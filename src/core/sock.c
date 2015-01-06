@@ -48,6 +48,7 @@
 #define NN_SOCK_STATE_ZOMBIE 3
 #define NN_SOCK_STATE_STOPPING_EPS 4
 #define NN_SOCK_STATE_STOPPING 5
+#define NN_SOCK_STATE_STOPPED 6
 
 /*  Events sent to the state machine. */
 #define NN_SOCK_ACTION_ZOMBIFY 1
@@ -793,80 +794,113 @@ static void nn_sock_shutdown (struct nn_fsm *self, int src, int type,
 
     sock = nn_cont (self, struct nn_sock, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
-        nn_assert (sock->state == NN_SOCK_STATE_ACTIVE ||
-            sock->state == NN_SOCK_STATE_ZOMBIE);
+    switch (src) {
+    case NN_FSM_ACTION:
+        switch (type) {
+        case NN_FSM_STOP:
+            /*  Set socket state prior to signalling to FDs  */
+            sock->state = NN_SOCK_STATE_STOPPING_EPS;
 
-        /*  Close sndfd and rcvfd. This should make any current
-            select/poll using SNDFD and/or RCVFD exit. */
-        if (!(sock->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)) {
-            nn_efd_term (&sock->rcvfd);
-            memset (&sock->rcvfd, 0xcd, sizeof (sock->rcvfd));
-        }
-        if (!(sock->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)) {
-            nn_efd_term (&sock->sndfd);
-            memset (&sock->sndfd, 0xcd, sizeof (sock->sndfd));
-        }
+            /*  Close sndfd and rcvfd. This should make any current
+                select/poll using SNDFD and/or RCVFD exit. */
+            if (!(sock->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)) {
+                nn_efd_term (&sock->rcvfd);
+                memset (&sock->rcvfd, 0xcd, sizeof (sock->rcvfd));
+            }
+            if (!(sock->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)) {
+                nn_efd_term (&sock->sndfd);
+                memset (&sock->sndfd, 0xcd, sizeof (sock->sndfd));
+            }
 
-        /*  Ask all the associated endpoints to stop. */
-        it = nn_list_begin (&sock->eps);
-        while (it != nn_list_end (&sock->eps)) {
-            ep = nn_cont (it, struct nn_ep, item);
-            it = nn_list_next (&sock->eps, it);
-            nn_list_erase (&sock->eps, &ep->item);
-            nn_list_insert (&sock->sdeps, &ep->item,
-                nn_list_end (&sock->sdeps));
-            nn_ep_stop (ep);
+            /*  Ask all the associated endpoints to stop. */
+            it = nn_list_begin (&sock->eps);
+            while (it != nn_list_end (&sock->eps)) {
+                ep = nn_cont (it, struct nn_ep, item);
+                it = nn_list_next (&sock->eps, it);
+                nn_list_erase (&sock->eps, &ep->item);
+                nn_list_insert (&sock->sdeps, &ep->item,
+                    nn_list_end (&sock->sdeps));
+                nn_ep_stop (ep);
+            }
+            break;
+        case NN_SOCK_ACTION_STOPPED:
+            /*  We get here when the deallocation of the socket was delayed by the
+                specific socket type. */
+            sock->state = NN_SOCK_STATE_STOPPED;
 
+            break;
+        default:
+            nn_fsm_bad_state (sock->state, src, type);
+            break;
         }
-        sock->state = NN_SOCK_STATE_STOPPING_EPS;
-        goto finish2;
+        break;
+    case NN_SOCK_SRC_EP:
+        switch (type) {
+        case NN_EP_STOPPED:
+            /*  Endpoint is stopped. Now we can safely deallocate it. */
+            nn_assert (nn_slow (sock->state == NN_SOCK_STATE_STOPPING_EPS));
+            ep = (struct nn_ep*) srcptr;
+            nn_list_erase (&sock->sdeps, &ep->item);
+            nn_ep_term (ep);
+            nn_free (ep);
+            break;
+        default:
+            nn_fsm_bad_state (sock->state, src, type);
+            break;
+        }
+        break;
+    default:
+        if (type == NN_PIPE_STARTED) {
+            /*  Silently ignore connection acknowledgement during shutdown.
+                This is an infrequent, benign race condition when an endpoint
+                async connection starts just before the bound endpoint is
+                closed or zombified, and the connection succeeds while the
+                socket is still shutting down (nominally, while other endpoints
+                continue to shut down). */
+            break;
+        }
+        else {
+            nn_fsm_bad_state (sock->state, src, type);
+            break;
+        }
     }
-    if (nn_slow (sock->state == NN_SOCK_STATE_STOPPING_EPS)) {
 
-        /*  Endpoint is stopped. Now we can safely deallocate it. */
-        if (!(src == NN_SOCK_SRC_EP && type == NN_EP_STOPPED)) {
-            fprintf (stderr, "src=%d type=%d\n", (int) src, (int) type);
-            nn_assert (src == NN_SOCK_SRC_EP && type == NN_EP_STOPPED);
-        }
-        ep = (struct nn_ep*) srcptr;
-        nn_list_erase (&sock->sdeps, &ep->item);
-        nn_ep_term (ep);
-        nn_free (ep);
-
-finish2:
+    switch (sock->state) {
+    case NN_SOCK_STATE_STOPPING_EPS:
         /*  If all the endpoints are deallocated, we can start stopping
-            protocol-specific part of the socket. If there' no stop function
+            protocol-specific part of the socket. If there's no stop function
             we can consider it stopped straight away. */
-        if (!nn_list_empty (&sock->sdeps))
+        if (!nn_list_empty (&sock->sdeps)) {
+            /*  Defer socket destruction until all endpoints are shut down. */
             return;
+        }
+
         nn_assert (nn_list_empty (&sock->eps));
-        sock->state = NN_SOCK_STATE_STOPPING;
-        if (!sock->sockbase->vfptr->stop)
-            goto finish1;
-        sock->sockbase->vfptr->stop (sock->sockbase);
-        return;
-    }
-    if (nn_slow (sock->state == NN_SOCK_STATE_STOPPING)) {
+        if (sock->sockbase->vfptr->stop) {
+            sock->state = NN_SOCK_STATE_STOPPING;
+            sock->sockbase->vfptr->stop (sock->sockbase);
+            return;
+        }
+        else {
+            sock->state = NN_SOCK_STATE_STOPPED;
+        }
+        break;
 
-        /*  We get here when the deallocation of the socket was delayed by the
-            specific socket type. */
-        nn_assert (src == NN_FSM_ACTION && type == NN_SOCK_ACTION_STOPPED);
-
-finish1:
-        /*  Protocol-specific part of the socket is stopped.
-            We can safely deallocate it. */
-        sock->sockbase->vfptr->destroy (sock->sockbase);
-        sock->state = NN_SOCK_STATE_INIT;
-
-        /*  Now we can unblock the application thread blocked in
-            the nn_close() call. */
-        nn_sem_post (&sock->termsem);
-
-        return;
+    case NN_SOCK_STATE_STOPPED:
+        /*  All protocol-specific parts of the socket are now stopped. */
+        break;
+    default:
+        nn_fsm_bad_state (sock->state, src, type);
+        break;
     }
 
-    nn_fsm_bad_state(sock->state, src, type);
+    nn_assert (nn_slow (sock->state = NN_SOCK_STATE_STOPPED));
+    sock->sockbase->vfptr->destroy (sock->sockbase);
+
+    /*  Finally, unblock application thread blocking in the nn_close() call. */
+    nn_sem_post (&sock->termsem);
+
+    return;
 }
 
 static void nn_sock_handler (struct nn_fsm *self, int src, int type,
@@ -936,6 +970,10 @@ static void nn_sock_handler (struct nn_fsm *self, int src, int type,
 
             /*  The assumption is that all the other events come from pipes. */
             switch (type) {
+            case NN_PIPE_STARTED:
+                sock->sockbase->vfptr->out(sock->sockbase,
+                    (struct nn_pipe*) srcptr);
+                return;
             case NN_PIPE_IN:
                 sock->sockbase->vfptr->in (sock->sockbase,
                     (struct nn_pipe*) srcptr);
