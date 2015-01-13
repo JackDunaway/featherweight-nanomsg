@@ -868,19 +868,19 @@ static void nn_sock_shutdown (struct nn_fsm *self, int src, int type,
         }
         break;
     default:
-        if (type == NN_PIPE_STARTED) {
+        if (type == NN_PIPE_STARTED || type == NN_PIPE_IN || type == NN_PIPE_OUT) {
             /*  Silently ignore connection acknowledgement during shutdown.
                 This is an infrequent, benign race condition when an endpoint
                 async connection starts just before the bound endpoint is
                 closed or zombified, and the connection succeeds while the
                 socket is still shutting down (nominally, while other endpoints
-                continue to shut down). */
+                continue to shut down). srcptr should be a valid nn_pipebase. */
+            nn_assert (srcptr);
             break;
         }
-        else {
-            nn_fsm_bad_state (sock->state, src, type);
-            break;
-        }
+
+        nn_fsm_bad_state (sock->state, src, type);
+        break;
     }
 
     switch (sock->state) {
