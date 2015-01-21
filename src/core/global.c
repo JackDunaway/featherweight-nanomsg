@@ -566,6 +566,27 @@ int nn_socket (int domain, int protocol)
     return rc;
 }
 
+int nn_socket_term (int s)
+{
+    int rc;
+
+    NN_BASIC_CHECKS;
+
+    nn_glock_lock ();
+
+    if (self.socks[s]) {
+        nn_sock_zombify (self.socks [s]);
+        rc = 0;
+    }
+    else {
+        rc = EINVAL;
+    }
+
+    nn_glock_unlock ();
+
+    return rc;
+}
+
 int nn_close (int s)
 {
     int rc;
