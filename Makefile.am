@@ -43,7 +43,7 @@ nninclude_HEADERS = \
     src/bus.h \
     src/tcpmux.h
 
-lib_LTLIBRARIES = libnanomsg.la
+noinst_LTLIBRARIES = libnanomsg.la
 
 NANOMSG_CORE = \
     src/core/ep.h \
