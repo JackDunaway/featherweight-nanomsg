@@ -914,9 +914,10 @@ static void nn_sock_handler (struct nn_fsm *self, int src, int type,
         }
 
 /******************************************************************************/
-/*  ACTIVE state.                                                             */
+/*  ACTIVE and ZOMBIE states.                                                 */
 /******************************************************************************/
     case NN_SOCK_STATE_ACTIVE:
+    case NN_SOCK_STATE_ZOMBIE:
         switch (src) {
 
         case NN_FSM_ACTION:
@@ -960,12 +961,6 @@ static void nn_sock_handler (struct nn_fsm *self, int src, int type,
                 nn_fsm_bad_action (sock->state, src, type);
             }
         }
-
-/******************************************************************************/
-/*  ZOMBIE state.                                                             */
-/******************************************************************************/
-    case NN_SOCK_STATE_ZOMBIE:
-        nn_fsm_bad_state (sock->state, src, type);
 
 /******************************************************************************/
 /*  Invalid state.                                                            */
