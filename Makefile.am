@@ -509,7 +509,8 @@ FEATURE_TESTS = \
     tests/shutdown \
     tests/stats \
     tests/cmsg \
-    tests/bug328
+    tests/bug328 \
+    tests/ws_async_shutdown
 
 EXTRA_DIST += tests/testutil.h
 
