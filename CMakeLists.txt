@@ -29,6 +29,10 @@ include (CheckCSourceCompiles)
 project (nanomsg C)
 enable_testing ()
 
+set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # User-defined options.
 
 option (WS_AUTOBAHN_TESTS "Enable Autobahn TestSuite test for WebSocket transport. Required: http://autobahn.ws/testsuite/installation.html" OFF)
@@ -154,5 +158,3 @@ install (TARGETS nanocat RUNTIME DESTINATION bin)
 set (CPACK_GENERATOR "NSIS")
 set (CPACK_PACKAGE_NAME "nanomsg")
 include (CPack)
-
-
