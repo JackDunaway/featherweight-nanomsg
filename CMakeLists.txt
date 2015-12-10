@@ -72,12 +72,12 @@ if (WIN32)
 
 elseif (UNIX)
     find_package (Threads REQUIRED)
-    CHECK_INCLUDE_FILE (netinet/in.h)
-    CHECK_INCLUDE_FILE (netdb.h)
-    CHECK_INCLUDE_FILE (arpa/inet.h)
-    CHECK_INCLUDE_FILE (unistd.h)
-    CHECK_INCLUDE_FILE (sys/socket.h)
-    CHECK_INCLUDE_FILE (sys/ioctl.h)
+#    CHECK_INCLUDE_FILE (netinet/in.h)
+#    CHECK_INCLUDE_FILE (netdb.h)
+#    CHECK_INCLUDE_FILE (arpa/inet.h)
+#    CHECK_INCLUDE_FILE (unistd.h)
+#    CHECK_INCLUDE_FILE (sys/socket.h)
+#    CHECK_INCLUDE_FILE (sys/ioctl.h)
     CHECK_LIBRARY_EXISTS (rt clock_gettime "" NN_HAVE_CLOCK_GETTIME)
 else ()
 
@@ -143,53 +143,38 @@ elseif (NN_HAVE_SOCKETPAIR)
     add_definitions (-DNN_USE_SOCKETPAIR)
 endif ()
 
-# AC_MSG_CHECKING([for CLOCK_MONOTONIC])
-# AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#     #include <time.h>
-# ]], [[
-#     struct timespec ts;
-#     clock_gettime(CLOCK_MONOTONIC, &ts);
-#     return 0;
-# ]])], [
-#     AC_MSG_RESULT([yes])
-#     AC_DEFINE([NN_HAVE_CLOCK_MONOTONIC])
-# ], [
-#     AC_MSG_RESULT([no])
-# ])
+CHECK_CXX_SYMBOL_EXISTS (CLOCK_MONOTONIC "time.h" NN_HAVE_CLOCK_MONOTONIC)
 
-# AC_LINK_IFELSE([AC_LANG_PROGRAM([], [[
-#         #include <stdint.h>
-#         int main()
-#         {
-#             volatile uint32_t n = 0;
-#             __sync_fetch_and_add (&n, 1);
-#             __sync_fetch_and_sub (&n, 1);
-#             return 0;
-#         }
-# ]])], [
-#     AC_DEFINE([NN_HAVE_GCC_ATOMIC_BUILTINS])
-# ])
+CHECK_C_SOURCE_COMPILES ("
+    #include <stdint.h>
+    int main()
+    {
+        volatile uint32_t n = 0;
+        __sync_fetch_and_add (&n, 1);
+        __sync_fetch_and_sub (&n, 1);
+        return 0;
+    }
+" NN_HAVE_GCC_ATOMIC_BUILTINS)
 
-# AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
-#     [[#include <atomic.h>]],
-#     [[uint32_t value; atomic_cas_32 (&value, 0, 0); return 0;]])],[
-#     AC_DEFINE([NN_HAVE_ATOMIC_SOLARIS])],[])
+CHECK_C_SOURCE_COMPILES ("
+    #include <atomic.h>
+    int main()
+    {
+        uint32_t value;
+        atomic_cas_32 (&value, 0, 0);
+        return 0;
+    }
+" NN_HAVE_ATOMIC_SOLARIS)
 
-# AC_MSG_CHECKING([for msghdr.msg_control])
-# AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-#     #include <sys/socket.h>
-# ]], [[
-#     struct msghdr hdr;
-#     hdr.msg_control = 0;
-#     return 0;
-# ]])], [
-#     AC_MSG_RESULT([yes])
-#     AC_DEFINE([NN_HAVE_MSG_CONTROL])
-# ], [
-#     AC_MSG_RESULT([no])
-# ])
-
-#  Build the library itself.
+CHECK_C_SOURCE_COMPILES ("
+    #include <sys/socket.h>
+    int main()
+    {
+        struct msghdr hdr;
+        hdr.msg_control = 0;
+        return 0;
+    }
+" NN_HAVE_MSG_CONTROL)
 
 add_subdirectory (src)
 
