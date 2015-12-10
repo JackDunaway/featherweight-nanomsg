@@ -72,7 +72,6 @@ if (WIN32)
 
 elseif (UNIX)
     find_package (Threads REQUIRED)
-    set_target_properties (${PROJECT_NAME} PROPERTIES VERSION NN_HAVE_QNX)
     CHECK_INCLUDE_FILE (netinet/in.h)
     CHECK_INCLUDE_FILE (netdb.h)
     CHECK_INCLUDE_FILE (arpa/inet.h)
