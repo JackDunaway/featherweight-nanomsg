@@ -301,26 +301,26 @@ elseif (UNIX)
 endif ()
 
 if (NN_STATIC_LIB)
-    add_library (${CMAKE_PROJECT_NAME} STATIC ${NN_SOURCES})
+    add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})
 else ()
-    add_library (${CMAKE_PROJECT_NAME} SHARED ${NN_SOURCES})
+    add_library (${PROJECT_NAME} SHARED ${NN_SOURCES})
     add_definitions (-DNN_EXPORTS)
 endif ()
 
 if (WIN32)
-    target_link_libraries (${CMAKE_PROJECT_NAME} ws2_32)
-    target_link_libraries (${CMAKE_PROJECT_NAME} mswsock)
-    target_link_libraries (${CMAKE_PROJECT_NAME} advapi32)
+    target_link_libraries (${PROJECT_NAME} ws2_32)
+    target_link_libraries (${PROJECT_NAME} mswsock)
+    target_link_libraries (${PROJECT_NAME} advapi32)
 elseif (UNIX)
     if(THREADS_HAVE_PTHREAD_ARG)
-        target_compile_options (${CMAKE_PROJECT_NAME} PUBLIC "-pthread")
+        target_compile_options (${PROJECT_NAME} PUBLIC "-pthread")
     endif()
     if(CMAKE_THREAD_LIBS_INIT)
-        target_link_libraries (${CMAKE_PROJECT_NAME} "${CMAKE_THREAD_LIBS_INIT}")
+        target_link_libraries (${PROJECT_NAME} "${CMAKE_THREAD_LIBS_INIT}")
     endif()
 endif ()
 
-install (TARGETS ${CMAKE_PROJECT_NAME}
+install (TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
