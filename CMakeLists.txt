@@ -143,7 +143,17 @@ elseif (NN_HAVE_SOCKETPAIR)
     add_definitions (-DNN_USE_SOCKETPAIR)
 endif ()
 
-CHECK_CXX_SYMBOL_EXISTS (CLOCK_MONOTONIC "time.h" NN_HAVE_CLOCK_MONOTONIC)
+CHECK_CXX_SYMBOL_EXISTS (CLOCK_MONOTONIC "time.h" )
+
+CHECK_C_SOURCE_COMPILES ("
+    #include <time.h>
+    int main()
+    {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return 0;
+    }
+" NN_HAVE_CLOCK_MONOTONIC)
 
 CHECK_C_SOURCE_COMPILES ("
     #include <stdint.h>
