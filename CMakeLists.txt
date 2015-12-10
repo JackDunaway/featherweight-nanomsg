@@ -143,8 +143,6 @@ elseif (NN_HAVE_SOCKETPAIR)
     add_definitions (-DNN_USE_SOCKETPAIR)
 endif ()
 
-CHECK_CXX_SYMBOL_EXISTS (CLOCK_MONOTONIC "time.h" )
-
 CHECK_C_SOURCE_COMPILES ("
     #include <time.h>
     int main()
