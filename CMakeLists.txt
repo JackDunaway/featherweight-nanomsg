@@ -47,7 +47,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
         add_definitions (-DNN_HAVE_MINGW -DNN_HAVE_STDINT -D_WIN32_WINNT=0x0600)
     endif ()
 else ()
-    message (FATAL_ERROR "ERROR: CMake build system is intended only to generate MSVC solution files.\nUse autotools build system for any other purpose." )
+    #message (FATAL_ERROR "ERROR: CMake build system is intended only to generate MSVC solution files.\nUse autotools build system for any other purpose." )
 endif ()
 
 #  Build the library itself.
