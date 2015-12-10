@@ -66,16 +66,8 @@ set (NN_SOURCES
     aio/timerset.c
     aio/usock.h
     aio/usock.c
-    aio/usock_posix.h
-    aio/usock_posix.inc
-    aio/usock_win.h
-    aio/usock_win.inc
     aio/worker.h
     aio/worker.c
-    aio/worker_posix.h
-    aio/worker_posix.inc
-    aio/worker_win.h
-    aio/worker_win.inc
 
     utils/alloc.h
     utils/alloc.c
@@ -126,10 +118,6 @@ set (NN_SOURCES
     utils/sleep.c
     utils/thread.h
     utils/thread.c
-    utils/thread_posix.h
-    utils/thread_posix.inc
-    utils/thread_win.h
-    utils/thread_win.inc
     utils/wire.h
     utils/wire.c
 
@@ -282,6 +270,21 @@ set (NN_SOURCES
 if (WIN32)
     LIST (APPEND NN_SOURCES
         utils/win.h
+        utils/thread_win.h
+        utils/thread_win.inc
+        aio/usock_win.h
+        aio/usock_win.inc
+        aio/worker_win.h
+        aio/worker_win.inc
+    )
+elseif (UNIX)
+    LIST (APPEND NN_SOURCES
+        aio/usock_posix.h
+        aio/usock_posix.inc
+        aio/worker_posix.h
+        aio/worker_posix.inc
+        utils/thread_posix.h
+        utils/thread_posix.inc
     )
 endif ()
 
@@ -293,7 +296,8 @@ target_link_libraries (nanomsg ws2_32)
 target_link_libraries (nanomsg mswsock)
 target_link_libraries (nanomsg advapi32)
 
-install(TARGETS nanomsg
+install (TARGETS nanomsg
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
-    RUNTIME DESTINATION bin)
+    RUNTIME DESTINATION bin
+)
