@@ -21,9 +21,10 @@
 #   IN THE SOFTWARE.
 #
 
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 2.8.12)
 include (CheckIncludeFiles)
 include (CheckSymbolExists)
+include (CheckLibraryExists)
 include (CheckCSourceCompiles)
 
 project (nanomsg C)
@@ -36,24 +37,158 @@ set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 # User-defined options.
 
 option (WS_AUTOBAHN_TESTS "Enable Autobahn TestSuite test for WebSocket transport. Required: http://autobahn.ws/testsuite/installation.html" OFF)
+option (ENABLE_NANOCAT "Enable building nanocat utility." OFF)
+option (NN_STATIC_LIB "Build static library instead of shared library." OFF)
+option (ENABLE_GETADDRINFO_A "Enable/disable use of getaddrinfo_a in place of getaddrinfo." ON)
 
 #  Platform checks.
 
-if (WIN32)
+if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    add_definitions (-DNN_HAVE_LINUX)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    add_definitions (-DNN_HAVE_OSX)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     add_definitions (-DNN_HAVE_WINDOWS)
     add_definitions (-D_CRT_SECURE_NO_WARNINGS)
-
-    if (MINGW)
-        message (FATAL_ERROR "ERROR: MinGW is no longer supported." )
-    endif ()
-elseif (UNIX)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+    add_definitions (-DNN_HAVE_FREEBSD)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "NetBSD")
+    add_definitions (-DNN_HAVE_NETBSD)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
+    add_definitions (-DNN_HAVE_OPENBSD)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "Solaris|SunOS")
+    add_definitions (-DNN_HAVE_SOLARIS)
+    CHECK_LIBRARY_EXISTS (socket socket "" NN_HAVE_SOLARIS_SOCKET)
+    CHECK_LIBRARY_EXISTS (nsl gethostbyname "" NN_HAVE_SOLARIS_GETHOSTBYNAME)
+elseif (${CMAKE_SYSTEM_NAME} MATCHES "QNX")
+    add_definitions (-DNN_HAVE_QNX)
+    CHECK_LIBRARY_EXISTS (socket socket "" NN_HAVE_QNX_SOCKET)
 else ()
     message (FATAL_ERROR "ERROR: CMake build system is not supported for this platform: ${CMAKE_SYSTEM_NAME}." )
 endif ()
 
-if (GCC)
-  add_definitions (-DNN_HAVE_GCC)
+
+if (WIN32)
+
+elseif (UNIX)
+    find_package (Threads REQUIRED)
+    set_target_properties (${CMAKE_PROJECT_NAME} PROPERTIES VERSION NN_HAVE_QNX)
+    CHECK_INCLUDE_FILE (netinet/in.h)
+    CHECK_INCLUDE_FILE (netdb.h)
+    CHECK_INCLUDE_FILE (arpa/inet.h)
+    CHECK_INCLUDE_FILE (unistd.h)
+    CHECK_INCLUDE_FILE (sys/socket.h)
+    CHECK_INCLUDE_FILE (sys/ioctl.h)
+    CHECK_LIBRARY_EXISTS (rt clock_gettime "" NN_HAVE_CLOCK_GETTIME)
+else ()
+
 endif ()
+
+# Compiler checks.
+
+if (GCC)
+    add_definitions (-DNN_HAVE_GCC)
+elseif (MINGW)
+    message (FATAL_ERROR "ERROR: MinGW is no longer supported." )
+endif ()
+# The following compiler definitions are set by the nanomsg autotools build, but
+# not used anywhere in source or the project.
+# NN_HAVE_GCC
+# NN_HAVE_ICC
+# NN_HAVE_SUN_STUDIO
+# NN_HAVE_CLANG
+# NN_HAVE_HPACC
+
+# Feature checks.
+
+CHECK_INCLUDE_FILE (stdint.h NN_HAVE_STDINT)
+
+CHECK_FUNCTION_EXISTS (gethrtime NN_HAVE_GETHRTIME)
+CHECK_FUNCTION_EXISTS (socketpair NN_HAVE_SOCKETPAIR)
+CHECK_FUNCTION_EXISTS (eventfd NN_HAVE_EVENTFD)
+CHECK_FUNCTION_EXISTS (pipe NN_HAVE_PIPE)
+CHECK_FUNCTION_EXISTS (pipe2 NN_HAVE_PIPE2)
+CHECK_FUNCTION_EXISTS (accept4 NN_HAVE_ACCEPT4)
+
+CHECK_FUNCTION_EXISTS (poll NN_HAVE_POLL)
+if (NN_HAVE_POLL)
+    CHECK_FUNCTION_EXISTS (epoll_create NN_USE_EPOLL)
+    if (NOT NN_USE_EPOLL)
+        CHECK_FUNCTION_EXISTS (kqueue NN_USE_KQUEUE)
+    else ()
+        SET (NN_USE_POLL 1)
+    endif ()
+endif ()
+
+CHECK_LIBRARY_EXISTS (anl getaddrinfo_a "" NN_HAVE_GETADDRINFO_A)
+CHECK_LIBRARY_EXISTS (rt sem_wait "" NN_HAVE_SEMAPHORE_RT)
+CHECK_LIBRARY_EXISTS (rt pthread "" NN_HAVE_SEMAPHORE_PTHREAD)
+
+if (NN_HAVE_SEMAPHORE_RT OR NN_HAVE_SEMAPHORE_PTHREAD)
+    add_definitions (-DNN_HAVE_SEMAPHORE)
+endif ()
+
+if (NOT ENABLE_GETADDRINFO_A)
+    add_definitions (-DNN_DISABLE_GETADDRINFO_A)
+endif ()
+
+if (NN_HAVE_PIPE2 OR NN_HAVE_ACCEPT4 OR NN_HAVE_GETADDRINFO_A)
+    add_definitions (-D_GNU_SOURCE)
+endif ()
+
+if (NN_HAVE_EVENTFD)
+    add_definitions (-DNN_USE_EVENTFD)
+elseif (NN_HAVE_PIPE)
+    add_definitions (-DNN_USE_PIPE)
+elseif (NN_HAVE_SOCKETPAIR)
+    add_definitions (-DNN_USE_SOCKETPAIR)
+endif ()
+
+# AC_MSG_CHECKING([for CLOCK_MONOTONIC])
+# AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#     #include <time.h>
+# ]], [[
+#     struct timespec ts;
+#     clock_gettime(CLOCK_MONOTONIC, &ts);
+#     return 0;
+# ]])], [
+#     AC_MSG_RESULT([yes])
+#     AC_DEFINE([NN_HAVE_CLOCK_MONOTONIC])
+# ], [
+#     AC_MSG_RESULT([no])
+# ])
+
+# AC_LINK_IFELSE([AC_LANG_PROGRAM([], [[
+#         #include <stdint.h>
+#         int main()
+#         {
+#             volatile uint32_t n = 0;
+#             __sync_fetch_and_add (&n, 1);
+#             __sync_fetch_and_sub (&n, 1);
+#             return 0;
+#         }
+# ]])], [
+#     AC_DEFINE([NN_HAVE_GCC_ATOMIC_BUILTINS])
+# ])
+
+# AC_COMPILE_IFELSE([AC_LANG_PROGRAM(
+#     [[#include <atomic.h>]],
+#     [[uint32_t value; atomic_cas_32 (&value, 0, 0); return 0;]])],[
+#     AC_DEFINE([NN_HAVE_ATOMIC_SOLARIS])],[])
+
+# AC_MSG_CHECKING([for msghdr.msg_control])
+# AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#     #include <sys/socket.h>
+# ]], [[
+#     struct msghdr hdr;
+#     hdr.msg_control = 0;
+#     return 0;
+# ]])], [
+#     AC_MSG_RESULT([yes])
+#     AC_DEFINE([NN_HAVE_MSG_CONTROL])
+# ], [
+#     AC_MSG_RESULT([no])
+# ])
 
 #  Build the library itself.
 
@@ -61,8 +196,10 @@ add_subdirectory (src)
 
 #  Build the tools
 
-add_executable (nanocat tools/nanocat.c tools/options.c)
-target_link_libraries (nanocat nanomsg)
+if (ENABLE_NANOCAT)
+    add_executable (nanocat tools/nanocat.c tools/options.c)
+    target_link_libraries (nanocat nanomsg)
+endif ()
 
 #  Build unit tests.
 
@@ -134,7 +271,7 @@ endif ()
 
 macro (add_libnanomsg_perf NAME)
     add_executable (${NAME} perf/${NAME}.c)
-    target_link_libraries (${NAME} nanomsg)
+    target_link_libraries (${NAME} ${CMAKE_PROJECT_NAME})
 endmacro (add_libnanomsg_perf)
 
 add_libnanomsg_perf (inproc_lat)
@@ -158,8 +295,10 @@ install (FILES src/pipeline.h DESTINATION include/nanomsg)
 install (FILES src/survey.h DESTINATION include/nanomsg)
 install (FILES src/bus.h DESTINATION include/nanomsg)
 
-install (TARGETS nanocat RUNTIME DESTINATION bin)
+if (BUILD_NANOCAT)
+    install (TARGETS nanocat RUNTIME DESTINATION bin)
+endif()
 
 set (CPACK_GENERATOR "NSIS")
-set (CPACK_PACKAGE_NAME "nanomsg")
+set (CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})
 include (CPack)

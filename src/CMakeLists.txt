@@ -52,12 +52,6 @@ set (NN_SOURCES
     aio/fsm.c
     aio/poller.h
     aio/poller.c
-    aio/poller_epoll.h
-    aio/poller_epoll.inc
-    aio/poller_kqueue.h
-    aio/poller_kqueue.inc
-    aio/poller_poll.h
-    aio/poller_poll.inc
     aio/pool.h
     aio/pool.c
     aio/timer.h
@@ -286,17 +280,47 @@ elseif (UNIX)
         utils/thread_posix.h
         utils/thread_posix.inc
     )
+    if (NN_USE_EPOLL)
+        LIST (APPEND NN_SOURCES
+            aio/poller_epoll.h
+            aio/poller_epoll.inc
+        )
+    elseif (NN_USE_KQUEUE)
+        LIST (APPEND NN_SOURCES
+            aio/poller_kqueue.h
+            aio/poller_kqueue.inc
+        )
+    elseif (NN_USE_POLL)
+        LIST (APPEND NN_SOURCES
+            aio/poller_poll.h
+            aio/poller_poll.inc
+        )
+    else ()
+        message (FATAL_ERROR "ERROR: could not determine poller." )
+    endif ()
 endif ()
 
-add_library (nanomsg SHARED ${NN_SOURCES})
+if (NN_STATIC_LIB)
+    add_library (${CMAKE_PROJECT_NAME} STATIC ${NN_SOURCES})
+else ()
+    add_library (${CMAKE_PROJECT_NAME} SHARED ${NN_SOURCES})
+    add_definitions (-DNN_EXPORTS)
+endif ()
 
-add_definitions (-DNN_EXPORTS)
+if (WIN32)
+    target_link_libraries (${CMAKE_PROJECT_NAME} ws2_32)
+    target_link_libraries (${CMAKE_PROJECT_NAME} mswsock)
+    target_link_libraries (${CMAKE_PROJECT_NAME} advapi32)
+elseif (UNIX)
+    if(THREADS_HAVE_PTHREAD_ARG)
+        target_compile_options (${CMAKE_PROJECT_NAME} PUBLIC "-pthread")
+    endif()
+    if(CMAKE_THREAD_LIBS_INIT)
+        target_link_libraries (${CMAKE_PROJECT_NAME} "${CMAKE_THREAD_LIBS_INIT}")
+    endif()
+endif ()
 
-target_link_libraries (nanomsg ws2_32)
-target_link_libraries (nanomsg mswsock)
-target_link_libraries (nanomsg advapi32)
-
-install (TARGETS nanomsg
+install (TARGETS ${CMAKE_PROJECT_NAME}
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
