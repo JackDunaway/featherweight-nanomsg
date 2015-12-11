@@ -272,17 +272,20 @@ elseif (UNIX)
         utils/thread_posix.h
         utils/thread_posix.inc
     )
-    if (NN_USE_EPOLL)
+    if (NN_HAVE_EPOLL)
+        add_compile_options (-DNN_USE_EPOLL)
         LIST (APPEND NN_SOURCES
             aio/poller_epoll.h
             aio/poller_epoll.inc
         )
-    elseif (NN_USE_KQUEUE)
+    elseif (NN_HAVE_KQUEUE)
+        add_compile_options (-DNN_USE_KQUEUE)
         LIST (APPEND NN_SOURCES
             aio/poller_kqueue.h
             aio/poller_kqueue.inc
         )
-    elseif (NN_USE_POLL)
+    elseif (NN_HAVE_POLL)
+        add_compile_options (-DNN_USE_POLL)
         LIST (APPEND NN_SOURCES
             aio/poller_poll.h
             aio/poller_poll.inc
