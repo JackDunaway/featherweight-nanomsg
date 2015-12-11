@@ -348,12 +348,10 @@ foreach (f ${NN_SOURCES})
 
     # CMake source_group expects \\, not /
     string (REPLACE / \\ SRC_GROUP ${SRC_GROUP})
-    source_group ("${SRC_GROUP}" FILES ${f})
-
-    list (APPEND NANOMSG_SRC_FILES ${f})
+    source_group ("${SRC_GROUP}" FILES ${f})=
 endforeach ()
 
-add_definitions (-DNN_EXPORTS)
+add_compile_options (-DNN_EXPORTS)
 
 if (NN_STATIC_LIB)
     add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})
