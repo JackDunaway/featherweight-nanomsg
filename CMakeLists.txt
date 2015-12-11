@@ -142,6 +142,9 @@ check_c_source_compiles ("
         return 0;
     }
 " NN_HAVE_CLOCK_MONOTONIC)
+if (NN_HAVE_CLOCK_MONOTONIC)
+    add_compile_options (-DNN_HAVE_CLOCK_MONOTONIC)
+endif ()
 
 check_c_source_compiles ("
     #include <stdint.h>
@@ -153,6 +156,9 @@ check_c_source_compiles ("
         return 0;
     }
 " NN_HAVE_GCC_ATOMIC_BUILTINS)
+if (NN_HAVE_GCC_ATOMIC_BUILTINS)
+    add_compile_options (-DNN_HAVE_GCC_ATOMIC_BUILTINS)
+endif ()
 
 check_c_source_compiles ("
     #include <atomic.h>
@@ -163,6 +169,9 @@ check_c_source_compiles ("
         return 0;
     }
 " NN_HAVE_ATOMIC_SOLARIS)
+if (NN_HAVE_ATOMIC_SOLARIS)
+    add_compile_options (-DNN_HAVE_ATOMIC_SOLARIS)
+endif ()
 
 check_c_source_compiles ("
     #include <sys/socket.h>
@@ -173,6 +182,9 @@ check_c_source_compiles ("
         return 0;
     }
 " NN_HAVE_MSG_CONTROL)
+if (NN_HAVE_MSG_CONTROL)
+    add_compile_options (-DNN_HAVE_MSG_CONTROL)
+endif ()
 
 add_subdirectory (src)
 
