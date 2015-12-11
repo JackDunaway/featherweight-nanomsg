@@ -29,12 +29,14 @@
 #define NN_POLLER_OUT 2
 #define NN_POLLER_ERR 3
 
-#if defined NN_USE_POLL
-#include "poller_poll.h"
-#elif defined NN_USE_EPOLL
-#include "poller_epoll.h"
+#if defined NN_USE_EPOLL
+    #include "poller_epoll.h"
 #elif defined NN_USE_KQUEUE
-#include "poller_kqueue.h"
+    #include "poller_kqueue.h"
+#elif defined NN_USE_POLL
+    #include "poller_poll.h"
+#else
+    #error
 #endif
 
 int nn_poller_init (struct nn_poller *self);

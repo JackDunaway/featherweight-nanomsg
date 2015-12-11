@@ -50,8 +50,6 @@ set (NN_SOURCES
     aio/ctx.c
     aio/fsm.h
     aio/fsm.c
-    aio/poller.h
-    aio/poller.c
     aio/pool.h
     aio/pool.c
     aio/timer.h
@@ -265,6 +263,8 @@ if (WIN32)
     )
 elseif (UNIX)
     LIST (APPEND NN_SOURCES
+        aio/poller.h
+        aio/poller.c
         aio/usock_posix.h
         aio/usock_posix.inc
         aio/worker_posix.h
