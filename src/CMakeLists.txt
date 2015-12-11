@@ -317,6 +317,7 @@ elseif (UNIX)
     else ()
         message (FATAL_ERROR "ERROR: could not determine poller." )
     endif ()
+endif ()
 
 # Provide same folder structure in IDE as on disk
 foreach (f ${NN_SOURCES})
