@@ -44,25 +44,25 @@ option (ENABLE_GETADDRINFO_A "Enable/disable use of getaddrinfo_a in place of ge
 #  Platform checks.
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    add_definitions (-DNN_HAVE_LINUX)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_LINUX)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-    add_definitions (-DNN_HAVE_OSX)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_OSX)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-    add_definitions (-DNN_HAVE_WINDOWS)
-    add_definitions (-D_CRT_SECURE_NO_WARNINGS)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_WINDOWS)
+    target_compile_options (${PROJECT_NAME} PUBLIC -D_CRT_SECURE_NO_WARNINGS)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-    add_definitions (-DNN_HAVE_FREEBSD)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_FREEBSD)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "NetBSD")
-    add_definitions (-DNN_HAVE_NETBSD)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_NETBSD)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
-    add_definitions (-DNN_HAVE_OPENBSD)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_OPENBSD)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Solaris|SunOS")
-    add_definitions (-DNN_HAVE_SOLARIS)
-    CHECK_LIBRARY_EXISTS (socket socket "" NN_HAVE_SOLARIS_SOCKET)
-    CHECK_LIBRARY_EXISTS (nsl gethostbyname "" NN_HAVE_SOLARIS_GETHOSTBYNAME)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_SOLARIS)
+    check_library_exists (socket socket "" NN_HAVE_SOLARIS_SOCKET)
+    check_library_exists (nsl gethostbyname "" NN_HAVE_SOLARIS_GETHOSTBYNAME)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "QNX")
-    add_definitions (-DNN_HAVE_QNX)
-    CHECK_LIBRARY_EXISTS (socket socket "" NN_HAVE_QNX_SOCKET)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_QNX)
+    check_library_exists (socket socket "" NN_HAVE_QNX_SOCKET)
 else ()
     message (FATAL_ERROR "ERROR: CMake build system is not supported for this platform: ${CMAKE_SYSTEM_NAME}." )
 endif ()
@@ -78,7 +78,7 @@ elseif (UNIX)
 #    CHECK_INCLUDE_FILE (unistd.h)
 #    CHECK_INCLUDE_FILE (sys/socket.h)
 #    CHECK_INCLUDE_FILE (sys/ioctl.h)
-    CHECK_LIBRARY_EXISTS (rt clock_gettime "" NN_HAVE_CLOCK_GETTIME)
+    check_library_exists (rt clock_gettime "" NN_HAVE_CLOCK_GETTIME)
 else ()
 
 endif ()
@@ -86,7 +86,7 @@ endif ()
 # Compiler checks.
 
 if (GCC)
-    add_definitions (-DNN_HAVE_GCC)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_GCC)
 elseif (MINGW)
     message (FATAL_ERROR "ERROR: MinGW is no longer supported." )
 endif ()
@@ -100,50 +100,50 @@ endif ()
 
 # Feature checks.
 
-CHECK_INCLUDE_FILE (stdint.h NN_HAVE_STDINT)
+check_include_file (stdint.h NN_HAVE_STDINT)
 
-CHECK_FUNCTION_EXISTS (gethrtime NN_HAVE_GETHRTIME)
-CHECK_FUNCTION_EXISTS (socketpair NN_HAVE_SOCKETPAIR)
-CHECK_FUNCTION_EXISTS (eventfd NN_HAVE_EVENTFD)
-CHECK_FUNCTION_EXISTS (pipe NN_HAVE_PIPE)
-CHECK_FUNCTION_EXISTS (pipe2 NN_HAVE_PIPE2)
-CHECK_FUNCTION_EXISTS (accept4 NN_HAVE_ACCEPT4)
+check_function_exists (gethrtime NN_HAVE_GETHRTIME)
+check_function_exists (socketpair NN_HAVE_SOCKETPAIR)
+check_function_exists (eventfd NN_HAVE_EVENTFD)
+check_function_exists (pipe NN_HAVE_PIPE)
+check_function_exists (pipe2 NN_HAVE_PIPE2)
+check_function_exists (accept4 NN_HAVE_ACCEPT4)
 
-CHECK_FUNCTION_EXISTS (poll NN_HAVE_POLL)
+check_function_exists (poll NN_HAVE_POLL)
 if (NN_HAVE_POLL)
-    CHECK_FUNCTION_EXISTS (epoll_create NN_USE_EPOLL)
+    check_function_exists (epoll_create NN_USE_EPOLL)
     if (NOT NN_USE_EPOLL)
-        CHECK_FUNCTION_EXISTS (kqueue NN_USE_KQUEUE)
+        check_function_exists (kqueue NN_USE_KQUEUE)
     else ()
         SET (NN_USE_POLL 1)
     endif ()
 endif ()
 
-CHECK_LIBRARY_EXISTS (anl getaddrinfo_a "" NN_HAVE_GETADDRINFO_A)
-CHECK_LIBRARY_EXISTS (rt sem_wait "" NN_HAVE_SEMAPHORE_RT)
-CHECK_LIBRARY_EXISTS (rt pthread "" NN_HAVE_SEMAPHORE_PTHREAD)
+check_library_exists (anl getaddrinfo_a "" NN_HAVE_GETADDRINFO_A)
+check_library_exists (rt sem_wait "" NN_HAVE_SEMAPHORE_RT)
+check_library_exists (rt pthread "" NN_HAVE_SEMAPHORE_PTHREAD)
 
 if (NN_HAVE_SEMAPHORE_RT OR NN_HAVE_SEMAPHORE_PTHREAD)
-    add_definitions (-DNN_HAVE_SEMAPHORE)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_HAVE_SEMAPHORE)
 endif ()
 
 if (NOT ENABLE_GETADDRINFO_A)
-    add_definitions (-DNN_DISABLE_GETADDRINFO_A)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_DISABLE_GETADDRINFO_A)
 endif ()
 
 if (NN_HAVE_PIPE2 OR NN_HAVE_ACCEPT4 OR NN_HAVE_GETADDRINFO_A)
-    add_definitions (-D_GNU_SOURCE)
+    target_compile_options (${PROJECT_NAME} PUBLIC -D_GNU_SOURCE)
 endif ()
 
 if (NN_HAVE_EVENTFD)
-    add_definitions (-DNN_USE_EVENTFD)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_USE_EVENTFD)
 elseif (NN_HAVE_PIPE)
-    add_definitions (-DNN_USE_PIPE)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_USE_PIPE)
 elseif (NN_HAVE_SOCKETPAIR)
-    add_definitions (-DNN_USE_SOCKETPAIR)
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_USE_SOCKETPAIR)
 endif ()
 
-CHECK_C_SOURCE_COMPILES ("
+check_c_source_compiles ("
     #include <time.h>
     int main()
     {
@@ -153,7 +153,7 @@ CHECK_C_SOURCE_COMPILES ("
     }
 " NN_HAVE_CLOCK_MONOTONIC)
 
-CHECK_C_SOURCE_COMPILES ("
+check_c_source_compiles ("
     #include <stdint.h>
     int main()
     {
@@ -164,7 +164,7 @@ CHECK_C_SOURCE_COMPILES ("
     }
 " NN_HAVE_GCC_ATOMIC_BUILTINS)
 
-CHECK_C_SOURCE_COMPILES ("
+check_c_source_compiles ("
     #include <atomic.h>
     int main()
     {
@@ -174,7 +174,7 @@ CHECK_C_SOURCE_COMPILES ("
     }
 " NN_HAVE_ATOMIC_SOLARIS)
 
-CHECK_C_SOURCE_COMPILES ("
+check_c_source_compiles ("
     #include <sys/socket.h>
     int main()
     {
