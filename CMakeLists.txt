@@ -34,6 +34,11 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# Determine library versions.
+
+execute_process (COMMAND ./abi_version.sh OUTPUT_VARIABLE NN_ABI_VERSION)
+set (ISSUE_REPORT_URL "https://github.com/nanomsg/nanomsg")
+
 # User-defined options.
 
 option (WS_AUTOBAHN_TESTS "Enable Autobahn TestSuite test for WebSocket transport. Required: http://autobahn.ws/testsuite/installation.html" OFF)
@@ -45,63 +50,69 @@ option (ENABLE_GETADDRINFO_A "Enable/disable use of getaddrinfo_a in place of ge
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     add_compile_options (-DNN_HAVE_LINUX)
+    find_package (Threads REQUIRED)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     add_compile_options (-DNN_HAVE_OSX)
+    find_package (Threads REQUIRED)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+    SET (NN_HAVE_WINSOCK 1)
     add_compile_options (-DNN_HAVE_WINDOWS)
     add_compile_options (-D_CRT_SECURE_NO_WARNINGS)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     add_compile_options (-DNN_HAVE_FREEBSD)
+    find_package (Threads REQUIRED)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "NetBSD")
     add_compile_options (-DNN_HAVE_NETBSD)
+    find_package (Threads REQUIRED)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
     add_compile_options (-DNN_HAVE_OPENBSD)
+    find_package (Threads REQUIRED)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "Solaris|SunOS")
     add_compile_options (-DNN_HAVE_SOLARIS)
+    find_package (Threads REQUIRED)
     check_library_exists (socket socket "" NN_HAVE_SOLARIS_SOCKET)
     check_library_exists (nsl gethostbyname "" NN_HAVE_SOLARIS_GETHOSTBYNAME)
 elseif (${CMAKE_SYSTEM_NAME} MATCHES "QNX")
     add_compile_options (-DNN_HAVE_QNX)
+    find_package (Threads REQUIRED)
     check_library_exists (socket socket "" NN_HAVE_QNX_SOCKET)
 else ()
-    message (FATAL_ERROR "ERROR: CMake build system is not supported for this platform: ${CMAKE_SYSTEM_NAME}." )
+    message (FATAL_ERROR "ERROR: This platform may or may not be supported: ${CMAKE_SYSTEM_NAME}")
+    message (AUTHOR_WARNING "1) Disable this FATAL_ERROR message in CMakeLists.txt" )
+    message (AUTHOR_WARNING "2) Rebuild" )
+    message (AUTHOR_WARNING "3) Please consider opening an issue at ${ISSUE_REPORT_URL} with your findings." )
 endif ()
 
+# Compiler checks.
 
-if (WIN32)
-    SET (NN_HAVE_WINSOCK 1)
-elseif (UNIX)
-    find_package (Threads REQUIRED)
+if (${CMAKE_C_COMPILER_ID} MATCHES "GNU")
+    add_compile_options (-DNN_HAVE_GCC)
+elseif (${CMAKE_C_COMPILER_ID} MATCHES "Intel")
+    add_compile_options (-DNN_HAVE_ICC)
+elseif (${CMAKE_C_COMPILER_ID} MATCHES "SunPro")
+    add_compile_options (-DNN_HAVE_SUN_STUDIO)
+elseif (${CMAKE_C_COMPILER_ID} MATCHES "Clang")
+    add_compile_options (-DNN_HAVE_CLANG)
+elseif (${CMAKE_C_COMPILER_ID} MATCHES "HP")
+    add_compile_options (-DNN_HAVE_HPACC)
+elseif (${CMAKE_C_COMPILER_ID} MATCHES "MSVC")
+    add_compile_options (-DNN_HAVE_MSVC)
+elseif (MINGW)
+    message (FATAL_ERROR "ERROR: MinGW is officially no longer supported." )
+else ()
+    message (FATAL_ERROR "ERROR: This compiler may or may not be supported: ${CMAKE_C_COMPILER_ID}")
+    message (AUTHOR_WARNING "1) Disable this FATAL_ERROR message in CMakeLists.txt" )
+    message (AUTHOR_WARNING "2) Rebuild" )
+    message (AUTHOR_WARNING "3) Please consider opening an issue at ${ISSUE_REPORT_URL} with your findings." )
+endif ()
+
+check_include_file (stdint.h NN_HAVE_STDINT)
 #    CHECK_INCLUDE_FILE (netinet/in.h)
 #    CHECK_INCLUDE_FILE (netdb.h)
 #    CHECK_INCLUDE_FILE (arpa/inet.h)
 #    CHECK_INCLUDE_FILE (unistd.h)
 #    CHECK_INCLUDE_FILE (sys/socket.h)
 #    CHECK_INCLUDE_FILE (sys/ioctl.h)
-    check_library_exists (rt clock_gettime "" NN_HAVE_CLOCK_GETTIME)
-    execute_process (COMMAND ./abi_version.sh OUTPUT_VARIABLE NN_ABI_VERSION)
-else ()
-
-endif ()
-
-# Compiler checks.
-
-if (GCC)
-    add_compile_options (-DNN_HAVE_GCC)
-elseif (MINGW)
-    message (FATAL_ERROR "ERROR: MinGW is no longer supported." )
-endif ()
-# The following compiler definitions are set by the nanomsg autotools build, but
-# not used anywhere in source or the project.
-# NN_HAVE_GCC
-# NN_HAVE_ICC
-# NN_HAVE_SUN_STUDIO
-# NN_HAVE_CLANG
-# NN_HAVE_HPACC
-
-# Feature checks.
-
-check_include_file (stdint.h NN_HAVE_STDINT)
 
 check_function_exists (gethrtime NN_HAVE_GETHRTIME)
 check_function_exists (socketpair NN_HAVE_SOCKETPAIR)
@@ -114,6 +125,7 @@ check_function_exists (kqueue NN_HAVE_KQUEUE)
 check_function_exists (poll NN_HAVE_POLL)
 
 check_library_exists (anl getaddrinfo_a "" NN_HAVE_GETADDRINFO_A)
+check_library_exists (rt clock_gettime "" NN_HAVE_CLOCK_GETTIME)
 check_library_exists (rt sem_wait "" NN_HAVE_SEMAPHORE_RT)
 check_library_exists (pthread sem_wait  "" NN_HAVE_SEMAPHORE_PTHREAD)
 

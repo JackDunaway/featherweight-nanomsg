@@ -272,54 +272,58 @@ elseif (UNIX)
         utils/thread_posix.h
         utils/thread_posix.inc
     )
-    if (NN_HAVE_EPOLL)
-        add_compile_options (-DNN_USE_EPOLL)
-        LIST (APPEND NN_SOURCES
-            aio/poller_epoll.h
-            aio/poller_epoll.inc
-        )
-    elseif (NN_HAVE_KQUEUE)
-        add_compile_options (-DNN_USE_KQUEUE)
-        LIST (APPEND NN_SOURCES
-            aio/poller_kqueue.h
-            aio/poller_kqueue.inc
-        )
-    elseif (NN_HAVE_POLL)
-        add_compile_options (-DNN_USE_POLL)
-        LIST (APPEND NN_SOURCES
-            aio/poller_poll.h
-            aio/poller_poll.inc
-        )
-    else ()
-        message (FATAL_ERROR "ERROR: could not determine poller." )
-    endif ()
-    if (NN_HAVE_EVENTFD)
-        add_compile_options (-DNN_USE_EVENTFD)
-        list (APPEND NN_SOURCES
-            utils/efd_eventfd.h
-            utils/efd_eventfd.inc
-        )
-    elseif (NN_HAVE_PIPE)
-        add_compile_options (-DNN_USE_PIPE)
-        list (APPEND NN_SOURCES
-            utils/efd_pipe.h
-            utils/efd_pipe.inc
-        )
-    elseif (NN_HAVE_SOCKETPAIR)
-        add_compile_options (-DNN_USE_SOCKETPAIR)
-        list (APPEND NN_SOURCES
-            utils/efd_socketpair.h
-            utils/efd_socketpair.inc
-        )
-    elseif (NN_HAVE_WINSOCK)
-        add_compile_options (-DNN_USE_WINSOCK)
-        list (APPEND NN_SOURCES
-            utils/efd_win.h
-            utils/efd_win.inc
-        )
-    else ()
-        message (FATAL_ERROR "ERROR: could not determine poller." )
-    endif ()
+else ()
+    message (FATAL_ERROR "This should be unreachable. Please report issue at: ${ISSUE_REPORT_URL}")
+endif ()
+
+if (NN_HAVE_EPOLL)
+    add_compile_options (-DNN_USE_EPOLL)
+    LIST (APPEND NN_SOURCES
+        aio/poller_epoll.h
+        aio/poller_epoll.inc
+    )
+elseif (NN_HAVE_KQUEUE)
+    add_compile_options (-DNN_USE_KQUEUE)
+    LIST (APPEND NN_SOURCES
+        aio/poller_kqueue.h
+        aio/poller_kqueue.inc
+    )
+elseif (NN_HAVE_POLL)
+    add_compile_options (-DNN_USE_POLL)
+    LIST (APPEND NN_SOURCES
+        aio/poller_poll.h
+        aio/poller_poll.inc
+    )
+else ()
+    message (FATAL_ERROR "ERROR: could not determine socket polling mechanism.")
+endif ()
+
+if (NN_HAVE_EVENTFD)
+    add_compile_options (-DNN_USE_EVENTFD)
+    list (APPEND NN_SOURCES
+        utils/efd_eventfd.h
+        utils/efd_eventfd.inc
+    )
+elseif (NN_HAVE_PIPE)
+    add_compile_options (-DNN_USE_PIPE)
+    list (APPEND NN_SOURCES
+        utils/efd_pipe.h
+        utils/efd_pipe.inc
+    )
+elseif (NN_HAVE_SOCKETPAIR)
+    add_compile_options (-DNN_USE_SOCKETPAIR)
+    list (APPEND NN_SOURCES
+        utils/efd_socketpair.h
+        utils/efd_socketpair.inc
+    )
+elseif (NN_HAVE_WINSOCK)
+    add_compile_options (-DNN_USE_WINSOCK)
+    list (APPEND NN_SOURCES
+        utils/efd_win.h
+        utils/efd_win.inc
+    )
+else ()
+    message (FATAL_ERROR "ERROR: could not determine socket signalling mechanism.")
 endif ()
 
 # Provide same folder structure in IDE as on disk
@@ -339,7 +343,6 @@ foreach (f ${NN_SOURCES})
     source_group ("${SRC_GROUP}" FILES ${f})
 
     list (APPEND NANOMSG_SRC_FILES ${f})
-    #message( STATUS "${SRC_GROUP} -- ${f}")
 endforeach ()
 
 add_definitions (-DNN_EXPORTS)
@@ -364,6 +367,8 @@ elseif (UNIX)
     if(CMAKE_THREAD_LIBS_INIT)
         target_link_libraries (${PROJECT_NAME} "${CMAKE_THREAD_LIBS_INIT}")
     endif()
+else ()
+    message (FATAL_ERROR "This should be unreachable. Please report issue at: ${ISSUE_REPORT_URL}")
 endif ()
 
 install (TARGETS ${PROJECT_NAME}
