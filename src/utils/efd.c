@@ -29,7 +29,7 @@
     #include "efd_pipe.inc"
 #elif defined NN_USE_SOCKETPAIR
     #include "efd_socketpair.inc"
-#if defined NN_USE_WINSOCK
+#elif defined NN_USE_WINSOCK
     #include "efd_win.inc"
 #else
     #error
