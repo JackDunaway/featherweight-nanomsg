@@ -30,16 +30,16 @@
 
 #include "fd.h"
 
-#if defined NN_HAVE_WINDOWS
-#include "efd_win.h"
-#elif defined NN_HAVE_EVENTFD
-#include "efd_eventfd.h"
-#elif defined NN_HAVE_PIPE
-#include "efd_pipe.h"
-#elif defined NN_HAVE_SOCKETPAIR
-#include "efd_socketpair.h"
+#if defined NN_USE_EVENTFD
+    #include "efd_eventfd.h"
+#elif defined NN_USE_PIPE
+    #include "efd_pipe.h"
+#elif defined NN_USE_SOCKETPAIR
+    #include "efd_socketpair.h"
+#elif defined NN_USE_WINSOCK
+    #include "efd_win.h"
 #else
-#error
+    #error
 #endif
 
 /*  Initialise the efd object. */

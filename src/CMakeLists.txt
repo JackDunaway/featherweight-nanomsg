@@ -79,14 +79,6 @@ set (NN_SOURCES
     utils/cont.h
     utils/efd.h
     utils/efd.c
-    utils/efd_eventfd.h
-    utils/efd_eventfd.inc
-    utils/efd_pipe.h
-    utils/efd_pipe.inc
-    utils/efd_socketpair.h
-    utils/efd_socketpair.inc
-    utils/efd_win.h
-    utils/efd_win.inc
     utils/err.h
     utils/err.c
     utils/fast.h
@@ -298,7 +290,33 @@ elseif (UNIX)
     else ()
         message (FATAL_ERROR "ERROR: could not determine poller." )
     endif ()
-endif ()
+    if (NN_HAVE_EVENTFD)
+        add_compile_options (-DNN_USE_EVENTFD)
+        list (APPEND NN_SOURCES
+            utils/efd_eventfd.h
+            utils/efd_eventfd.inc
+        )
+    elseif (NN_HAVE_PIPE)
+        add_compile_options (-DNN_USE_PIPE)
+        list (APPEND NN_SOURCES
+            utils/efd_pipe.h
+            utils/efd_pipe.inc
+        )
+    elseif (NN_HAVE_SOCKETPAIR)
+        add_compile_options (-DNN_USE_SOCKETPAIR)
+        list (APPEND NN_SOURCES
+            utils/efd_socketpair.h
+            utils/efd_socketpair.inc
+        )
+    elseif (NN_HAVE_WINSOCK)
+        add_compile_options (-DNN_USE_WINSOCK)
+        list (APPEND NN_SOURCES
+            utils/efd_win.h
+            utils/efd_win.inc
+        )
+    else ()
+        message (FATAL_ERROR "ERROR: could not determine poller." )
+    endif ()
 
 # Provide same folder structure in IDE as on disk
 foreach (f ${NN_SOURCES})
@@ -326,6 +344,9 @@ if (NN_STATIC_LIB)
     add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})
 else ()
     add_library (${PROJECT_NAME} SHARED ${NN_SOURCES})
+    set_target_properties(${PROJECT_NAME} PROPERTIES
+        VERSION ${NN_PACKAGE_VERSION}
+        SOVERSION ${NN_ABI_VERSION})
 endif ()
 
 if (WIN32)

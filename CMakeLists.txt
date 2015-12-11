@@ -69,7 +69,7 @@ endif ()
 
 
 if (WIN32)
-
+    SET (NN_HAVE_WINSOCK 1)
 elseif (UNIX)
     find_package (Threads REQUIRED)
 #    CHECK_INCLUDE_FILE (netinet/in.h)
@@ -79,6 +79,7 @@ elseif (UNIX)
 #    CHECK_INCLUDE_FILE (sys/socket.h)
 #    CHECK_INCLUDE_FILE (sys/ioctl.h)
     check_library_exists (rt clock_gettime "" NN_HAVE_CLOCK_GETTIME)
+    execute_process (COMMAND ./abi_version.sh OUTPUT_VARIABLE NN_ABI_VERSION)
 else ()
 
 endif ()
@@ -133,14 +134,6 @@ endif ()
 
 if (NN_HAVE_PIPE2 OR NN_HAVE_ACCEPT4 OR NN_HAVE_GETADDRINFO_A)
     add_compile_options (-D_GNU_SOURCE)
-endif ()
-
-if (NN_HAVE_EVENTFD)
-    add_compile_options (-DNN_USE_EVENTFD)
-elseif (NN_HAVE_PIPE)
-    add_compile_options (-DNN_USE_PIPE)
-elseif (NN_HAVE_SOCKETPAIR)
-    add_compile_options (-DNN_USE_SOCKETPAIR)
 endif ()
 
 check_c_source_compiles ("
@@ -272,6 +265,12 @@ add_libnanomsg_perf (local_lat)
 add_libnanomsg_perf (remote_lat)
 add_libnanomsg_perf (local_thr)
 add_libnanomsg_perf (remote_thr)
+
+# # Output configuration header
+#
+# configure_file (config.h.cmake
+#                ${PROJECT_SOURCE_DIR}/src/config.h
+#                @ONLY)
 
 #  NSIS package
 
