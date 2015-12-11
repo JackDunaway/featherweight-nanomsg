@@ -283,12 +283,6 @@ add_libnanomsg_perf (remote_lat)
 add_libnanomsg_perf (local_thr)
 add_libnanomsg_perf (remote_thr)
 
-# # Output configuration header
-#
-# configure_file (config.h.cmake
-#                ${PROJECT_SOURCE_DIR}/src/config.h
-#                @ONLY)
-
 #  NSIS package
 
 install (FILES src/nn.h DESTINATION include/nanomsg)
@@ -310,3 +304,9 @@ endif()
 set (CPACK_GENERATOR "NSIS")
 set (CPACK_PACKAGE_NAME ${PROJECT_NAME})
 include (CPack)
+
+# Output all variables for debugging CMake script
+get_cmake_property (_variableNames VARIABLES)
+foreach (_variableName ${_variableNames})
+    message (STATUS "${_variableName}=${${_variableName}}")
+endforeach ()
