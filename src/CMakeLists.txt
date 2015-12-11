@@ -354,30 +354,30 @@ endforeach ()
 add_compile_options (-DNN_EXPORTS)
 
 if (NN_STATIC_LIB)
-    add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})
+    add_library (nanomsg STATIC ${NN_SOURCES})
 else ()
-    add_library (${PROJECT_NAME} SHARED ${NN_SOURCES})
-    set_target_properties(${PROJECT_NAME} PROPERTIES
+    add_library (nanomsg SHARED ${NN_SOURCES})
+    set_target_properties(nanomsg PROPERTIES
         VERSION ${NN_PACKAGE_VERSION}
         SOVERSION ${NN_ABI_VERSION})
 endif ()
 
 if (WIN32)
-    target_link_libraries (${PROJECT_NAME} ws2_32)
-    target_link_libraries (${PROJECT_NAME} mswsock)
-    target_link_libraries (${PROJECT_NAME} advapi32)
+    target_link_libraries (nanomsg ws2_32)
+    target_link_libraries (nanomsg mswsock)
+    target_link_libraries (nanomsg advapi32)
 elseif (UNIX)
     if(THREADS_HAVE_PTHREAD_ARG)
-        target_compile_options (${PROJECT_NAME} PUBLIC "-pthread")
+        add_compile_options (-pthread)
     endif()
     if(CMAKE_THREAD_LIBS_INIT)
-        target_link_libraries (${PROJECT_NAME} "${CMAKE_THREAD_LIBS_INIT}")
+        target_link_libraries (nanomsg "${CMAKE_THREAD_LIBS_INIT}")
     endif()
 else ()
     message (FATAL_ERROR "Assertion failed; this path is unreachable.")
 endif ()
 
-install (TARGETS ${PROJECT_NAME}
+install (TARGETS nanomsg
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
