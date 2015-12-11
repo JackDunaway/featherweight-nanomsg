@@ -122,7 +122,7 @@ endif ()
 
 check_library_exists (anl getaddrinfo_a "" NN_HAVE_GETADDRINFO_A)
 check_library_exists (rt sem_wait "" NN_HAVE_SEMAPHORE_RT)
-check_library_exists (rt pthread "" NN_HAVE_SEMAPHORE_PTHREAD)
+check_library_exists (pthread sem_wait  "" NN_HAVE_SEMAPHORE_PTHREAD)
 
 if (NN_HAVE_SEMAPHORE_RT OR NN_HAVE_SEMAPHORE_PTHREAD)
     add_compile_options (-DNN_HAVE_SEMAPHORE)

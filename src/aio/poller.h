@@ -23,7 +23,7 @@
 #ifndef NN_POLLER_INCLUDED
 #define NN_POLLER_INCLUDED
 
-#if !defined NN_HAVE_WINDOWS
+#if !defined NN_USE_WINSOCK
 
 #define NN_POLLER_IN 1
 #define NN_POLLER_OUT 2
