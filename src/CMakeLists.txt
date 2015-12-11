@@ -298,7 +298,7 @@ elseif (NN_HAVE_POLL)
         aio/poller_poll.h
         aio/poller_poll.inc
     )
-elseif (NN_HAVE_WINDOWS)
+elseif (NN_HAVE_WINSOCK)
     # No operation
 else ()
     message (AUTHOR_WARNING "ERROR: could not determine socket polling mechanism.")
