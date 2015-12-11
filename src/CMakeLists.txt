@@ -320,12 +320,12 @@ foreach (f ${NN_SOURCES})
     #message( STATUS "${SRC_GROUP} -- ${f}")
 endforeach ()
 
+add_definitions (-DNN_EXPORTS)
 
 if (NN_STATIC_LIB)
     add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})
 else ()
     add_library (${PROJECT_NAME} SHARED ${NN_SOURCES})
-    add_definitions (-DNN_EXPORTS)
 endif ()
 
 if (WIN32)
