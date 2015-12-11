@@ -300,6 +300,27 @@ elseif (UNIX)
     endif ()
 endif ()
 
+# Provide same folder structure in IDE as on disk
+foreach (f ${NN_SOURCES})
+    # Get the path of the file relative to source directory
+    if (IS_ABSOLUTE "${f}")
+        file (RELATIVE_PATH f ${CMAKE_CURRENT_SOURCE_DIR} ${f})
+    endif ()
+    set (SRC_GROUP "${f}")
+    set (f "${CMAKE_CURRENT_SOURCE_DIR}/${f}")
+
+    # Remove the filename part
+    string (REGEX REPLACE "(.*)(/[^/]*)$" "\\1" SRC_GROUP ${SRC_GROUP})
+
+    # CMake source_group expects \\, not /
+    string (REPLACE / \\ SRC_GROUP ${SRC_GROUP})
+    source_group ("${SRC_GROUP}" FILES ${f})
+
+    list (APPEND NANOMSG_SRC_FILES ${f})
+    #message( STATUS "${SRC_GROUP} -- ${f}")
+endforeach ()
+
+
 if (NN_STATIC_LIB)
     add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})
 else ()
