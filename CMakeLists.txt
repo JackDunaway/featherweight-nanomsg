@@ -200,7 +200,7 @@ add_subdirectory (src)
 
 if (ENABLE_NANOCAT)
     add_executable (nanocat tools/nanocat.c tools/options.c)
-    target_link_libraries (nanocat ${PROJECT_NAME})
+    target_link_libraries (nanocat "${PROJECT_NAME}")
 endif ()
 
 #  Build unit tests.
@@ -210,7 +210,7 @@ set (all_tests "")
 macro (add_libnanomsg_test NAME TIMEOUT)
     list (APPEND all_tests ${NAME})
     add_executable (${NAME} tests/${NAME}.c)
-    target_link_libraries (${NAME} ${PROJECT_NAME})
+    target_link_libraries (${NAME} "${PROJECT_NAME}")
     add_test (NAME ${NAME} COMMAND ${NAME})
     set_tests_properties (${NAME} PROPERTIES TIMEOUT ${TIMEOUT})
 endmacro (add_libnanomsg_test)
@@ -273,7 +273,7 @@ endif ()
 
 macro (add_libnanomsg_perf NAME)
     add_executable (${NAME} perf/${NAME}.c)
-    target_link_libraries (${NAME} ${PROJECT_NAME})
+    target_link_libraries (${NAME} "${PROJECT_NAME}")
 endmacro (add_libnanomsg_perf)
 
 add_libnanomsg_perf (inproc_lat)
@@ -302,7 +302,7 @@ if (BUILD_NANOCAT)
 endif()
 
 set (CPACK_GENERATOR "NSIS")
-set (CPACK_PACKAGE_NAME ${PROJECT_NAME})
+set (CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 include (CPack)
 
 # Output all variables for debugging CMake script
