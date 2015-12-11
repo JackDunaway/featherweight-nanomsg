@@ -23,8 +23,6 @@
 #ifndef NN_POLLER_INCLUDED
 #define NN_POLLER_INCLUDED
 
-#if !defined NN_USE_WINSOCK
-
 #define NN_POLLER_IN 1
 #define NN_POLLER_OUT 2
 #define NN_POLLER_ERR 3
@@ -53,6 +51,3 @@ int nn_poller_event (struct nn_poller *self, int *event,
     struct nn_poller_hndl **hndl);
 
 #endif
-
-#endif
-
