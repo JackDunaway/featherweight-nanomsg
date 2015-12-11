@@ -37,7 +37,7 @@ set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 # Determine library versions.
 
 execute_process (COMMAND ./abi_version.sh OUTPUT_VARIABLE NN_ABI_VERSION)
-set (ISSUE_REPORT_URL "https://github.com/nanomsg/nanomsg")
+set (ISSUE_REPORT_MSG "Please consider opening an issue at https://github.com/nanomsg/nanomsg with your findings")
 
 # User-defined options.
 
@@ -77,10 +77,8 @@ elseif (${CMAKE_SYSTEM_NAME} MATCHES "QNX")
     find_package (Threads REQUIRED)
     check_library_exists (socket socket "" NN_HAVE_QNX_SOCKET)
 else ()
-    message (FATAL_ERROR "ERROR: This platform may or may not be supported: ${CMAKE_SYSTEM_NAME}")
-    message (AUTHOR_WARNING "1) Disable this FATAL_ERROR message in CMakeLists.txt" )
-    message (AUTHOR_WARNING "2) Rebuild" )
-    message (AUTHOR_WARNING "3) Please consider opening an issue at ${ISSUE_REPORT_URL} with your findings." )
+    message (AUTHOR_WARNING "WARNING: This platform may or may not be supported: ${CMAKE_SYSTEM_NAME}")
+    message (AUTHOR_WARNING "${ISSUE_REPORT_MSG}" )
 endif ()
 
 # Compiler checks.
@@ -100,10 +98,8 @@ elseif (${CMAKE_C_COMPILER_ID} MATCHES "MSVC")
 elseif (MINGW)
     message (FATAL_ERROR "ERROR: MinGW is officially no longer supported." )
 else ()
-    message (FATAL_ERROR "ERROR: This compiler may or may not be supported: ${CMAKE_C_COMPILER_ID}")
-    message (AUTHOR_WARNING "1) Disable this FATAL_ERROR message in CMakeLists.txt" )
-    message (AUTHOR_WARNING "2) Rebuild" )
-    message (AUTHOR_WARNING "3) Please consider opening an issue at ${ISSUE_REPORT_URL} with your findings." )
+    message (AUTHOR_WARNING "WARNING: This compiler may or may not be supported: ${CMAKE_C_COMPILER_ID}")
+    message (AUTHOR_WARNING "${ISSUE_REPORT_MSG}" )
 endif ()
 
 check_include_file (stdint.h NN_HAVE_STDINT)

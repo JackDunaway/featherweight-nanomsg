@@ -252,7 +252,7 @@ set (NN_SOURCES
 )
 
 if (WIN32)
-    LIST (APPEND NN_SOURCES
+    list (APPEND NN_SOURCES
         utils/win.h
         utils/thread_win.h
         utils/thread_win.inc
@@ -262,7 +262,7 @@ if (WIN32)
         aio/worker_win.inc
     )
 elseif (UNIX)
-    LIST (APPEND NN_SOURCES
+    list (APPEND NN_SOURCES
         aio/poller.h
         aio/poller.c
         aio/usock_posix.h
@@ -273,29 +273,30 @@ elseif (UNIX)
         utils/thread_posix.inc
     )
 else ()
-    message (FATAL_ERROR "This should be unreachable. Please report issue at: ${ISSUE_REPORT_URL}")
+    message (FATAL_ERROR "Assertion failed; this path is unreachable.")
 endif ()
 
 if (NN_HAVE_EPOLL)
     add_compile_options (-DNN_USE_EPOLL)
-    LIST (APPEND NN_SOURCES
+    list (APPEND NN_SOURCES
         aio/poller_epoll.h
         aio/poller_epoll.inc
     )
 elseif (NN_HAVE_KQUEUE)
     add_compile_options (-DNN_USE_KQUEUE)
-    LIST (APPEND NN_SOURCES
+    list (APPEND NN_SOURCES
         aio/poller_kqueue.h
         aio/poller_kqueue.inc
     )
 elseif (NN_HAVE_POLL)
     add_compile_options (-DNN_USE_POLL)
-    LIST (APPEND NN_SOURCES
+    list (APPEND NN_SOURCES
         aio/poller_poll.h
         aio/poller_poll.inc
     )
 else ()
-    message (FATAL_ERROR "ERROR: could not determine socket polling mechanism.")
+    message (AUTHOR_WARNING "ERROR: could not determine socket polling mechanism.")
+    message (AUTHOR_WARNING "${ISSUE_REPORT_MSG}" )
 endif ()
 
 if (NN_HAVE_EVENTFD)
@@ -323,7 +324,8 @@ elseif (NN_HAVE_WINSOCK)
         utils/efd_win.inc
     )
 else ()
-    message (FATAL_ERROR "ERROR: could not determine socket signalling mechanism.")
+    message (AUTHOR_WARNING "ERROR: could not determine socket signalling mechanism.")
+    message (AUTHOR_WARNING "${ISSUE_REPORT_MSG}" )
 endif ()
 
 # Provide same folder structure in IDE as on disk
@@ -368,7 +370,7 @@ elseif (UNIX)
         target_link_libraries (${PROJECT_NAME} "${CMAKE_THREAD_LIBS_INIT}")
     endif()
 else ()
-    message (FATAL_ERROR "This should be unreachable. Please report issue at: ${ISSUE_REPORT_URL}")
+    message (FATAL_ERROR "Assertion failed; this path is unreachable.")
 endif ()
 
 install (TARGETS ${PROJECT_NAME}
