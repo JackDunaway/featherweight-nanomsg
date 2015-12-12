@@ -34,10 +34,12 @@ set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set (CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set (CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
+set (ISSUE_REPORT_MSG "Please consider opening an issue at https://github.com/nanomsg/nanomsg with your findings")
+
 # Determine library versions.
 
 execute_process (COMMAND ./abi_version.sh OUTPUT_VARIABLE NN_ABI_VERSION)
-set (ISSUE_REPORT_MSG "Please consider opening an issue at https://github.com/nanomsg/nanomsg with your findings")
+message (STATUS "Detected nanomsg ABI v${NN_ABI_VERSION}")
 
 # User-defined options.
 
@@ -103,6 +105,9 @@ else ()
 endif ()
 
 check_include_file (stdint.h NN_HAVE_STDINT)
+if (NN_HAVE_STDINT)
+    add_definitions (-DNN_HAVE_STDINT)
+endif ()
 #    CHECK_INCLUDE_FILE (netinet/in.h)
 #    CHECK_INCLUDE_FILE (netdb.h)
 #    CHECK_INCLUDE_FILE (arpa/inet.h)
