@@ -275,7 +275,7 @@ else ()
 endif ()
 
 if (NN_HAVE_EPOLL)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_EPOLL)
+    add_definitions (-DNN_USE_EPOLL)
     list (APPEND NN_SOURCES
         aio/poller.h
         aio/poller.c
@@ -283,7 +283,7 @@ if (NN_HAVE_EPOLL)
         aio/poller_epoll.inc
     )
 elseif (NN_HAVE_KQUEUE)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_KQUEUE)
+    add_definitions (-DNN_USE_KQUEUE)
     list (APPEND NN_SOURCES
         aio/poller.h
         aio/poller.c
@@ -291,7 +291,7 @@ elseif (NN_HAVE_KQUEUE)
         aio/poller_kqueue.inc
     )
 elseif (NN_HAVE_POLL)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_POLL)
+    add_definitions (-DNN_USE_POLL)
     list (APPEND NN_SOURCES
         aio/poller.h
         aio/poller.c
@@ -306,25 +306,25 @@ else ()
 endif ()
 
 if (NN_HAVE_EVENTFD)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_EVENTFD)
+    add_definitions (-DNN_USE_EVENTFD)
     list (APPEND NN_SOURCES
         utils/efd_eventfd.h
         utils/efd_eventfd.inc
     )
 elseif (NN_HAVE_PIPE)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_PIPE)
+    add_definitions (-DNN_USE_PIPE)
     list (APPEND NN_SOURCES
         utils/efd_pipe.h
         utils/efd_pipe.inc
     )
 elseif (NN_HAVE_SOCKETPAIR)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_SOCKETPAIR)
+    add_definitions (-DNN_USE_SOCKETPAIR)
     list (APPEND NN_SOURCES
         utils/efd_socketpair.h
         utils/efd_socketpair.inc
     )
 elseif (NN_HAVE_WINSOCK)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_WINSOCK)
+    add_definitions (-DNN_USE_WINSOCK)
     list (APPEND NN_SOURCES
         utils/efd_win.h
         utils/efd_win.inc
@@ -351,7 +351,7 @@ foreach (f ${NN_SOURCES})
     source_group ("${SRC_GROUP}" FILES ${f})
 endforeach ()
 
-target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_EXPORTS)
+add_definitions (-DNN_EXPORTS)
 
 if (NN_STATIC_LIB)
     add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})

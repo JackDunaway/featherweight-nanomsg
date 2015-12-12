@@ -49,31 +49,31 @@ option (ENABLE_GETADDRINFO_A "Enable/disable use of getaddrinfo_a in place of ge
 #  Platform checks.
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_LINUX)
+    add_definitions (-DNN_HAVE_LINUX)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_OSX)
+    add_definitions (-DNN_HAVE_OSX)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
     SET (NN_HAVE_WINSOCK 1)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_WINDOWS)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -D_CRT_SECURE_NO_WARNINGS)
+    add_definitions (-DNN_HAVE_WINDOWS)
+    add_definitions (-D_CRT_SECURE_NO_WARNINGS)
 elseif (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_FREEBSD)
+    add_definitions (-DNN_HAVE_FREEBSD)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_NETBSD)
+    add_definitions (-DNN_HAVE_NETBSD)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_OPENBSD)
+    add_definitions (-DNN_HAVE_OPENBSD)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Solaris|SunOS")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_SOLARIS)
+    add_definitions (-DNN_HAVE_SOLARIS)
     find_package (Threads REQUIRED)
     check_library_exists (socket socket "" NN_HAVE_SOLARIS_SOCKET)
     check_library_exists (nsl gethostbyname "" NN_HAVE_SOLARIS_GETHOSTBYNAME)
 elseif (CMAKE_SYSTEM_NAME MATCHES "QNX")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_QNX)
+    add_definitions (-DNN_HAVE_QNX)
     find_package (Threads REQUIRED)
     check_library_exists (socket socket "" NN_HAVE_QNX_SOCKET)
 else ()
@@ -84,17 +84,17 @@ endif ()
 # Compiler checks.
 
 if (CMAKE_C_COMPILER_ID MATCHES "GNU")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_GCC)
+    add_definitions (-DNN_HAVE_GCC)
 elseif (CMAKE_C_COMPILER_ID MATCHES "Intel")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_ICC)
+    add_definitions (-DNN_HAVE_ICC)
 elseif (CMAKE_C_COMPILER_ID MATCHES "SunPro")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_SUN_STUDIO)
+    add_definitions (-DNN_HAVE_SUN_STUDIO)
 elseif (CMAKE_C_COMPILER_ID MATCHES "Clang")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_CLANG)
+    add_definitions (-DNN_HAVE_CLANG)
 elseif (CMAKE_C_COMPILER_ID MATCHES "HP")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_HPACC)
+    add_definitions (-DNN_HAVE_HPACC)
 elseif (CMAKE_C_COMPILER_ID MATCHES "MSVC")
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_MSVC)
+    add_definitions (-DNN_HAVE_MSVC)
 elseif (MINGW)
     message (FATAL_ERROR "ERROR: MinGW is officially no longer supported.")
 else ()
@@ -126,19 +126,19 @@ check_library_exists (rt sem_wait "" NN_HAVE_SEMAPHORE_RT)
 check_library_exists (pthread sem_wait  "" NN_HAVE_SEMAPHORE_PTHREAD)
 
 if (NN_HAVE_POLL)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_POLL)
+    add_definitions (-DNN_HAVE_POLL)
 endif ()
 
 if (NN_HAVE_SEMAPHORE_RT OR NN_HAVE_SEMAPHORE_PTHREAD)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_SEMAPHORE)
+    add_definitions (-DNN_HAVE_SEMAPHORE)
 endif ()
 
 if (NOT ENABLE_GETADDRINFO_A)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_DISABLE_GETADDRINFO_A)
+    add_definitions (-DNN_DISABLE_GETADDRINFO_A)
 endif ()
 
 if (NN_HAVE_PIPE2 OR NN_HAVE_ACCEPT4 OR NN_HAVE_GETADDRINFO_A)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -D_GNU_SOURCE)
+    add_definitions (-D_GNU_SOURCE)
 endif ()
 
 check_c_source_compiles ("
@@ -151,7 +151,7 @@ check_c_source_compiles ("
     }
 " NN_HAVE_CLOCK_MONOTONIC)
 if (NN_HAVE_CLOCK_MONOTONIC)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_CLOCK_MONOTONIC)
+    add_definitions (-DNN_HAVE_CLOCK_MONOTONIC)
 endif ()
 
 check_c_source_compiles ("
@@ -165,7 +165,7 @@ check_c_source_compiles ("
     }
 " NN_HAVE_GCC_ATOMIC_BUILTINS)
 if (NN_HAVE_GCC_ATOMIC_BUILTINS)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_GCC_ATOMIC_BUILTINS)
+    add_definitions (-DNN_HAVE_GCC_ATOMIC_BUILTINS)
 endif ()
 
 check_c_source_compiles ("
@@ -178,7 +178,7 @@ check_c_source_compiles ("
     }
 " NN_HAVE_ATOMIC_SOLARIS)
 if (NN_HAVE_ATOMIC_SOLARIS)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_ATOMIC_SOLARIS)
+    add_definitions (-DNN_HAVE_ATOMIC_SOLARIS)
 endif ()
 
 check_c_source_compiles ("
@@ -191,7 +191,7 @@ check_c_source_compiles ("
     }
 " NN_HAVE_MSG_CONTROL)
 if (NN_HAVE_MSG_CONTROL)
-    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_MSG_CONTROL)
+    add_definitions (-DNN_HAVE_MSG_CONTROL)
 endif ()
 
 add_subdirectory (src)
