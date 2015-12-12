@@ -275,7 +275,7 @@ else ()
 endif ()
 
 if (NN_HAVE_EPOLL)
-    add_compile_options (-DNN_USE_EPOLL)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_EPOLL)
     list (APPEND NN_SOURCES
         aio/poller.h
         aio/poller.c
@@ -283,7 +283,7 @@ if (NN_HAVE_EPOLL)
         aio/poller_epoll.inc
     )
 elseif (NN_HAVE_KQUEUE)
-    add_compile_options (-DNN_USE_KQUEUE)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_KQUEUE)
     list (APPEND NN_SOURCES
         aio/poller.h
         aio/poller.c
@@ -291,7 +291,7 @@ elseif (NN_HAVE_KQUEUE)
         aio/poller_kqueue.inc
     )
 elseif (NN_HAVE_POLL)
-    add_compile_options (-DNN_USE_POLL)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_POLL)
     list (APPEND NN_SOURCES
         aio/poller.h
         aio/poller.c
@@ -306,25 +306,25 @@ else ()
 endif ()
 
 if (NN_HAVE_EVENTFD)
-    add_compile_options (-DNN_USE_EVENTFD)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_EVENTFD)
     list (APPEND NN_SOURCES
         utils/efd_eventfd.h
         utils/efd_eventfd.inc
     )
 elseif (NN_HAVE_PIPE)
-    add_compile_options (-DNN_USE_PIPE)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_PIPE)
     list (APPEND NN_SOURCES
         utils/efd_pipe.h
         utils/efd_pipe.inc
     )
 elseif (NN_HAVE_SOCKETPAIR)
-    add_compile_options (-DNN_USE_SOCKETPAIR)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_SOCKETPAIR)
     list (APPEND NN_SOURCES
         utils/efd_socketpair.h
         utils/efd_socketpair.inc
     )
 elseif (NN_HAVE_WINSOCK)
-    add_compile_options (-DNN_USE_WINSOCK)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_USE_WINSOCK)
     list (APPEND NN_SOURCES
         utils/efd_win.h
         utils/efd_win.inc
@@ -351,33 +351,33 @@ foreach (f ${NN_SOURCES})
     source_group ("${SRC_GROUP}" FILES ${f})
 endforeach ()
 
-add_compile_options (-DNN_EXPORTS)
+target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_EXPORTS)
 
 if (NN_STATIC_LIB)
-    add_library (nanomsg STATIC ${NN_SOURCES})
+    add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})
 else ()
-    add_library (nanomsg SHARED ${NN_SOURCES})
-    set_target_properties(nanomsg PROPERTIES
+    add_library (${PROJECT_NAME} SHARED ${NN_SOURCES})
+    set_target_properties(${PROJECT_NAME} PROPERTIES
         VERSION ${NN_PACKAGE_VERSION}
         SOVERSION ${NN_ABI_VERSION})
 endif ()
 
 if (WIN32)
-    target_link_libraries (nanomsg ws2_32)
-    target_link_libraries (nanomsg mswsock)
-    target_link_libraries (nanomsg advapi32)
+    target_link_libraries (${PROJECT_NAME} ws2_32)
+    target_link_libraries (${PROJECT_NAME} mswsock)
+    target_link_libraries (${PROJECT_NAME} advapi32)
 elseif (UNIX)
     if(THREADS_HAVE_PTHREAD_ARG)
-        add_compile_options (-pthread)
+        target_compile_options (${PROJECT_NAME} INTERFACE -pthread)
     endif()
     if(CMAKE_THREAD_LIBS_INIT)
-        target_link_libraries (nanomsg "${CMAKE_THREAD_LIBS_INIT}")
+        target_link_libraries (${PROJECT_NAME} "${CMAKE_THREAD_LIBS_INIT}")
     endif()
 else ()
     message (FATAL_ERROR "Assertion failed; this path is unreachable.")
 endif ()
 
-install (TARGETS nanomsg
+install (TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin

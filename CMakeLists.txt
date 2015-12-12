@@ -49,31 +49,31 @@ option (ENABLE_GETADDRINFO_A "Enable/disable use of getaddrinfo_a in place of ge
 #  Platform checks.
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
-    add_compile_options (-DNN_HAVE_LINUX)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_LINUX)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    add_compile_options (-DNN_HAVE_OSX)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_OSX)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
     SET (NN_HAVE_WINSOCK 1)
-    add_compile_options (-DNN_HAVE_WINDOWS)
-    add_compile_options (-D_CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_WINDOWS)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -D_CRT_SECURE_NO_WARNINGS)
 elseif (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
-    add_compile_options (-DNN_HAVE_FREEBSD)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_FREEBSD)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
-    add_compile_options (-DNN_HAVE_NETBSD)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_NETBSD)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
-    add_compile_options (-DNN_HAVE_OPENBSD)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_OPENBSD)
     find_package (Threads REQUIRED)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Solaris|SunOS")
-    add_compile_options (-DNN_HAVE_SOLARIS)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_SOLARIS)
     find_package (Threads REQUIRED)
     check_library_exists (socket socket "" NN_HAVE_SOLARIS_SOCKET)
     check_library_exists (nsl gethostbyname "" NN_HAVE_SOLARIS_GETHOSTBYNAME)
 elseif (CMAKE_SYSTEM_NAME MATCHES "QNX")
-    add_compile_options (-DNN_HAVE_QNX)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_QNX)
     find_package (Threads REQUIRED)
     check_library_exists (socket socket "" NN_HAVE_QNX_SOCKET)
 else ()
@@ -84,17 +84,17 @@ endif ()
 # Compiler checks.
 
 if (CMAKE_C_COMPILER_ID MATCHES "GNU")
-    add_compile_options (-DNN_HAVE_GCC)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_GCC)
 elseif (CMAKE_C_COMPILER_ID MATCHES "Intel")
-    add_compile_options (-DNN_HAVE_ICC)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_ICC)
 elseif (CMAKE_C_COMPILER_ID MATCHES "SunPro")
-    add_compile_options (-DNN_HAVE_SUN_STUDIO)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_SUN_STUDIO)
 elseif (CMAKE_C_COMPILER_ID MATCHES "Clang")
-    add_compile_options (-DNN_HAVE_CLANG)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_CLANG)
 elseif (CMAKE_C_COMPILER_ID MATCHES "HP")
-    add_compile_options (-DNN_HAVE_HPACC)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_HPACC)
 elseif (CMAKE_C_COMPILER_ID MATCHES "MSVC")
-    add_compile_options (-DNN_HAVE_MSVC)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_MSVC)
 elseif (MINGW)
     message (FATAL_ERROR "ERROR: MinGW is officially no longer supported.")
 else ()
@@ -126,19 +126,19 @@ check_library_exists (rt sem_wait "" NN_HAVE_SEMAPHORE_RT)
 check_library_exists (pthread sem_wait  "" NN_HAVE_SEMAPHORE_PTHREAD)
 
 if (NN_HAVE_POLL)
-    add_compile_options (-DNN_HAVE_POLL)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_POLL)
 endif ()
 
 if (NN_HAVE_SEMAPHORE_RT OR NN_HAVE_SEMAPHORE_PTHREAD)
-    add_compile_options (-DNN_HAVE_SEMAPHORE)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_SEMAPHORE)
 endif ()
 
 if (NOT ENABLE_GETADDRINFO_A)
-    add_compile_options (-DNN_DISABLE_GETADDRINFO_A)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_DISABLE_GETADDRINFO_A)
 endif ()
 
 if (NN_HAVE_PIPE2 OR NN_HAVE_ACCEPT4 OR NN_HAVE_GETADDRINFO_A)
-    add_compile_options (-D_GNU_SOURCE)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -D_GNU_SOURCE)
 endif ()
 
 check_c_source_compiles ("
@@ -151,7 +151,7 @@ check_c_source_compiles ("
     }
 " NN_HAVE_CLOCK_MONOTONIC)
 if (NN_HAVE_CLOCK_MONOTONIC)
-    add_compile_options (-DNN_HAVE_CLOCK_MONOTONIC)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_CLOCK_MONOTONIC)
 endif ()
 
 check_c_source_compiles ("
@@ -165,7 +165,7 @@ check_c_source_compiles ("
     }
 " NN_HAVE_GCC_ATOMIC_BUILTINS)
 if (NN_HAVE_GCC_ATOMIC_BUILTINS)
-    add_compile_options (-DNN_HAVE_GCC_ATOMIC_BUILTINS)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_GCC_ATOMIC_BUILTINS)
 endif ()
 
 check_c_source_compiles ("
@@ -178,7 +178,7 @@ check_c_source_compiles ("
     }
 " NN_HAVE_ATOMIC_SOLARIS)
 if (NN_HAVE_ATOMIC_SOLARIS)
-    add_compile_options (-DNN_HAVE_ATOMIC_SOLARIS)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_ATOMIC_SOLARIS)
 endif ()
 
 check_c_source_compiles ("
@@ -191,7 +191,7 @@ check_c_source_compiles ("
     }
 " NN_HAVE_MSG_CONTROL)
 if (NN_HAVE_MSG_CONTROL)
-    add_compile_options (-DNN_HAVE_MSG_CONTROL)
+    target_compile_definitions (${PROJECT_NAME} INTERFACE -DNN_HAVE_MSG_CONTROL)
 endif ()
 
 add_subdirectory (src)
@@ -200,7 +200,7 @@ add_subdirectory (src)
 
 if (ENABLE_NANOCAT)
     add_executable (nanocat tools/nanocat.c tools/options.c)
-    target_link_libraries (nanocat nanomsg)
+    target_link_libraries (nanocat ${PROJECT_NAME})
 endif ()
 
 #  Build unit tests.
@@ -210,7 +210,7 @@ set (all_tests "")
 macro (add_libnanomsg_test NAME TIMEOUT)
     list (APPEND all_tests ${NAME})
     add_executable (${NAME} tests/${NAME}.c)
-    target_link_libraries (${NAME} nanomsg)
+    target_link_libraries (${NAME} ${PROJECT_NAME})
     add_test (NAME ${NAME} COMMAND ${NAME})
     set_tests_properties (${NAME} PROPERTIES TIMEOUT ${TIMEOUT})
 endmacro (add_libnanomsg_test)
@@ -273,7 +273,7 @@ endif ()
 
 macro (add_libnanomsg_perf NAME)
     add_executable (${NAME} perf/${NAME}.c)
-    target_link_libraries (${NAME} nanomsg)
+    target_link_libraries (${NAME} ${PROJECT_NAME})
 endmacro (add_libnanomsg_perf)
 
 add_libnanomsg_perf (inproc_lat)
@@ -302,7 +302,7 @@ if (BUILD_NANOCAT)
 endif()
 
 set (CPACK_GENERATOR "NSIS")
-set (CPACK_PACKAGE_NAME nanomsg)
+set (CPACK_PACKAGE_NAME ${PROJECT_NAME})
 include (CPack)
 
 # Output all variables for debugging CMake script
