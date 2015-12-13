@@ -32,12 +32,14 @@ extern "C" {
 #include <errno.h>
 #include <stddef.h>
 
-/*  Handle DSO symbol visibility                                             */
+/*  Handle DSO symbol visibility. */
 #if defined NN_NO_EXPORTS
 #   define NN_EXPORT
 #else
 #   if defined _WIN32
-#      if defined NN_EXPORTS
+#      if defined NN_STATIC_LIB
+#          define NN_EXPORT extern
+#      elif defined NN_SHARED_LIB
 #          define NN_EXPORT __declspec(dllexport)
 #      else
 #          define NN_EXPORT __declspec(dllimport)

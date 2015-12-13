@@ -351,13 +351,13 @@ foreach (f ${NN_SOURCES})
     source_group ("${SRC_GROUP}" FILES ${f})
 endforeach ()
 
-add_definitions (-DNN_EXPORTS)
-
 if (NN_STATIC_LIB)
     add_library (${PROJECT_NAME} STATIC ${NN_SOURCES})
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_STATIC_LIB)
 else ()
     add_library (${PROJECT_NAME} SHARED ${NN_SOURCES})
-    set_target_properties(${PROJECT_NAME} PROPERTIES
+    target_compile_options (${PROJECT_NAME} PUBLIC -DNN_SHARED_LIB)
+    set_target_properties (${PROJECT_NAME} PROPERTIES
         VERSION ${NN_PACKAGE_VERSION}
         SOVERSION ${NN_ABI_VERSION})
 endif ()
@@ -368,7 +368,7 @@ if (WIN32)
     target_link_libraries (${PROJECT_NAME} advapi32)
 elseif (UNIX)
     if(THREADS_HAVE_PTHREAD_ARG)
-        target_compile_options (${PROJECT_NAME} INTERFACE -pthread)
+        target_compile_options (${PROJECT_NAME} PUBLIC -pthread)
     endif()
     if(CMAKE_THREAD_LIBS_INIT)
         target_link_libraries (${PROJECT_NAME} "${CMAKE_THREAD_LIBS_INIT}")
