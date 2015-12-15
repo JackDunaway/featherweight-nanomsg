@@ -180,7 +180,7 @@ static void nn_ws_fuzzing_client (NN_UNUSED void *args)
     return;
 }
 
-static void nn_ws_fuzzing_server (NN_UNUSED void)
+static void nn_ws_fuzzing_server (NN_UNUSED void *args)
 {
     FILE *fd;
     int rc;
