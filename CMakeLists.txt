@@ -24,6 +24,7 @@
 
 cmake_minimum_required (VERSION 2.8.12)
 include (CheckIncludeFiles)
+include (CheckFunctionExists)
 include (CheckSymbolExists)
 include (CheckLibraryExists)
 include (CheckCSourceCompiles)
