@@ -48,6 +48,37 @@ else ()
     message (STATUS "Detected nanomsg ABI v${NN_ABI_VERSION}")
 endif ()
 
+# Determine package version.
+find_package(Git QUIET)
+if (DEFINED ENV{TRAVIS_TAG})
+    set (NN_PACKAGE_VERSION "$ENV{TRAVIS_TAG}")
+elseif (GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
+    # Working off a git repo, using git versioning
+
+    # Get version from last tag
+    execute_process(
+        COMMAND             "${GIT_EXECUTABLE}" describe --always# | sed -e "s:v::" 
+        WORKING_DIRECTORY   "${PROJECT_SOURCE_DIR}"
+        OUTPUT_VARIABLE     NN_PACKAGE_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+    # If the sources have been changed locally, add -dirty to the version.
+    execute_process(
+        COMMAND             "${GIT_EXECUTABLE}" diff --quiet
+        WORKING_DIRECTORY   "${PROJECT_SOURCE_DIR}"
+        RESULT_VARIABLE     res)
+    if (res EQUAL 1)
+        set (NN_PACKAGE_VERSION "${NN_PACKAGE_VERSION}-dirty")
+    endif()
+
+elseif (EXISTS .version)
+    #  If git is not available (e.g. when building from source package)
+    #  we can extract the package version from .version file.
+    file (READ .version NN_PACKAGE_VERSION)
+else ()
+    set (NN_PACKAGE_VERSION "Unknown")
+endif()
+
 # User-defined options.
 
 option (WS_AUTOBAHN_TESTS "Enable Autobahn TestSuite test for WebSocket transport. Required: http://autobahn.ws/testsuite/installation.html" OFF)
