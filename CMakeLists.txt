@@ -90,11 +90,12 @@ endif()
 # User-defined options.
 
 option (NN_STATIC_LIB "Build static library instead of shared library." OFF)
-option (NN_ENABLE_DOC "Enable building documentation." ON)
+option (NN_ENABLE_DOC "Enable building documentation." OFF)
 option (NN_ENABLE_GETADDRINFO_A "Enable/disable use of getaddrinfo_a in place of getaddrinfo." ON)
 option (NN_TESTS "Build and run nanomsg tests" ON)
 option (NN_TOOLS "Build nanomsg tools" ON)
 option (NN_ENABLE_NANOCAT "Enable building nanocat utility." ${NN_TOOLS})
+option (NN_WS_AUTOBAHN_TESTS "Enable Autobahn TestSuite test for WebSocket transport. Required: http://autobahn.ws/testsuite/installation.html" OFF)
 
 #  Platform checks.
 
@@ -105,7 +106,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     add_definitions (-DNN_HAVE_OSX)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Windows")
-    SET (NN_HAVE_WINSOCK 1)
+    set (NN_HAVE_WINSOCK 1)
     add_definitions (-DNN_HAVE_WINDOWS)
     add_definitions (-D_CRT_SECURE_NO_WARNINGS)
 elseif (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
@@ -125,16 +126,16 @@ endif ()
 
 macro (nn_check_func SYM DEF)
     check_function_exists (${SYM} ${DEF})
-     if (${DEF})
-         add_definitions (-D${DEF}=1)
-     endif ()
+    if (${DEF})
+        add_definitions (-D${DEF}=1)
+    endif ()
 endmacro (nn_check_func)
 
 macro (nn_check_sym SYM HDR DEF)
     check_symbol_exists (${SYM} ${HDR} ${DEF})
-     if (${DEF})
-         add_definitions (-D${DEF}=1)
-     endif ()
+    if (${DEF})
+        add_definitions (-D${DEF}=1)
+    endif ()
 endmacro (nn_check_sym)
 
 macro (nn_check_lib LIB SYM DEF)
@@ -220,18 +221,15 @@ if (NN_ENABLE_NANOCAT)
     target_link_libraries (nanocat ${PROJECT_NAME})
 endif ()
 
-if (NN_ENABLE_DOC)
-    find_program (ASCIIDOCTOR_EXE asciidoctor)
-    if (NOT ASCIIDOCTOR_EXE)
-        message (WARNING "Could not find asciidoctor: skipping docs")
-        set (NN_ENABLE_DOC OFF)
-    else ()
-        message (STATUS "Using asciidoctor at ${ASCIIDOCTOR_EXE}")
-    endif ()
-endif ()
-
 # Build the documenation
 if (NN_ENABLE_DOC)
+
+    find_program (NN_ASCIIDOCTOR_INSTALLED asciidoctor)
+    if (NN_ASCIIDOCTOR_INSTALLED)
+        message (STATUS "Using asciidoctor at ${ASCIIDOCTOR_EXE}")
+    else ()
+        message (FATAL_ERROR "Could not find asciidoctor.")
+    endif ()
 
     set (NN_DOCDIR ${CMAKE_CURRENT_SOURCE_DIR}/doc)
     set (NN_STYLESHEET ${NN_DOCDIR}/stylesheet.css)
@@ -373,11 +371,25 @@ if (NN_TESTS)
     add_libnanomsg_test (shutdown 5)
     add_libnanomsg_test (cmsg 5)
     add_libnanomsg_test (bug328 5)
+    add_libnanomsg_test (ws_async_shutdown 5)
 
     # Platform-specific tests
     if (WIN32)
         add_libnanomsg_test (win_sec_attr 5)
     endif()
+
+    # Optional tests.
+    if (NN_WS_AUTOBAHN_TESTS)
+        find_program (NN_AUTOBAHN_INSTALLED wstest)
+        if (NN_AUTOBAHN_INSTALLED)
+          add_libnanomsg_test (ws_stress 60)
+          message (STATUS "Autobahn TestSuite for WebSocket enabled: ${NN_AUTOBAHN_INSTALLED}")
+        else ()
+          message (FATAL_ERROR "Autobahn not installed.")
+        endif ()
+    else ()
+        message (STATUS "Autobahn TestSuite for WebSocket is disabled." )
+    endif ()
 
     #  Build the performance tests.
 
