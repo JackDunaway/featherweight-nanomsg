@@ -87,6 +87,7 @@ void nn_ctx_leave (struct nn_ctx *self)
         event = nn_cont (item, struct nn_fsm_event, item);
         if (!event)
             break;
+        nn_assert (event && event->fsm && event->fsm->ctx);
         nn_ctx_enter (event->fsm->ctx);
         nn_fsm_event_process (event);
         nn_ctx_leave (event->fsm->ctx);
