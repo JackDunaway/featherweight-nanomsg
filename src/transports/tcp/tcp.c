@@ -108,7 +108,8 @@ static void nn_tcp_optset_destroy (struct nn_optset *self)
 {
     struct nn_tcp_optset *optset;
 
-    optset = nn_cont (self, struct nn_tcp_optset, base);
+    nn_cont_assert (optset, self, struct nn_tcp_optset, base);
+
     nn_free (optset);
 }
 
@@ -118,7 +119,7 @@ static int nn_tcp_optset_setopt (struct nn_optset *self, int option,
     struct nn_tcp_optset *optset;
     int val;
 
-    optset = nn_cont (self, struct nn_tcp_optset, base);
+    nn_cont_assert (optset, self, struct nn_tcp_optset, base);
 
     /*  At this point we assume that all options are of type int. */
     if (optvallen != sizeof (int))
@@ -142,7 +143,7 @@ static int nn_tcp_optset_getopt (struct nn_optset *self, int option,
     struct nn_tcp_optset *optset;
     int intval;
 
-    optset = nn_cont (self, struct nn_tcp_optset, base);
+    nn_cont_assert (optset, self, struct nn_tcp_optset, base);
 
     switch (option) {
     case NN_TCP_NODELAY:

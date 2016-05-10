@@ -51,7 +51,7 @@ int nn_timerset_add (struct nn_timerset *self, int timeout,
     for (it = nn_list_begin (&self->timeouts);
           it != nn_list_end (&self->timeouts);
           it = nn_list_next (&self->timeouts, it)) {
-        ith = nn_cont (it, struct nn_timerset_hndl, list);
+        nn_cont_assert (ith, it, struct nn_timerset_hndl, list);
         if (hndl->timeout < ith->timeout)
             break;
     }
@@ -81,12 +81,15 @@ int nn_timerset_rm (struct nn_timerset *self, struct nn_timerset_hndl *hndl)
 int nn_timerset_timeout (struct nn_timerset *self)
 {
     int timeout;
+    struct nn_timerset_hndl *timer;
 
     if (nn_fast (nn_list_empty (&self->timeouts)))
         return -1;
 
-    timeout = (int) (nn_cont (nn_list_begin (&self->timeouts),
-        struct nn_timerset_hndl, list)->timeout - nn_clock_ms());
+    nn_cont_assert (timer, nn_list_begin (&self->timeouts),
+        struct nn_timerset_hndl, list);
+    
+    timeout = (int) (timer->timeout - nn_clock_ms ());
     return timeout < 0 ? 0 : timeout;
 }
 
@@ -99,7 +102,7 @@ int nn_timerset_event (struct nn_timerset *self, struct nn_timerset_hndl **hndl)
         return -EAGAIN;
 
     /*  If no timeout have expired yet, there's no event to return. */
-    first = nn_cont (nn_list_begin (&self->timeouts),
+    nn_cont_assert (first, nn_list_begin (&self->timeouts),
         struct nn_timerset_hndl, list);
     if (first->timeout > nn_clock_ms())
         return -EAGAIN;

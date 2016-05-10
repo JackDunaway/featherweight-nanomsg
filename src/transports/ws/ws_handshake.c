@@ -246,7 +246,7 @@ static void nn_ws_handshake_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_ws_handshake *handshaker;
 
-    handshaker = nn_cont (self, struct nn_ws_handshake, fsm);
+    nn_cont_assert (handshaker, self, struct nn_ws_handshake, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         nn_timer_stop (&handshaker->timer);
@@ -393,7 +393,7 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 
     size_t i;
 
-    handshaker = nn_cont (self, struct nn_ws_handshake, fsm);
+    nn_cont_assert (handshaker, self, struct nn_ws_handshake, fsm);
 
     switch (handshaker->state) {
 

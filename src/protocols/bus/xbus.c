@@ -75,7 +75,7 @@ static void nn_xbus_destroy (struct nn_sockbase *self)
 {
     struct nn_xbus *xbus;
 
-    xbus = nn_cont (self, struct nn_xbus, sockbase);
+    nn_cont_assert (xbus, self, struct nn_xbus, sockbase);
 
     nn_xbus_term (xbus);
     nn_free (xbus);
@@ -88,7 +88,7 @@ int nn_xbus_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     int rcvprio;
     size_t sz;
 
-    xbus = nn_cont (self, struct nn_xbus, sockbase);
+    nn_cont_assert (xbus, self, struct nn_xbus, sockbase);
 
     sz = sizeof (rcvprio);
     nn_pipe_getopt (pipe, NN_SOL_SOCKET, NN_RCVPRIO, &rcvprio, &sz);
@@ -109,7 +109,7 @@ void nn_xbus_rm (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xbus *xbus;
     struct nn_xbus_data *data;
 
-    xbus = nn_cont (self, struct nn_xbus, sockbase);
+    nn_cont_assert (xbus, self, struct nn_xbus, sockbase);
     data = nn_pipe_getdata (pipe);
 
     nn_fq_rm (&xbus->inpipes, &data->initem);
@@ -123,7 +123,7 @@ void nn_xbus_in (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xbus *xbus;
     struct nn_xbus_data *data;
 
-    xbus = nn_cont (self, struct nn_xbus, sockbase);
+    nn_cont_assert (xbus, self, struct nn_xbus, sockbase);
     data = nn_pipe_getdata (pipe);
 
     nn_fq_in (&xbus->inpipes, &data->initem);
@@ -134,7 +134,7 @@ void nn_xbus_out (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xbus *xbus;
     struct nn_xbus_data *data;
 
-    xbus = nn_cont (self, struct nn_xbus, sockbase);
+    nn_cont_assert (xbus, self, struct nn_xbus, sockbase);
     data = nn_pipe_getdata (pipe);
 
     nn_dist_out (&xbus->outpipes, &data->outitem);
@@ -142,14 +142,18 @@ void nn_xbus_out (struct nn_sockbase *self, struct nn_pipe *pipe)
 
 int nn_xbus_events (struct nn_sockbase *self)
 {
-    return (nn_fq_can_recv (&nn_cont (self, struct nn_xbus,
-        sockbase)->inpipes) ? NN_SOCKBASE_EVENT_IN : 0) | NN_SOCKBASE_EVENT_OUT;
+    struct nn_xbus *xbus;
+
+    nn_cont_assert (xbus, self, struct nn_xbus, sockbase);
+
+    return (nn_fq_can_recv (&xbus->inpipes) ? NN_SOCKBASE_EVENT_IN : 0) | NN_SOCKBASE_EVENT_OUT;
 }
 
 int nn_xbus_send (struct nn_sockbase *self, struct nn_msg *msg)
 {
     size_t hdrsz;
     struct nn_pipe *exclude;
+    struct nn_xbus *xbus;
 
     hdrsz = nn_chunkref_size (&msg->sphdr);
     if (hdrsz == 0)
@@ -162,8 +166,9 @@ int nn_xbus_send (struct nn_sockbase *self, struct nn_msg *msg)
     else
         return -EINVAL;
 
-    return nn_dist_send (&nn_cont (self, struct nn_xbus, sockbase)->outpipes,
-        msg, exclude);
+    nn_cont_assert (xbus, self, struct nn_xbus, sockbase);
+
+    return nn_dist_send (&xbus->outpipes, msg, exclude);
 }
 
 int nn_xbus_recv (struct nn_sockbase *self, struct nn_msg *msg)
@@ -172,7 +177,7 @@ int nn_xbus_recv (struct nn_sockbase *self, struct nn_msg *msg)
     struct nn_xbus *xbus;
     struct nn_pipe *pipe;
 
-    xbus = nn_cont (self, struct nn_xbus, sockbase);
+    nn_cont_assert (xbus, self, struct nn_xbus, sockbase);
 
     while (1) {
 

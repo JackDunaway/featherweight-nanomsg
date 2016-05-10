@@ -23,11 +23,24 @@
 #ifndef NN_CONT_INCLUDED
 #define NN_CONT_INCLUDED
 
-#include <stddef.h>
+#include "err.h"
 
-/*  Takes a pointer to a member variable and computes pointer to the structure
-    that contains it. 'type' is type of the structure, not the member. */
-#define nn_cont(ptr, type, member) \
-    (ptr ? ((type*) (((char*) ptr) - offsetof(type, member))) : NULL)
+/*  Takes a pointer to a member variable and computes pointer to the owning
+    structure that contains it. The return value will be NULL if the input
+    pointer is NULL. */
+#define nn_cont_unsafe(owner_ptr, owner_type, member_name) \
+    (owner_ptr ? ((owner_type*) (((char*) owner_ptr) - \
+        offsetof(owner_type, member_name))) : NULL)
+
+/*  Takes a pointer to a member variable, computes pointer to the owning
+    structure that contains it, then assigns its value to owner_ptr. This macro
+    asserts that the member pointer must be a valid pointer, so be mindful to
+    not pass a NULL value. */
+#define nn_cont_assert(owner_ptr, member_ptr, owner_type, member_name) \
+    do { \
+        nn_assert (member_ptr); \
+        owner_ptr = ((owner_type*) (((char*) member_ptr) - \
+            offsetof(owner_type, member_name))); \
+    } while (0)
 
 #endif

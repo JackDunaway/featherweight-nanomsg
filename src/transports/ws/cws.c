@@ -274,7 +274,7 @@ static void nn_cws_stop (struct nn_epbase *self)
 {
     struct nn_cws *cws;
 
-    cws = nn_cont (self, struct nn_cws, epbase);
+    nn_cont_assert (cws, self, struct nn_cws, epbase);
 
     nn_fsm_stop (&cws->fsm);
 }
@@ -283,7 +283,7 @@ static void nn_cws_destroy (struct nn_epbase *self)
 {
     struct nn_cws *cws;
 
-    cws = nn_cont (self, struct nn_cws, epbase);
+    nn_cont_assert (cws, self, struct nn_cws, epbase);
 
     nn_chunkref_term (&cws->resource);
     nn_chunkref_term (&cws->remote_host);
@@ -303,7 +303,7 @@ static void nn_cws_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_cws *cws;
 
-    cws = nn_cont (self, struct nn_cws, fsm);
+    nn_cont_assert (cws, self, struct nn_cws, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         if (!nn_sws_isidle (&cws->sws)) {
@@ -340,7 +340,7 @@ static void nn_cws_handler (struct nn_fsm *self, int src, int type,
 {
     struct nn_cws *cws;
 
-    cws = nn_cont (self, struct nn_cws, fsm);
+    nn_cont_assert (cws, self, struct nn_cws, fsm);
 
     switch (cws->state) {
 

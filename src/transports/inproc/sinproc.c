@@ -139,7 +139,7 @@ static int nn_sinproc_send (struct nn_pipebase *self, struct nn_msg *msg)
     struct nn_sinproc *sinproc;
     struct nn_msg nmsg;
 
-    sinproc = nn_cont (self, struct nn_sinproc, pipebase);
+    nn_cont_assert (sinproc, self, struct nn_sinproc, pipebase);
 
     /*  If the peer have already closed the connection, we cannot send
         anymore. */
@@ -180,7 +180,7 @@ static int nn_sinproc_recv (struct nn_pipebase *self, struct nn_msg *msg)
     int rc;
     struct nn_sinproc *sinproc;
 
-    sinproc = nn_cont (self, struct nn_sinproc, pipebase);
+    nn_cont_assert (sinproc, self, struct nn_sinproc, pipebase);
 
     /*  Sanity check. */
     nn_assert (sinproc->state == NN_SINPROC_STATE_ACTIVE ||
@@ -273,7 +273,7 @@ static void nn_sinproc_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_sinproc *sinproc;
 
-    sinproc = nn_cont (self, struct nn_sinproc, fsm);
+    nn_cont_assert (sinproc, self, struct nn_sinproc, fsm);
     nn_assert (sinproc->fsm.state == 3);
 
     nn_sinproc_shutdown_events (sinproc, src, type, srcptr);
@@ -312,7 +312,7 @@ static void nn_sinproc_handler (struct nn_fsm *self, int src, int type,
     struct nn_sinproc *sinproc;
     int empty;
 
-    sinproc = nn_cont (self, struct nn_sinproc, fsm);
+    nn_cont_assert (sinproc, self, struct nn_sinproc, fsm);
 
     switch (sinproc->state) {
 

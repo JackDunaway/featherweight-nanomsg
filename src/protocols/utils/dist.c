@@ -85,7 +85,7 @@ int nn_dist_send (struct nn_dist *self, struct nn_msg *msg,
     nn_msg_bulkcopy_start (msg, self->count);
     it = nn_list_begin (&self->pipes);
     while (it != nn_list_end (&self->pipes)) {
-       data = nn_cont (it, struct nn_dist_data, item);
+       nn_cont_assert (data, it, struct nn_dist_data, item);
        nn_msg_bulkcopy_cp (&copy, msg);
        if (nn_fast (data->pipe == exclude)) {
            nn_msg_term (&copy);

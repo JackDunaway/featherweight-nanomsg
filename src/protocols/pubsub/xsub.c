@@ -96,7 +96,7 @@ void nn_xsub_destroy (struct nn_sockbase *self)
 {
     struct nn_xsub *xsub;
 
-    xsub = nn_cont (self, struct nn_xsub, sockbase);
+    nn_cont_assert (xsub, self, struct nn_xsub, sockbase);
 
     nn_xsub_term (xsub);
     nn_free (xsub);
@@ -109,7 +109,7 @@ static int nn_xsub_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     int rcvprio;
     size_t sz;
 
-    xsub = nn_cont (self, struct nn_xsub, sockbase);
+    nn_cont_assert (xsub, self, struct nn_xsub, sockbase);
 
     sz = sizeof (rcvprio);
     nn_pipe_getopt (pipe, NN_SOL_SOCKET, NN_RCVPRIO, &rcvprio, &sz);
@@ -129,7 +129,7 @@ static void nn_xsub_rm (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xsub *xsub;
     struct nn_xsub_data *data;
 
-    xsub = nn_cont (self, struct nn_xsub, sockbase);
+    nn_cont_assert (xsub, self, struct nn_xsub, sockbase);
     data = nn_pipe_getdata (pipe);
     nn_fq_rm (&xsub->fq, &data->fq);
     nn_free (data);
@@ -140,7 +140,7 @@ static void nn_xsub_in (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xsub *xsub;
     struct nn_xsub_data *data;
 
-    xsub = nn_cont (self, struct nn_xsub, sockbase);
+    nn_cont_assert (xsub, self, struct nn_xsub, sockbase);
     data = nn_pipe_getdata (pipe);
     nn_fq_in (&xsub->fq, &data->fq);
 }
@@ -155,8 +155,11 @@ static void nn_xsub_out (NN_UNUSED struct nn_sockbase *self,
 
 static int nn_xsub_events (struct nn_sockbase *self)
 {
-    return nn_fq_can_recv (&nn_cont (self, struct nn_xsub, sockbase)->fq) ?
-        NN_SOCKBASE_EVENT_IN : 0;
+    struct nn_xsub *xsub;
+
+    nn_cont_assert (xsub, self, struct nn_xsub, sockbase);
+
+    return nn_fq_can_recv (&xsub->fq) ? NN_SOCKBASE_EVENT_IN : 0;
 }
 
 static int nn_xsub_recv (struct nn_sockbase *self, struct nn_msg *msg)
@@ -164,7 +167,7 @@ static int nn_xsub_recv (struct nn_sockbase *self, struct nn_msg *msg)
     int rc;
     struct nn_xsub *xsub;
 
-    xsub = nn_cont (self, struct nn_xsub, sockbase);
+    nn_cont_assert (xsub, self, struct nn_xsub, sockbase);
 
     /*  Loop while a matching message is found or when there are no more
         messages to receive. */
@@ -191,7 +194,7 @@ static int nn_xsub_setopt (struct nn_sockbase *self, int level, int option,
     int rc;
     struct nn_xsub *xsub;
 
-    xsub = nn_cont (self, struct nn_xsub, sockbase);
+    nn_cont_assert (xsub, self, struct nn_xsub, sockbase);
 
     if (level != NN_SUB)
         return -ENOPROTOOPT;

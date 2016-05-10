@@ -126,7 +126,7 @@ static int nn_sipc_send (struct nn_pipebase *self, struct nn_msg *msg)
     struct nn_sipc *sipc;
     struct nn_iovec iov [3];
 
-    sipc = nn_cont (self, struct nn_sipc, pipebase);
+    nn_cont_assert (sipc, self, struct nn_sipc, pipebase);
 
     nn_assert_state (sipc, NN_SIPC_STATE_ACTIVE);
     nn_assert (sipc->outstate == NN_SIPC_OUTSTATE_IDLE);
@@ -158,7 +158,7 @@ static int nn_sipc_recv (struct nn_pipebase *self, struct nn_msg *msg)
 {
     struct nn_sipc *sipc;
 
-    sipc = nn_cont (self, struct nn_sipc, pipebase);
+    nn_cont_assert (sipc, self, struct nn_sipc, pipebase);
 
     nn_assert_state (sipc, NN_SIPC_STATE_ACTIVE);
     nn_assert (sipc->instate == NN_SIPC_INSTATE_HASMSG);
@@ -179,7 +179,7 @@ static void nn_sipc_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_sipc *sipc;
 
-    sipc = nn_cont (self, struct nn_sipc, fsm);
+    nn_cont_assert (sipc, self, struct nn_sipc, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         nn_pipebase_stop (&sipc->pipebase);
@@ -209,8 +209,7 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
     struct nn_sipc *sipc;
     uint64_t size;
 
-    sipc = nn_cont (self, struct nn_sipc, fsm);
-
+    nn_cont_assert (sipc, self, struct nn_sipc, fsm);
 
     switch (sipc->state) {
 

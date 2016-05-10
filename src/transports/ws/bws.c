@@ -187,7 +187,7 @@ static void nn_bws_stop (struct nn_epbase *self)
 {
     struct nn_bws *bws;
 
-    bws = nn_cont (self, struct nn_bws, epbase);
+    nn_cont_assert (bws, self, struct nn_bws, epbase);
 
     nn_fsm_stop (&bws->fsm);
 }
@@ -196,7 +196,7 @@ static void nn_bws_destroy (struct nn_epbase *self)
 {
     struct nn_bws *bws;
 
-    bws = nn_cont (self, struct nn_bws, epbase);
+    nn_cont_assert (bws, self, struct nn_bws, epbase);
 
     nn_assert_state (bws, NN_BWS_STATE_IDLE);
     nn_list_term (&bws->awss);
@@ -216,7 +216,7 @@ static void nn_bws_shutdown (struct nn_fsm *self, int src, int type,
     struct nn_list_item *it;
     struct nn_aws *aws;
 
-    bws = nn_cont (self, struct nn_bws, fsm);
+    nn_cont_assert (bws, self, struct nn_bws, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         nn_backoff_stop (&bws->retry);
@@ -243,7 +243,7 @@ static void nn_bws_shutdown (struct nn_fsm *self, int src, int type,
         for (it = nn_list_begin (&bws->awss);
               it != nn_list_end (&bws->awss);
               it = nn_list_next (&bws->awss, it)) {
-            aws = nn_cont (it, struct nn_aws, item);
+            nn_cont_assert (aws, it, struct nn_aws, item);
             nn_aws_stop (aws);
         }
         bws->state = NN_BWS_STATE_STOPPING_AWSS;
@@ -278,7 +278,7 @@ static void nn_bws_handler (struct nn_fsm *self, int src, int type,
     struct nn_bws *bws;
     struct nn_aws *aws;
 
-    bws = nn_cont (self, struct nn_bws, fsm);
+    nn_cont_assert (bws, self, struct nn_bws, fsm);
 
     switch (bws->state) {
 

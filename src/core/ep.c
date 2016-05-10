@@ -140,7 +140,7 @@ static void nn_ep_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_ep *ep;
 
-    ep = nn_cont (self, struct nn_ep, fsm);
+    nn_cont_assert (ep, self, struct nn_ep, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         ep->epbase->vfptr->stop (ep->epbase);
@@ -164,7 +164,7 @@ static void nn_ep_handler (struct nn_fsm *self, int src, int type,
 {
     struct nn_ep *ep;
 
-    ep = nn_cont (self, struct nn_ep, fsm);
+    nn_cont_assert (ep, self, struct nn_ep, fsm);
 
     switch (ep->state) {
 

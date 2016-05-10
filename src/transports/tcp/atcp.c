@@ -103,7 +103,7 @@ static void nn_atcp_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_atcp *atcp;
 
-    atcp = nn_cont (self, struct nn_atcp, fsm);
+    nn_cont_assert (atcp, self, struct nn_atcp, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         if (!nn_stcp_isidle (&atcp->stcp)) {
@@ -144,7 +144,7 @@ static void nn_atcp_handler (struct nn_fsm *self, int src, int type,
     int val;
     size_t sz;
 
-    atcp = nn_cont (self, struct nn_atcp, fsm);
+    nn_cont_assert (atcp, self, struct nn_atcp, fsm);
 
     switch (atcp->state) {
 

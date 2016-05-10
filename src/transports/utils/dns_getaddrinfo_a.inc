@@ -163,7 +163,7 @@ static void nn_dns_shutdown (struct nn_fsm *self, int src, int type,
     int rc;
     struct nn_dns *dns;
 
-    dns = nn_cont (self, struct nn_dns, fsm);
+    nn_cont_assert (dns, self, struct nn_dns, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         if (dns->state == NN_DNS_STATE_RESOLVING) {
@@ -201,7 +201,7 @@ static void nn_dns_handler (struct nn_fsm *self, int src, int type,
 {
     struct nn_dns *dns;
 
-    dns = nn_cont (self, struct nn_dns, fsm);
+    nn_cont_assert (dns, self, struct nn_dns, fsm);
 
     switch (dns->state) {
 /******************************************************************************/

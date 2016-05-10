@@ -94,7 +94,7 @@ static void nn_binproc_stop (struct nn_epbase *self)
 {
     struct nn_binproc *binproc;
 
-    binproc = nn_cont (self, struct nn_binproc, item.epbase);
+    nn_cont_assert (binproc, self, struct nn_binproc, item.epbase);
 
     nn_fsm_stop (&binproc->fsm);
 }
@@ -103,7 +103,7 @@ static void nn_binproc_destroy (struct nn_epbase *self)
 {
     struct nn_binproc *binproc;
 
-    binproc = nn_cont (self, struct nn_binproc, item.epbase);
+    nn_cont_assert (binproc, self, struct nn_binproc, item.epbase);
 
     nn_list_term (&binproc->sinprocs);
     nn_fsm_term (&binproc->fsm);
@@ -119,8 +119,8 @@ static void nn_binproc_connect (struct nn_ins_item *self,
     struct nn_cinproc *cinproc;
     struct nn_sinproc *sinproc;
 
-    binproc = nn_cont (self, struct nn_binproc, item);
-    cinproc = nn_cont (peer, struct nn_cinproc, item);
+    nn_cont_assert (binproc, self, struct nn_binproc, item);
+    nn_cont_assert (cinproc, peer, struct nn_cinproc, item);
 
     nn_assert_state (binproc, NN_BINPROC_STATE_ACTIVE);
 
@@ -143,7 +143,7 @@ static void nn_binproc_shutdown (struct nn_fsm *self, int src, int type,
     struct nn_list_item *it;
     struct nn_sinproc *sinproc;
 
-    binproc = nn_cont (self, struct nn_binproc, fsm);
+    nn_cont_assert (binproc, self, struct nn_binproc, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
 
@@ -155,7 +155,7 @@ static void nn_binproc_shutdown (struct nn_fsm *self, int src, int type,
         for (it = nn_list_begin (&binproc->sinprocs);
               it != nn_list_end (&binproc->sinprocs);
               it = nn_list_next (&binproc->sinprocs, it)) {
-            sinproc = nn_cont (it, struct nn_sinproc, item);
+            nn_cont_assert (sinproc, it, struct nn_sinproc, item);
             nn_sinproc_stop (sinproc);
         }
 
@@ -187,7 +187,7 @@ static void nn_binproc_handler (struct nn_fsm *self, int src, int type,
     struct nn_sinproc *peer;
     struct nn_sinproc *sinproc;
 
-    binproc = nn_cont (self, struct nn_binproc, fsm);
+    nn_cont_assert (binproc, self, struct nn_binproc, fsm);
 
     switch (binproc->state) {
 

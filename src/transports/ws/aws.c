@@ -106,7 +106,7 @@ static void nn_aws_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_aws *aws;
 
-    aws = nn_cont (self, struct nn_aws, fsm);
+    nn_cont_assert (aws, self, struct nn_aws, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         if (!nn_sws_isidle (&aws->sws)) {
@@ -148,7 +148,7 @@ static void nn_aws_handler (struct nn_fsm *self, int src, int type,
     size_t sz;
     uint8_t msg_type;
 
-    aws = nn_cont (self, struct nn_aws, fsm);
+    nn_cont_assert (aws, self, struct nn_aws, fsm);
 
     switch (aws->state) {
 

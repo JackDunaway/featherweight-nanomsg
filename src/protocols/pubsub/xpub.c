@@ -97,7 +97,7 @@ void nn_xpub_destroy (struct nn_sockbase *self)
 {
     struct nn_xpub *xpub;
 
-    xpub = nn_cont (self, struct nn_xpub, sockbase);
+    nn_cont_assert (xpub, self, struct nn_xpub, sockbase);
 
     nn_xpub_term (xpub);
     nn_free (xpub);
@@ -108,7 +108,7 @@ static int nn_xpub_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xpub *xpub;
     struct nn_xpub_data *data;
 
-    xpub = nn_cont (self, struct nn_xpub, sockbase);
+    nn_cont_assert (xpub, self, struct nn_xpub, sockbase);
 
     data = nn_alloc (sizeof (struct nn_xpub_data), "pipe data (pub)");
     alloc_assert (data);
@@ -123,7 +123,7 @@ static void nn_xpub_rm (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xpub *xpub;
     struct nn_xpub_data *data;
 
-    xpub = nn_cont (self, struct nn_xpub, sockbase);
+    nn_cont_assert (xpub, self, struct nn_xpub, sockbase);
     data = nn_pipe_getdata (pipe);
 
     nn_dist_rm (&xpub->outpipes, &data->item);
@@ -143,7 +143,7 @@ static void nn_xpub_out (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xpub *xpub;
     struct nn_xpub_data *data;
 
-    xpub = nn_cont (self, struct nn_xpub, sockbase);
+    nn_cont_assert (xpub, self, struct nn_xpub, sockbase);
     data = nn_pipe_getdata (pipe);
 
     nn_dist_out (&xpub->outpipes, &data->item);
@@ -156,8 +156,11 @@ static int nn_xpub_events (NN_UNUSED struct nn_sockbase *self)
 
 static int nn_xpub_send (struct nn_sockbase *self, struct nn_msg *msg)
 {
-    return nn_dist_send (&nn_cont (self, struct nn_xpub, sockbase)->outpipes,
-        msg, NULL);
+    struct nn_xpub *xpub;
+
+    nn_cont_assert (xpub, self, struct nn_xpub, sockbase);
+
+    return nn_dist_send (&xpub->outpipes, msg, NULL);
 }
 
 static int nn_xpub_setopt (NN_UNUSED struct nn_sockbase *self,

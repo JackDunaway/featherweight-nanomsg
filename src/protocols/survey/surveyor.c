@@ -150,7 +150,7 @@ void nn_surveyor_stop (struct nn_sockbase *self)
 {
     struct nn_surveyor *surveyor;
 
-    surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, xsurveyor.sockbase);
 
     nn_fsm_stop (&surveyor->fsm);
 }
@@ -159,7 +159,7 @@ void nn_surveyor_destroy (struct nn_sockbase *self)
 {
     struct nn_surveyor *surveyor;
 
-    surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, xsurveyor.sockbase);
 
     nn_surveyor_term (surveyor);
     nn_free (surveyor);
@@ -167,6 +167,7 @@ void nn_surveyor_destroy (struct nn_sockbase *self)
 
 static int nn_surveyor_inprogress (struct nn_surveyor *self)
 {
+    nn_assert (self);
     /*  Return 1 if there's a survey going on. 0 otherwise. */
     return self->state == NN_SURVEYOR_STATE_IDLE ||
         self->state == NN_SURVEYOR_STATE_PASSIVE ||
@@ -178,7 +179,7 @@ static int nn_surveyor_events (struct nn_sockbase *self)
     int rc;
     struct nn_surveyor *surveyor;
 
-    surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, xsurveyor.sockbase);
 
     /*  Determine the actual readability/writability of the socket. */
     rc = nn_xsurveyor_events (&surveyor->xsurveyor.sockbase);
@@ -195,7 +196,7 @@ static int nn_surveyor_send (struct nn_sockbase *self, struct nn_msg *msg)
 {
     struct nn_surveyor *surveyor;
 
-    surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, xsurveyor.sockbase);
 
     /*  Generate new survey ID. */
     ++surveyor->surveyid;
@@ -238,7 +239,7 @@ static int nn_surveyor_recv (struct nn_sockbase *self, struct nn_msg *msg)
     struct nn_surveyor *surveyor;
     uint32_t surveyid;
 
-    surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, xsurveyor.sockbase);
 
     /*  If no survey is going on return EFSM error. */
     if (nn_slow (!nn_surveyor_inprogress (surveyor))) {
@@ -279,7 +280,7 @@ static int nn_surveyor_setopt (struct nn_sockbase *self, int level, int option,
 {
     struct nn_surveyor *surveyor;
 
-    surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, xsurveyor.sockbase);
 
     if (level != NN_SURVEYOR)
         return -ENOPROTOOPT;
@@ -299,7 +300,7 @@ static int nn_surveyor_getopt (struct nn_sockbase *self, int level, int option,
 {
     struct nn_surveyor *surveyor;
 
-    surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, xsurveyor.sockbase);
 
     if (level != NN_SURVEYOR)
         return -ENOPROTOOPT;
@@ -320,7 +321,7 @@ static void nn_surveyor_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_surveyor *surveyor;
 
-    surveyor = nn_cont (self, struct nn_surveyor, fsm);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, fsm);
 
     if (nn_slow (src== NN_FSM_ACTION && type == NN_FSM_STOP)) {
         nn_timer_stop (&surveyor->timer);
@@ -343,7 +344,7 @@ static void nn_surveyor_handler (struct nn_fsm *self, int src, int type,
 {
     struct nn_surveyor *surveyor;
 
-    surveyor = nn_cont (self, struct nn_surveyor, fsm);
+    nn_cont_assert (surveyor, self, struct nn_surveyor, fsm);
 
     switch (surveyor->state) {
 

@@ -79,11 +79,11 @@ void nn_priolist_rm (struct nn_priolist *self, struct nn_priolist_data *data)
 
     /*  Advance the current pointer (with wrap-over). */
     it = nn_list_erase (&slot->pipes, &data->item);
-    slot->current = nn_cont (it, struct nn_priolist_data, item);
+    slot->current = nn_cont_unsafe (it, struct nn_priolist_data, item);
     nn_list_item_term (&data->item);
     if (!slot->current) {
         it = nn_list_begin (&slot->pipes);
-        slot->current = nn_cont (it, struct nn_priolist_data, item);
+        slot->current = nn_cont_unsafe (it, struct nn_priolist_data, item);
     }
 
     /*  If we are not messing with the current slot, we are done. */
@@ -161,7 +161,7 @@ void nn_priolist_advance (struct nn_priolist *self, int release)
         it = nn_list_next (&slot->pipes, &slot->current->item);
     if (!it)
         it = nn_list_begin (&slot->pipes);
-    slot->current = nn_cont (it, struct nn_priolist_data, item);
+    slot->current = nn_cont_unsafe (it, struct nn_priolist_data, item);
 
     /* If there are no more pipes in this slot, find a non-empty slot with
        lower priority. */

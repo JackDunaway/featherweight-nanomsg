@@ -131,7 +131,7 @@ int main ()
     list_item = nn_list_begin (&list);
     nn_assert (list_item == &that.item);
 
-    item = nn_cont (list_item, struct item, item);
+    nn_cont_assert (item, list_item, struct item, item);
     nn_assert (item == &that);
 
     list_item = nn_list_end (&list);

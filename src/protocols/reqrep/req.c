@@ -116,7 +116,7 @@ void nn_req_stop (struct nn_sockbase *self)
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     nn_fsm_stop (&req->fsm);
 }
@@ -125,7 +125,7 @@ void nn_req_destroy (struct nn_sockbase *self)
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     nn_req_term (req);
     nn_free (req);
@@ -133,6 +133,7 @@ void nn_req_destroy (struct nn_sockbase *self)
 
 int nn_req_inprogress (struct nn_req *self)
 {
+    nn_assert (self);
     /*  Return 1 if there's a request submitted. 0 otherwise. */
     return self->state == NN_REQ_STATE_IDLE ||
         self->state == NN_REQ_STATE_PASSIVE ||
@@ -145,7 +146,7 @@ void nn_req_in (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_req *req;
     uint32_t reqid;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     /*  Pass the pipe to the raw REQ socket. */
     nn_xreq_in (&req->xreq.sockbase, pipe);
@@ -200,7 +201,7 @@ void nn_req_out (struct nn_sockbase *self, struct nn_pipe *pipe)
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     /*  Add the pipe to the underlying raw socket. */
     nn_xreq_out (&req->xreq.sockbase, pipe);
@@ -215,7 +216,7 @@ int nn_req_events (struct nn_sockbase *self)
     int rc;
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     /*  OUT is signalled all the time because sending a request while
         another one is being processed cancels the old one. */
@@ -232,7 +233,7 @@ int nn_req_csend (struct nn_sockbase *self, struct nn_msg *msg)
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     /*  Generate new request ID for the new request and put it into message
         header. The most important bit is set to 1 to indicate that this is
@@ -257,7 +258,7 @@ int nn_req_crecv (struct nn_sockbase *self, struct nn_msg *msg)
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     /*  No request was sent. Waiting for a reply doesn't make sense. */
     if (nn_slow (!nn_req_inprogress (req)))
@@ -282,7 +283,7 @@ int nn_req_setopt (struct nn_sockbase *self, int level, int option,
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     if (level != NN_REQ)
         return -ENOPROTOOPT;
@@ -302,7 +303,7 @@ int nn_req_getopt (struct nn_sockbase *self, int level, int option,
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     if (level != NN_REQ)
         return -ENOPROTOOPT;
@@ -323,7 +324,7 @@ void nn_req_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, fsm);
+    nn_cont_assert (req, self, struct nn_req, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         nn_timer_stop (&req->task.timer);
@@ -346,7 +347,7 @@ void nn_req_handler (struct nn_fsm *self, int src, int type,
 {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, fsm);
+    nn_cont_assert (req, self, struct nn_req, fsm);
 
     switch (req->state) {
 
@@ -650,7 +651,7 @@ static int nn_req_create (void *hint, struct nn_sockbase **sockbase)
 void nn_req_rm (struct nn_sockbase *self, struct nn_pipe *pipe) {
     struct nn_req *req;
 
-    req = nn_cont (self, struct nn_req, xreq.sockbase);
+    nn_cont_assert (req, self, struct nn_req, xreq.sockbase);
 
     nn_xreq_rm (self, pipe);
     if (nn_slow (pipe == req->task.sent_to)) {

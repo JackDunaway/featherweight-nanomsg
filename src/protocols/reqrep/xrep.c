@@ -77,7 +77,7 @@ static void nn_xrep_destroy (struct nn_sockbase *self)
 {
     struct nn_xrep *xrep;
 
-    xrep = nn_cont (self, struct nn_xrep, sockbase);
+    nn_cont_assert (xrep, self, struct nn_xrep, sockbase);
 
     nn_xrep_term (xrep);
     nn_free (xrep);
@@ -90,7 +90,7 @@ int nn_xrep_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     int rcvprio;
     size_t sz;
 
-    xrep = nn_cont (self, struct nn_xrep, sockbase);
+    nn_cont_assert (xrep, self, struct nn_xrep, sockbase);
 
     sz = sizeof (rcvprio);
     nn_pipe_getopt (pipe, NN_SOL_SOCKET, NN_RCVPRIO, &rcvprio, &sz);
@@ -116,7 +116,7 @@ void nn_xrep_rm (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xrep *xrep;
     struct nn_xrep_data *data;
 
-    xrep = nn_cont (self, struct nn_xrep, sockbase);
+    nn_cont_assert (xrep, self, struct nn_xrep, sockbase);
     data = nn_pipe_getdata (pipe);
 
     nn_fq_rm (&xrep->inpipes, &data->initem);
@@ -131,7 +131,7 @@ void nn_xrep_in (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xrep *xrep;
     struct nn_xrep_data *data;
 
-    xrep = nn_cont (self, struct nn_xrep, sockbase);
+    nn_cont_assert (xrep, self, struct nn_xrep, sockbase);
     data = nn_pipe_getdata (pipe);
 
     nn_fq_in (&xrep->inpipes, &data->initem);
@@ -147,8 +147,12 @@ void nn_xrep_out (NN_UNUSED struct nn_sockbase *self, struct nn_pipe *pipe)
 
 int nn_xrep_events (struct nn_sockbase *self)
 {
-    return (nn_fq_can_recv (&nn_cont (self, struct nn_xrep,
-        sockbase)->inpipes) ? NN_SOCKBASE_EVENT_IN : 0) | NN_SOCKBASE_EVENT_OUT;
+    struct nn_xrep *xrep;
+
+    nn_cont_assert (xrep, self, struct nn_xrep, sockbase);
+
+    return (nn_fq_can_recv (&xrep->inpipes) ?
+        NN_SOCKBASE_EVENT_IN : 0) | NN_SOCKBASE_EVENT_OUT;
 }
 
 int nn_xrep_send (struct nn_sockbase *self, struct nn_msg *msg)
@@ -158,7 +162,7 @@ int nn_xrep_send (struct nn_sockbase *self, struct nn_msg *msg)
     struct nn_xrep *xrep;
     struct nn_xrep_data *data;
 
-    xrep = nn_cont (self, struct nn_xrep, sockbase);
+    nn_cont_assert (xrep, self, struct nn_xrep, sockbase);
 
     /*  We treat invalid peer ID as if the peer was non-existent. */
     if (nn_slow (nn_chunkref_size (&msg->sphdr) < sizeof (uint32_t))) {
@@ -172,8 +176,8 @@ int nn_xrep_send (struct nn_sockbase *self, struct nn_msg *msg)
 
     /*  Find the appropriate pipe to send the message to. If there's none,
         or if it's not ready for sending, silently drop the message. */
-    data = nn_cont (nn_hash_get (&xrep->outpipes, key), struct nn_xrep_data,
-        outitem);
+    data = nn_cont_unsafe (nn_hash_get (&xrep->outpipes, key),
+        struct nn_xrep_data, outitem);
     if (!data || !(data->flags & NN_XREP_OUT)) {
         nn_msg_term (msg);
         return 0;
@@ -199,7 +203,7 @@ int nn_xrep_recv (struct nn_sockbase *self, struct nn_msg *msg)
     struct nn_chunkref ref;
     struct nn_xrep_data *pipedata;
 
-    xrep = nn_cont (self, struct nn_xrep, sockbase);
+    nn_cont_assert (xrep, self, struct nn_xrep, sockbase);
 
     rc = nn_fq_recv (&xrep->inpipes, msg, &pipe);
     if (nn_slow (rc < 0))

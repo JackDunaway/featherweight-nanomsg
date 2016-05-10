@@ -92,7 +92,7 @@ void nn_xpull_destroy (struct nn_sockbase *self)
 {
     struct nn_xpull *xpull;
 
-    xpull = nn_cont (self, struct nn_xpull, sockbase);
+    nn_cont_assert (xpull, self, struct nn_xpull, sockbase);
 
     nn_xpull_term (xpull);
     nn_free (xpull);
@@ -105,7 +105,7 @@ static int nn_xpull_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     int rcvprio;
     size_t sz;
 
-    xpull = nn_cont (self, struct nn_xpull, sockbase);
+    nn_cont_assert (xpull, self, struct nn_xpull, sockbase);
 
     sz = sizeof (rcvprio);
     nn_pipe_getopt (pipe, NN_SOL_SOCKET, NN_RCVPRIO, &rcvprio, &sz);
@@ -125,7 +125,7 @@ static void nn_xpull_rm (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xpull *xpull;
     struct nn_xpull_data *data;
 
-    xpull = nn_cont (self, struct nn_xpull, sockbase);
+    nn_cont_assert (xpull, self, struct nn_xpull, sockbase);
     data = nn_pipe_getdata (pipe);
     nn_fq_rm (&xpull->fq, &data->fq);
     nn_free (data);
@@ -137,7 +137,7 @@ static void nn_xpull_in (NN_UNUSED struct nn_sockbase *self,
     struct nn_xpull *xpull;
     struct nn_xpull_data *data;
 
-    xpull = nn_cont (self, struct nn_xpull, sockbase);
+    nn_cont_assert (xpull, self, struct nn_xpull, sockbase);
     data = nn_pipe_getdata (pipe);
     nn_fq_in (&xpull->fq, &data->fq);
 }
@@ -151,16 +151,21 @@ static void nn_xpull_out (NN_UNUSED struct nn_sockbase *self,
 
 static int nn_xpull_events (struct nn_sockbase *self)
 {
-    return nn_fq_can_recv (&nn_cont (self, struct nn_xpull, sockbase)->fq) ?
-        NN_SOCKBASE_EVENT_IN : 0;
+    struct nn_xpull *xpull;
+
+    nn_cont_assert (xpull, self, struct nn_xpull, sockbase);
+
+    return nn_fq_can_recv (&xpull->fq) ? NN_SOCKBASE_EVENT_IN : 0;
 }
 
 static int nn_xpull_recv (struct nn_sockbase *self, struct nn_msg *msg)
 {
     int rc;
+    struct nn_xpull *xpull;
 
-    rc = nn_fq_recv (&nn_cont (self, struct nn_xpull, sockbase)->fq,
-         msg, NULL);
+    nn_cont_assert (xpull, self, struct nn_xpull, sockbase);
+
+    rc = nn_fq_recv (&xpull->fq, msg, NULL);
 
     /*  Discard NN_PIPEBASE_PARSED flag. */
     return rc < 0 ? rc : 0;

@@ -88,7 +88,7 @@ void nn_xpair_destroy (struct nn_sockbase *self)
 {
     struct nn_xpair *xpair;
 
-    xpair = nn_cont (self, struct nn_xpair, sockbase);
+    nn_cont_assert (xpair, self, struct nn_xpair, sockbase);
 
     nn_xpair_term (xpair);
     nn_free (xpair);
@@ -96,23 +96,38 @@ void nn_xpair_destroy (struct nn_sockbase *self)
 
 static int nn_xpair_add (struct nn_sockbase *self, struct nn_pipe *pipe)
 {
-    return nn_excl_add (&nn_cont (self, struct nn_xpair, sockbase)->excl,
-        pipe);
+    struct nn_xpair *xpair;
+
+    nn_cont_assert (xpair, self, struct nn_xpair, sockbase);
+
+    return nn_excl_add (&xpair->excl, pipe);
 }
 
 static void nn_xpair_rm (struct nn_sockbase *self, struct nn_pipe *pipe)
 {
-    nn_excl_rm (&nn_cont (self, struct nn_xpair, sockbase)->excl, pipe);
+    struct nn_xpair *xpair;
+
+    nn_cont_assert (xpair, self, struct nn_xpair, sockbase);
+
+    nn_excl_rm (&xpair->excl, pipe);
 }
 
 static void nn_xpair_in (struct nn_sockbase *self, struct nn_pipe *pipe)
 {
-    nn_excl_in (&nn_cont (self, struct nn_xpair, sockbase)->excl, pipe);
+    struct nn_xpair *xpair;
+
+    nn_cont_assert (xpair, self, struct nn_xpair, sockbase);
+
+    nn_excl_in (&xpair->excl, pipe);
 }
 
 static void nn_xpair_out (struct nn_sockbase *self, struct nn_pipe *pipe)
 {
-    nn_excl_out (&nn_cont (self, struct nn_xpair, sockbase)->excl, pipe);
+    struct nn_xpair *xpair;
+
+    nn_cont_assert (xpair, self, struct nn_xpair, sockbase);
+
+    nn_excl_out (&xpair->excl, pipe);
 }
 
 static int nn_xpair_events (struct nn_sockbase *self)
@@ -120,7 +135,7 @@ static int nn_xpair_events (struct nn_sockbase *self)
     struct nn_xpair *xpair;
     int events;
 
-    xpair = nn_cont (self, struct nn_xpair, sockbase);
+    nn_cont_assert (xpair, self, struct nn_xpair, sockbase);
 
     events = 0;
     if (nn_excl_can_recv (&xpair->excl))
@@ -132,15 +147,21 @@ static int nn_xpair_events (struct nn_sockbase *self)
 
 static int nn_xpair_send (struct nn_sockbase *self, struct nn_msg *msg)
 {
-    return nn_excl_send (&nn_cont (self, struct nn_xpair, sockbase)->excl,
-        msg);
+    struct nn_xpair *xpair;
+
+    nn_cont_assert (xpair, self, struct nn_xpair, sockbase);
+
+    return nn_excl_send (&xpair->excl, msg);
 }
 
 static int nn_xpair_recv (struct nn_sockbase *self, struct nn_msg *msg)
 {
     int rc;
+    struct nn_xpair *xpair;
 
-    rc = nn_excl_recv (&nn_cont (self, struct nn_xpair, sockbase)->excl, msg);
+    nn_cont_assert (xpair, self, struct nn_xpair, sockbase);
+
+    rc = nn_excl_recv (&xpair->excl, msg);
 
     /*  Discard NN_PIPEBASE_PARSED flag. */
     return rc < 0 ? rc : 0;

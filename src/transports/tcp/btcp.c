@@ -186,7 +186,7 @@ static void nn_btcp_stop (struct nn_epbase *self)
 {
     struct nn_btcp *btcp;
 
-    btcp = nn_cont (self, struct nn_btcp, epbase);
+    nn_cont_assert (btcp, self, struct nn_btcp, epbase);
 
     nn_fsm_stop (&btcp->fsm);
 }
@@ -195,7 +195,7 @@ static void nn_btcp_destroy (struct nn_epbase *self)
 {
     struct nn_btcp *btcp;
 
-    btcp = nn_cont (self, struct nn_btcp, epbase);
+    nn_cont_assert (btcp, self, struct nn_btcp, epbase);
 
     nn_assert_state (btcp, NN_BTCP_STATE_IDLE);
     nn_list_term (&btcp->atcps);
@@ -215,7 +215,7 @@ static void nn_btcp_shutdown (struct nn_fsm *self, int src, int type,
     struct nn_list_item *it;
     struct nn_atcp *atcp;
 
-    btcp = nn_cont (self, struct nn_btcp, fsm);
+    nn_cont_assert (btcp, self, struct nn_btcp, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         nn_backoff_stop (&btcp->retry);
@@ -243,7 +243,7 @@ static void nn_btcp_shutdown (struct nn_fsm *self, int src, int type,
         for (it = nn_list_begin (&btcp->atcps);
               it != nn_list_end (&btcp->atcps);
               it = nn_list_next (&btcp->atcps, it)) {
-            atcp = nn_cont (it, struct nn_atcp, item);
+            nn_cont_assert (atcp, it, struct nn_atcp, item);
             nn_atcp_stop (atcp);
         }
         btcp->state = NN_BTCP_STATE_STOPPING_ATCPS;
@@ -278,7 +278,7 @@ static void nn_btcp_handler (struct nn_fsm *self, int src, int type,
     struct nn_btcp *btcp;
     struct nn_atcp *atcp;
 
-    btcp = nn_cont (self, struct nn_btcp, fsm);
+    nn_cont_assert (btcp, self, struct nn_btcp, fsm);
 
     switch (btcp->state) {
 

@@ -211,7 +211,7 @@ static void nn_ctcp_stop (struct nn_epbase *self)
 {
     struct nn_ctcp *ctcp;
 
-    ctcp = nn_cont (self, struct nn_ctcp, epbase);
+    nn_cont_assert (ctcp, self, struct nn_ctcp, epbase);
 
     nn_fsm_stop (&ctcp->fsm);
 }
@@ -220,7 +220,7 @@ static void nn_ctcp_destroy (struct nn_epbase *self)
 {
     struct nn_ctcp *ctcp;
 
-    ctcp = nn_cont (self, struct nn_ctcp, epbase);
+    nn_cont_assert (ctcp, self, struct nn_ctcp, epbase);
 
     nn_dns_term (&ctcp->dns);
     nn_stcp_term (&ctcp->stcp);
@@ -237,7 +237,7 @@ static void nn_ctcp_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_ctcp *ctcp;
 
-    ctcp = nn_cont (self, struct nn_ctcp, fsm);
+    nn_cont_assert (ctcp, self, struct nn_ctcp, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         if (!nn_stcp_isidle (&ctcp->stcp)) {
@@ -274,7 +274,7 @@ static void nn_ctcp_handler (struct nn_fsm *self, int src, int type,
 {
     struct nn_ctcp *ctcp;
 
-    ctcp = nn_cont (self, struct nn_ctcp, fsm);
+    nn_cont_assert (ctcp, self, struct nn_ctcp, fsm);
 
     switch (ctcp->state) {
 

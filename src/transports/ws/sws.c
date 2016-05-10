@@ -234,7 +234,7 @@ void nn_msg_array_term (struct nn_list *msg_array)
 
     while (!nn_list_empty (msg_array)) {
         it = nn_list_begin (msg_array);
-        ch = nn_cont (it, struct msg_chunk, item);
+        nn_cont_assert (ch, it, struct msg_chunk, item);
         nn_msg_chunk_term (ch, msg_array);
     }
 
@@ -376,7 +376,7 @@ static int nn_sws_send (struct nn_pipebase *self, struct nn_msg *msg)
     struct nn_msghdr msghdr;
     uint8_t rand_mask [NN_SWS_FRAME_SIZE_MASK];
 
-    sws = nn_cont (self, struct nn_sws, pipebase);
+    nn_cont_assert (sws, self, struct nn_sws, pipebase);
 
     nn_assert_state (sws, NN_SWS_STATE_ACTIVE);
     nn_assert (sws->outstate == NN_SWS_OUTSTATE_IDLE);
@@ -488,7 +488,7 @@ static int nn_sws_recv (struct nn_pipebase *self, struct nn_msg *msg)
     size_t cmsgsz;
     size_t pos;
 
-    sws = nn_cont (self, struct nn_sws, pipebase);
+    nn_cont_assert (sws, self, struct nn_sws, pipebase);
 
     nn_assert_state (sws, NN_SWS_STATE_ACTIVE);
 
@@ -517,7 +517,7 @@ static int nn_sws_recv (struct nn_pipebase *self, struct nn_msg *msg)
         /*  Reassemble incoming message scatter array. */
         while (!nn_list_empty (&sws->inmsg_array)) {
             it = nn_list_begin (&sws->inmsg_array);
-            ch = nn_cont (it, struct msg_chunk, item);
+            nn_cont_assert (ch, it, struct msg_chunk, item);
             memcpy (((uint8_t*) nn_chunkref_data (&msg->body)) + pos,
                 nn_chunkref_data (&ch->chunk),
                 nn_chunkref_size (&ch->chunk));
@@ -843,7 +843,7 @@ static void nn_sws_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_sws *sws;
 
-    sws = nn_cont (self, struct nn_sws, fsm);
+    nn_cont_assert (sws, self, struct nn_sws, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         /*  TODO: Consider sending a close code here? */
@@ -875,7 +875,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
     int opt;
     size_t opt_sz = sizeof (opt);
 
-    sws = nn_cont (self, struct nn_sws, fsm);
+    nn_cont_assert (sws, self, struct nn_sws, fsm);
 
     switch (sws->state) {
 

@@ -73,7 +73,7 @@ static void nn_bus_destroy (struct nn_sockbase *self)
 {
     struct nn_bus *bus;
 
-    bus = nn_cont (self, struct nn_bus, xbus.sockbase);
+    nn_cont_assert (bus, self, struct nn_bus, xbus.sockbase);
 
     nn_bus_term (bus);
     nn_free (bus);
@@ -84,7 +84,7 @@ static int nn_bus_send (struct nn_sockbase *self, struct nn_msg *msg)
     int rc;
     struct nn_bus *bus;
 
-    bus = nn_cont (self, struct nn_bus, xbus.sockbase);
+    nn_cont_assert (bus, self, struct nn_bus, xbus.sockbase);
 
     /*  Check for malformed messages. */
     if (nn_chunkref_size (&msg->sphdr))
@@ -102,7 +102,7 @@ static int nn_bus_recv (struct nn_sockbase *self, struct nn_msg *msg)
     int rc;
     struct nn_bus *bus;
 
-    bus = nn_cont (self, struct nn_bus, xbus.sockbase);
+    nn_cont_assert (bus, self, struct nn_bus, xbus.sockbase);
 
     /*  Get next message. */
     rc = nn_xbus_recv (&bus->xbus.sockbase, msg);

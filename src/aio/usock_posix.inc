@@ -529,7 +529,7 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_usock *usock;
 
-    usock = nn_cont (self, struct nn_usock, fsm);
+    nn_cont_assert (usock, self, struct nn_usock, fsm);
 
     if (nn_internal_tasks (usock, src, type))
         return;
@@ -599,7 +599,7 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
     size_t sz;
     int sockerr;
 
-    usock = nn_cont (self, struct nn_usock, fsm);
+    nn_cont_assert (usock, self, struct nn_usock, fsm);
 
     if(nn_internal_tasks(usock, src, type))
         return;

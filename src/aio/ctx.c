@@ -57,7 +57,7 @@ void nn_ctx_leave (struct nn_ctx *self)
     /*  Process any queued events before leaving the context. */
     while (1) {
         item = nn_queue_pop (&self->events);
-        event = nn_cont (item, struct nn_fsm_event, item);
+        event = nn_cont_unsafe (item, struct nn_fsm_event, item);
         if (!event)
             break;
         nn_fsm_event_process (event);
@@ -84,7 +84,7 @@ void nn_ctx_leave (struct nn_ctx *self)
         lock the context it belongs to. */
     while (1) {
         item = nn_queue_pop (&eventsto);
-        event = nn_cont (item, struct nn_fsm_event, item);
+        event = nn_cont_unsafe (item, struct nn_fsm_event, item);
         if (!event)
             break;
         nn_ctx_enter (event->fsm->ctx);

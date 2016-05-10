@@ -552,7 +552,7 @@ int nn_sock_rm_ep (struct nn_sock *self, int eid)
     for (it = nn_list_begin (&self->eps);
           it != nn_list_end (&self->eps);
           it = nn_list_next (&self->eps, it)) {
-        ep = nn_cont (it, struct nn_ep, item);
+        nn_cont_assert (ep, it, struct nn_ep, item);
         if (ep->eid == eid)
             break;
         ep = NULL;
@@ -794,7 +794,7 @@ static void nn_sock_onleave (struct nn_ctx *self)
     struct nn_sock *sock;
     int events;
 
-    sock = nn_cont (self, struct nn_sock, ctx);
+    nn_cont_assert (sock, self, struct nn_sock, ctx);
 
     /*  If nn_close() was already called there's no point in adjusting the
         snd/rcv file descriptors. */
@@ -872,7 +872,7 @@ static void nn_sock_shutdown (struct nn_fsm *self, int src, int type,
     struct nn_list_item *it;
     struct nn_ep *ep;
 
-    sock = nn_cont (self, struct nn_sock, fsm);
+    nn_cont_assert (sock, self, struct nn_sock, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         nn_assert (sock->state == NN_SOCK_STATE_ACTIVE ||
@@ -890,7 +890,7 @@ static void nn_sock_shutdown (struct nn_fsm *self, int src, int type,
         /*  Ask all the associated endpoints to stop. */
         it = nn_list_begin (&sock->eps);
         while (it != nn_list_end (&sock->eps)) {
-            ep = nn_cont (it, struct nn_ep, item);
+            nn_cont_assert (ep, it, struct nn_ep, item);
             it = nn_list_next (&sock->eps, it);
             nn_list_erase (&sock->eps, &ep->item);
             nn_list_insert (&sock->sdeps, &ep->item,
@@ -965,7 +965,7 @@ static void nn_sock_handler (struct nn_fsm *self, int src, int type,
     struct nn_sock *sock;
     struct nn_ep *ep;
 
-    sock = nn_cont (self, struct nn_sock, fsm);
+    nn_cont_assert (sock, self, struct nn_sock, fsm);
 
     switch (sock->state) {
 

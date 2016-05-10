@@ -110,7 +110,8 @@ static void nn_ws_optset_destroy (struct nn_optset *self)
 {
     struct nn_ws_optset *optset;
 
-    optset = nn_cont (self, struct nn_ws_optset, base);
+    nn_cont_assert (optset, self, struct nn_ws_optset, base);
+
     nn_free (optset);
 }
 
@@ -120,7 +121,7 @@ static int nn_ws_optset_setopt (struct nn_optset *self, int option,
     struct nn_ws_optset *optset;
     int val;
 
-    optset = nn_cont (self, struct nn_ws_optset, base);
+    nn_cont_assert (optset, self, struct nn_ws_optset, base);
     if (optvallen != sizeof (int)) {
         return -EINVAL;
     }
@@ -146,7 +147,7 @@ static int nn_ws_optset_getopt (struct nn_optset *self, int option,
 {
     struct nn_ws_optset *optset;
 
-    optset = nn_cont (self, struct nn_ws_optset, base);
+    nn_cont_assert (optset, self, struct nn_ws_optset, base);
 
     switch (option) {
     case NN_WS_MSG_TYPE:

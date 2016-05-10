@@ -153,7 +153,7 @@ static void nn_worker_routine (void *arg)
             if (nn_fast (rc == -EAGAIN))
                 break;
             errnum_assert (rc == 0, -rc);
-            timer = nn_cont (thndl, struct nn_worker_timer, hndl);
+            nn_cont_assert (timer, thndl, struct nn_worker_timer, hndl);
             nn_ctx_enter (timer->owner->ctx);
             nn_fsm_feed (timer->owner, -1, NN_WORKER_TIMER_TIMEOUT, timer);
             nn_ctx_leave (timer->owner->ctx);
@@ -174,7 +174,7 @@ static void nn_worker_routine (void *arg)
 
             /*  Process I/O completion events. */
             if (nn_fast (entries [i].lpOverlapped != NULL)) {
-                op = nn_cont (entries [i].lpOverlapped,
+                nn_cont_assert (op, entries [i].lpOverlapped,
                     struct nn_worker_op, olpd);
 
                 /*  The 'Internal' field is actually an NTSTATUS. Report

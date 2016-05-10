@@ -91,7 +91,7 @@ void nn_xpush_destroy (struct nn_sockbase *self)
 {
     struct nn_xpush *xpush;
 
-    xpush = nn_cont (self, struct nn_xpush, sockbase);
+    nn_cont_assert (xpush, self, struct nn_xpush, sockbase);
 
     nn_xpush_term (xpush);
     nn_free (xpush);
@@ -104,7 +104,7 @@ static int nn_xpush_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     int sndprio;
     size_t sz;
 
-    xpush = nn_cont (self, struct nn_xpush, sockbase);
+    nn_cont_assert (xpush, self, struct nn_xpush, sockbase);
 
     sz = sizeof (sndprio);
     nn_pipe_getopt (pipe, NN_SOL_SOCKET, NN_SNDPRIO, &sndprio, &sz);
@@ -124,7 +124,7 @@ static void nn_xpush_rm (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xpush *xpush;
     struct nn_xpush_data *data;
 
-    xpush = nn_cont (self, struct nn_xpush, sockbase);
+    nn_cont_assert (xpush, self, struct nn_xpush, sockbase);
     data = nn_pipe_getdata (pipe);
     nn_lb_rm (&xpush->lb, &data->lb);
     nn_free (data);
@@ -145,7 +145,7 @@ static void nn_xpush_out (struct nn_sockbase *self, struct nn_pipe *pipe)
     struct nn_xpush *xpush;
     struct nn_xpush_data *data;
 
-    xpush = nn_cont (self, struct nn_xpush, sockbase);
+    nn_cont_assert (xpush, self, struct nn_xpush, sockbase);
     data = nn_pipe_getdata (pipe);
     nn_lb_out (&xpush->lb, &data->lb);
     nn_sockbase_stat_increment (self, NN_STAT_CURRENT_SND_PRIORITY,
@@ -154,14 +154,20 @@ static void nn_xpush_out (struct nn_sockbase *self, struct nn_pipe *pipe)
 
 static int nn_xpush_events (struct nn_sockbase *self)
 {
-    return nn_lb_can_send (&nn_cont (self, struct nn_xpush, sockbase)->lb) ?
-        NN_SOCKBASE_EVENT_OUT : 0;
+    struct nn_xpush *xpush;
+
+    nn_cont_assert (xpush, self, struct nn_xpush, sockbase);
+
+    return nn_lb_can_send (&xpush->lb) ? NN_SOCKBASE_EVENT_OUT : 0;
 }
 
 static int nn_xpush_send (struct nn_sockbase *self, struct nn_msg *msg)
 {
-    return nn_lb_send (&nn_cont (self, struct nn_xpush, sockbase)->lb,
-        msg, NULL);
+    struct nn_xpush *xpush;
+
+    nn_cont_assert (xpush, self, struct nn_xpush, sockbase);
+
+    return nn_lb_send (&xpush->lb, msg, NULL);
 }
 
 static int nn_xpush_setopt (NN_UNUSED struct nn_sockbase *self,

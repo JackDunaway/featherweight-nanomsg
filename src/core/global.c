@@ -275,7 +275,7 @@ static void nn_global_term (void)
     /*  Ask all the transport to deallocate their global resources. */
     while (!nn_list_empty (&self.transports)) {
         it = nn_list_begin (&self.transports);
-        tp = nn_cont (it, struct nn_transport, item);
+        nn_cont_assert (tp, it, struct nn_transport, item);
         if (tp->term)
             tp->term ();
         nn_list_erase (&self.transports, it);
@@ -430,7 +430,7 @@ int nn_global_create_socket (int domain, int protocol)
     for (it = nn_list_begin (&self.socktypes);
           it != nn_list_end (&self.socktypes);
           it = nn_list_next (&self.socktypes, it)) {
-        socktype = nn_cont (it, struct nn_socktype, item);
+        nn_cont_assert (socktype, it, struct nn_socktype, item);
         if (socktype->domain == domain && socktype->protocol == protocol) {
 
             /*  Instantiate the socket. */
@@ -1089,7 +1089,7 @@ static int nn_global_create_ep (struct nn_sock *sock, const char *addr,
     for (it = nn_list_begin (&self.transports);
           it != nn_list_end (&self.transports);
           it = nn_list_next (&self.transports, it)) {
-        tp = nn_cont (it, struct nn_transport, item);
+        nn_cont_assert (tp, it, struct nn_transport, item);
         if (strlen (tp->name) == protosz &&
               memcmp (tp->name, proto, protosz) == 0)
             break;
@@ -1116,7 +1116,7 @@ struct nn_transport *nn_global_transport (int id)
     for (it = nn_list_begin (&self.transports);
           it != nn_list_end (&self.transports);
           it = nn_list_next (&self.transports, it)) {
-        tp = nn_cont (it, struct nn_transport, item);
+        nn_cont_assert (tp, it, struct nn_transport, item);
         if (tp->id == id)
             break;
         tp = NULL;

@@ -183,7 +183,7 @@ static void nn_worker_routine (void *arg)
             if (rc == -EAGAIN)
                 break;
             errnum_assert (rc == 0, -rc);
-            timer = nn_cont (thndl, struct nn_worker_timer, hndl);
+            nn_cont_assert (timer, thndl, struct nn_worker_timer, hndl);
             nn_ctx_enter (timer->owner->ctx);
             nn_fsm_feed (timer->owner, -1, NN_WORKER_TIMER_TIMEOUT, timer);
             nn_ctx_leave (timer->owner->ctx);
@@ -232,7 +232,7 @@ static void nn_worker_routine (void *arg)
 
                     /*  It's a user-defined task. Notify the user that it has
                         arrived in the worker thread. */
-                    task = nn_cont (item, struct nn_worker_task, item);
+                    nn_cont_assert (task, item, struct nn_worker_task, item);
                     nn_ctx_enter (task->owner->ctx);
                     nn_fsm_feed (task->owner, task->src,
                         NN_WORKER_TASK_EXECUTE, task);
@@ -243,7 +243,7 @@ static void nn_worker_routine (void *arg)
             }
 
             /*  It's a true I/O event. Invoke the handler. */
-            fd = nn_cont (phndl, struct nn_worker_fd, hndl);
+            nn_cont_assert (fd, phndl, struct nn_worker_fd, hndl);
             nn_ctx_enter (fd->owner->ctx);
             nn_fsm_feed (fd->owner, fd->src, pevent, fd);
             nn_ctx_leave (fd->owner->ctx);

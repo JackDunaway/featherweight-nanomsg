@@ -112,7 +112,8 @@ static void nn_ipc_optset_destroy (struct nn_optset *self)
 {
     struct nn_ipc_optset *optset;
 
-    optset = nn_cont (self, struct nn_ipc_optset, base);
+    nn_cont_assert (optset, self, struct nn_ipc_optset, base);
+
     nn_free (optset);
 }
 
@@ -121,7 +122,7 @@ static int nn_ipc_optset_setopt (struct nn_optset *self, int option,
 {
     struct nn_ipc_optset *optset;
 
-    optset = nn_cont (self, struct nn_ipc_optset, base);
+    nn_cont_assert (optset, self, struct nn_ipc_optset, base);
     if (optvallen < sizeof (int)) {
         return -EINVAL;
     }
@@ -146,7 +147,7 @@ static int nn_ipc_optset_getopt (struct nn_optset *self, int option,
 {
     struct nn_ipc_optset *optset;
 
-    optset = nn_cont (self, struct nn_ipc_optset, base);
+    nn_cont_assert (optset, self, struct nn_ipc_optset, base);
 
     switch (option) {
     case NN_IPC_SEC_ATTR: 

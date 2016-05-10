@@ -136,7 +136,7 @@ static void nn_cipc_stop (struct nn_epbase *self)
 {
     struct nn_cipc *cipc;
 
-    cipc = nn_cont (self, struct nn_cipc, epbase);
+    nn_cont_assert (cipc, self, struct nn_cipc, epbase);
 
     nn_fsm_stop (&cipc->fsm);
 }
@@ -145,7 +145,7 @@ static void nn_cipc_destroy (struct nn_epbase *self)
 {
     struct nn_cipc *cipc;
 
-    cipc = nn_cont (self, struct nn_cipc, epbase);
+    nn_cont_assert (cipc, self, struct nn_cipc, epbase);
 
     nn_sipc_term (&cipc->sipc);
     nn_backoff_term (&cipc->retry);
@@ -161,7 +161,7 @@ static void nn_cipc_shutdown (struct nn_fsm *self, int src, int type,
 {
     struct nn_cipc *cipc;
 
-    cipc = nn_cont (self, struct nn_cipc, fsm);
+    nn_cont_assert (cipc, self, struct nn_cipc, fsm);
 
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
         if (!nn_sipc_isidle (&cipc->sipc)) {
@@ -196,7 +196,7 @@ static void nn_cipc_handler (struct nn_fsm *self, int src, int type,
 {
     struct nn_cipc *cipc;
 
-    cipc = nn_cont (self, struct nn_cipc, fsm);
+    nn_cont_assert (cipc, self, struct nn_cipc, fsm);
 
     switch (cipc->state) {
 
