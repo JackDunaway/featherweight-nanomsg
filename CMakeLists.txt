@@ -412,6 +412,12 @@ if (NN_ENABLE_NANOCAT)
     install (TARGETS nanocat RUNTIME DESTINATION bin)
 endif()
 
+add_custom_target (
+    NN_STRESS_TEST
+        COMMAND ${CMAKE_CTEST_COMMAND} -j16 -C $<CONFIGURATION> --force-new-ctest-process --repeat-until-fail 10
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
 set (CPACK_PACKAGE_NAME ${PROJECT_NAME})
 set (CPACK_PACKAGE_VERSION ${NN_PACKAGE_VERSION})
 include (CPack)
