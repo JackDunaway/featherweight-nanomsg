@@ -396,6 +396,7 @@ if (NN_TESTS)
     add_libnanomsg_test (ws_async_shutdown 5)
     add_libnanomsg_test (reqttl 10)
     add_libnanomsg_test (surveyttl 10)
+    add_libnanomsg_test (reqrep_cancellation 10)
 
     # Platform-specific tests
     if (WIN32)
