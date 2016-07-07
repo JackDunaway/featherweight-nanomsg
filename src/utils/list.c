@@ -26,6 +26,13 @@
 #include "err.h"
 #include "attr.h"
 
+/*  NB: This doubly-linked list implementation as-designed is not threadsafe.
+    Its usage is intended as a private implementation of nanomsg where list
+    instances are always protected by a higher level mutex. Locking at this
+    layer is avoided for performance. If you find yourself debugging this
+    codebase and considering somehow mutexing or locking this structure, the
+    problem likely lies at some higher level. */
+
 void nn_list_init (struct nn_list *self)
 {
     self->first = NULL;
