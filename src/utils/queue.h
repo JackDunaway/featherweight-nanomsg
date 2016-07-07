@@ -37,6 +37,7 @@ struct nn_queue_item {
 struct nn_queue {
     struct nn_queue_item *head;
     struct nn_queue_item *tail;
+    int items;
 };
 
 /*  Initialise the queue. */
