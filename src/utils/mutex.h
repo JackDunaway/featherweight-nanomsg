@@ -34,8 +34,12 @@ struct nn_mutex {
         implementation. */
 #ifdef NN_HAVE_WINDOWS
     CRITICAL_SECTION cs;
+
+    /*  In addition to the mutex itself, on Windows we store additional state
+        to track recursive mutexes to provide same semantics as POSIX. */
     DWORD owner;
-    int debug;
+    int recursive;
+    int locks;
 #else
     pthread_mutex_t mutex;
 #endif
@@ -43,8 +47,8 @@ struct nn_mutex {
 
 typedef struct nn_mutex nn_mutex_t;
 
-/*  Initialise the mutex. */
-void nn_mutex_init (nn_mutex_t *self);
+/*  Initialize the mutex, declaring whether recursion is allowed. */
+void nn_mutex_init (nn_mutex_t *self, int recursive);
 
 /*  Terminate the mutex. */
 void nn_mutex_term (nn_mutex_t *self);

@@ -230,15 +230,16 @@ int nn_sock_term (struct nn_sock *self)
     }
 
     /*  Threads that posted the semaphore(s) can still have the ctx locked
-        for a short while. By simply entering the context and exiting it
-        immediately we can be sure that any such threads have already
-        exited the context. */
+        for a short while processing their final events. Waiting to acquire the
+        lock here one last time ensures the socket has fully completed its
+        shutdown sequence. */
     nn_ctx_enter (&self->ctx);
+    nn_assert (nn_queue_empty (&self->ctx.events));
+    nn_assert (nn_queue_empty (&self->ctx.eventsto));
     nn_ctx_leave (&self->ctx);
 
-    /*  At this point, we can be reasonably certain that no other thread
-        has any references to the socket. */
-
+    /*  We are now certain that no other threads reference resources held by
+        the socket. */
     nn_fsm_stopped_noevent (&self->fsm);
     nn_fsm_term (&self->fsm);
     nn_sem_term (&self->termsem);
