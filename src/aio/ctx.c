@@ -29,7 +29,7 @@
 void nn_ctx_init (struct nn_ctx *self, struct nn_pool *pool,
     nn_ctx_onleave onleave)
 {
-    nn_mutex_init (&self->sync);
+    nn_mutex_init (&self->sync, 1);
     self->pool = pool;
     nn_queue_init (&self->events);
     nn_queue_init (&self->eventsto);
@@ -52,7 +52,6 @@ void nn_ctx_leave (struct nn_ctx *self)
 {
     struct nn_queue_item *item;
     struct nn_fsm_event *event;
-    struct nn_queue eventsto;
 
     /*  Process any queued events before leaving the context. */
     while (1) {
@@ -73,17 +72,10 @@ void nn_ctx_leave (struct nn_ctx *self)
         return;
     }
 
-    /*  Make a copy of the queue of the external events so that it does not
-        get corrupted once we unlock the context. */
-    eventsto = self->eventsto;
-    nn_queue_init (&self->eventsto);
-
-    nn_mutex_unlock (&self->sync);
-
-    /*  Process any queued external events. Before processing each event
-        lock the context it belongs to. */
+    /*  Process all queued external events while holding the exclusive
+        lock on its owning context. */
     while (1) {
-        item = nn_queue_pop (&eventsto);
+        item = nn_queue_pop (&self->eventsto);
         event = nn_cont (item, struct nn_fsm_event, item);
         if (!event)
             break;
@@ -92,7 +84,7 @@ void nn_ctx_leave (struct nn_ctx *self)
         nn_ctx_leave (event->fsm->ctx);
     }
 
-    nn_queue_term (&eventsto);
+    nn_mutex_unlock (&self->sync);
 }
 
 struct nn_worker *nn_ctx_choose_worker (struct nn_ctx *self)

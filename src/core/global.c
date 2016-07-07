@@ -464,7 +464,7 @@ int nn_global_create_socket (int domain, int protocol)
 static void nn_lib_init(void)
 {
     /*  This function is executed once to initialize global locks. */
-    nn_mutex_init (&self.lock);
+    nn_mutex_init (&self.lock, 0);
     nn_condvar_init (&self.cond);
 }
 

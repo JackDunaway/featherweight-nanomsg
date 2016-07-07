@@ -27,7 +27,7 @@ void nn_atomic_init (struct nn_atomic *self, uint32_t n)
 {
     self->n = n;
 #if defined NN_ATOMIC_MUTEX
-    nn_mutex_init (&self->sync);
+    nn_mutex_init (&self->sync, 0);
 #endif
 }
 

@@ -69,7 +69,7 @@ void nn_ins_item_term (struct nn_ins_item *self)
 
 void nn_ins_init (void)
 {
-    nn_mutex_init (&self.sync);
+    nn_mutex_init (&self.sync, 0);
     nn_list_init (&self.bound);
     nn_list_init (&self.connected);
 }

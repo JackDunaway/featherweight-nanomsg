@@ -468,7 +468,8 @@ static void nn_sinproc_handler (struct nn_fsm *self, int src, int type,
         case NN_SINPROC_SRC_PEER:
             switch (type) {
             case NN_SINPROC_RECEIVED:
-                /*  This case can safely be ignored. It may happen when
+            case NN_SINPROC_SENT:
+                /*  These cases may be safely be ignored. They may happen when
                     nn_close() comes before the already enqueued
                     NN_SINPROC_RECEIVED has been delivered.  */
                 return;

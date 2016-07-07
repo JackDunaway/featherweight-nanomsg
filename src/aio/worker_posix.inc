@@ -106,7 +106,7 @@ int nn_worker_init (struct nn_worker *self)
     if (rc < 0)
         return rc;
 
-    nn_mutex_init (&self->sync);
+    nn_mutex_init (&self->sync, 0);
     nn_queue_init (&self->tasks);
     nn_queue_item_init (&self->stop);
     nn_poller_init (&self->poller);

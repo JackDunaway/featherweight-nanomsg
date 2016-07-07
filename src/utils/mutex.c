@@ -28,16 +28,18 @@
 
 #ifdef NN_HAVE_WINDOWS
 
-void nn_mutex_init (nn_mutex_t *self)
+void nn_mutex_init (nn_mutex_t *self, int recursive)
 {
     InitializeCriticalSection (&self->cs);
     self->owner = 0;
+    self->locks = 0;
+    self->recursive = recursive;
 }
 
 void nn_mutex_term (nn_mutex_t *self)
 {
     /*  Make sure we don't free a locked mutex. */
-    nn_assert(self->owner == 0);
+    nn_assert (self->owner == 0 && self->locks == 0);
     DeleteCriticalSection (&self->cs);
 }
 
@@ -45,32 +47,55 @@ void nn_mutex_lock (nn_mutex_t *self)
 {
     EnterCriticalSection (&self->cs);
 
-    /*  Make sure we don't recursively enter mutexes. */
-    nn_assert(self->owner == 0);
+    /*  Ensure recursive mutexes are only entered by the owning thread. */
+    if (self->recursive && self->owner != 0) {
+        nn_assert (self->owner == GetCurrentThreadId());
+        self->locks++;
+        return;
+    }
+    
+    /*  Establish ownership of mutex. */
+    nn_assert (self->owner == 0 && self->locks == 0);
     self->owner = GetCurrentThreadId();
+    self->locks = 1;
 }
 
 void nn_mutex_unlock (nn_mutex_t *self)
 {
-    /*  Make sure that we own the mutex we are releasing. */
-    nn_assert(self->owner == GetCurrentThreadId());
-    self->owner = 0;
+    /*  Ensure we own the mutex we are releasing. */
+    nn_assert (self->owner == GetCurrentThreadId ());
+
+    /*  Ensure recursion preconditions match POSIX sanity semantics. */
+    if (self->recursive) {
+        nn_assert (self->locks >= 1);
+        self->locks--;
+        if (self->locks == 0) {
+            self->owner = 0;
+        }
+    }
+    else {
+        nn_assert (self->locks == 1);
+        self->locks = 0;
+        self->owner = 0;
+    }
     LeaveCriticalSection (&self->cs);
 }
 
 #else
 
-void nn_mutex_init (nn_mutex_t *self)
+void nn_mutex_init (nn_mutex_t *self, int recursive)
 {
     int rc;
+    int type;
     pthread_mutexattr_t attr;
 
-    pthread_mutexattr_init(&attr);
-    rc = pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_ERRORCHECK);
+    pthread_mutexattr_init (&attr);
+    type = recursive ? PTHREAD_MUTEX_RECURSIVE : PTHREAD_MUTEX_ERRORCHECK;
+    rc = pthread_mutexattr_settype (&attr, type);
     errnum_assert (rc == 0, rc);
-    rc = pthread_mutex_init (&self->mutex, NULL);
+    rc = pthread_mutex_init (&self->mutex, &attr);
     errnum_assert (rc == 0, rc);
-    pthread_mutexattr_destroy(&attr);
+    pthread_mutexattr_destroy (&attr);
 }
 
 void nn_mutex_term (nn_mutex_t *self)

@@ -190,10 +190,12 @@ void nn_fsm_raise (struct nn_fsm *self, struct nn_fsm_event *event, int type)
 void nn_fsm_raiseto (struct nn_fsm *self, struct nn_fsm *dst,
     struct nn_fsm_event *event, int src, int type, void *srcptr)
 {
+    nn_ctx_enter (dst->ctx);
     event->fsm = dst;
     event->src = src;
     event->srcptr = srcptr;
     event->type = type;
     nn_ctx_raiseto (self->ctx, event);
+    nn_ctx_leave (dst->ctx);
 }
 

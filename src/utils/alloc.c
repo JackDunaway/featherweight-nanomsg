@@ -42,7 +42,7 @@ static size_t nn_alloc_blocks;
 
 void nn_alloc_init (void)
 {
-    nn_mutex_init (&nn_alloc_sync);
+    nn_mutex_init (&nn_alloc_sync, 0);
     nn_alloc_bytes = 0;
     nn_alloc_blocks = 0;
 }
