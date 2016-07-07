@@ -25,6 +25,13 @@
 #include "queue.h"
 #include "err.h"
 
+/*  NB: This queue implementation as-designed is not threadsafe.
+    Its usage is intended as a private implementation of nanomsg where queue
+    instances are always protected by a higher level mutex. Locking at this
+    layer is avoided for performance. If you find yourself debugging this
+    codebase and considering somehow mutexing or locking this structure, the
+    problem likely lies at some higher level. */
+
 void nn_queue_init (struct nn_queue *self)
 {
     self->head = NULL;
