@@ -107,13 +107,6 @@ int nn_sock_init (struct nn_sock *self, struct nn_socktype *socktype, int fd)
     }
     nn_sem_init (&self->termsem);
     nn_sem_init (&self->relesem);
-    if (nn_slow (rc < 0)) {
-        if (!(socktype->flags & NN_SOCKTYPE_FLAG_NORECV))
-            nn_efd_term (&self->rcvfd);
-        if (!(socktype->flags & NN_SOCKTYPE_FLAG_NOSEND))
-            nn_efd_term (&self->sndfd);
-        return rc;
-    }
 
     self->holds = 1;   /*  Callers hold. */
     self->flags = 0;
