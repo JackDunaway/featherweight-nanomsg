@@ -68,9 +68,7 @@ void nn_req_destroy (struct nn_sockbase *self);
 void nn_req_in (struct nn_sockbase *self, struct nn_pipe *pipe);
 void nn_req_out (struct nn_sockbase *self, struct nn_pipe *pipe);
 int nn_req_events (struct nn_sockbase *self);
-int nn_req_csend (struct nn_sockbase *self, struct nn_msg *msg);
 void nn_req_rm (struct nn_sockbase *self, struct nn_pipe *pipe);
-int nn_req_crecv (struct nn_sockbase *self, struct nn_msg *msg);
 int nn_req_setopt (struct nn_sockbase *self, int level, int option,
     const void *optval, size_t optvallen);
 int nn_req_getopt (struct nn_sockbase *self, int level, int option,
