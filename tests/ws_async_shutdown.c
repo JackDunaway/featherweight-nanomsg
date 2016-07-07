@@ -33,20 +33,22 @@ static char socket_address [128];
 
 #define TEST_LOOPS 10
 #define TEST_THREADS 10
+#define MSG "ws"
+#define MSG_LEN sizeof (MSG)
 
 static void routine (NN_UNUSED void *arg)
 {
     int s;
     int rc;
-    char msg[1];
+    char msg [MSG_LEN];
 
     nn_assert (arg);
 
     s = *(int *)arg;
 
     while (1) {
-        rc = nn_recv (s, &msg, sizeof(msg), 0);
-        if (rc == 0) {
+        rc = nn_recv (s, &msg, sizeof (msg), 0);
+        if (rc == MSG_LEN - 1) {
             continue;
         }
 
@@ -96,7 +98,7 @@ int main (int argc, const char *argv[])
         /*  Allow all threads a bit of time to connect. */
         nn_sleep (100);
 
-        test_send (sb, "");
+        test_send (sb, MSG);
 
         for (j = 0; j < TEST_THREADS; j++) {
             test_close (sockets [j]);
