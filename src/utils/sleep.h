@@ -1,5 +1,6 @@
 /*
     Copyright (c) 2012 Martin Sustrik  All rights reserved.
+    Copyright (c) 2016 Jack R. Dunaway. All rights reserved.
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"),
@@ -23,8 +24,11 @@
 #ifndef NN_SLEEP_INCLUDED
 #define NN_SLEEP_INCLUDED
 
-/*  Platform independent implementation of sleeping. */
+/*  Platform-independent implementation of sleeping. */
 
 void nn_sleep (int milliseconds);
+
+/*  Platform-independent implementation of yielding a thread's time slice. */
+void nn_yield (void);
 
 #endif

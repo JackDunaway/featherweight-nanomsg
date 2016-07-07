@@ -1,5 +1,6 @@
 /*
     Copyright (c) 2012 Martin Sustrik  All rights reserved.
+    Copyright (c) 2016 Jack R. Dunaway. All rights reserved.
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"),
@@ -32,6 +33,11 @@ void nn_sleep (int milliseconds)
     Sleep (milliseconds);
 }
 
+void nn_yield (void)
+{
+    (void) SwitchToThread ();
+}
+
 #else
 
 #include <time.h>
@@ -44,7 +50,14 @@ void nn_sleep (int milliseconds)
     ts.tv_sec = milliseconds / 1000;
     ts.tv_nsec = milliseconds % 1000 * 1000000;
     rc = nanosleep (&ts, NULL);
-    errno_assert (rc == 0);    
+    errno_assert (rc == 0);
+}
+
+void nn_yield (void)
+{
+    int rc;
+    rc = sched_yield ();
+    errno_assert (rc == 0);
 }
 
 #endif
