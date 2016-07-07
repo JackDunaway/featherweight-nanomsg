@@ -38,10 +38,12 @@
 #define TEST2_THREAD_COUNT 10
 #define MESSAGES_PER_THREAD 10
 #define TEST_LOOPS 10
+#define MSG "hello"
+#define MSG_LEN sizeof (MSG) - 1
 
 struct nn_atomic active;
 
-static char socket_address[128];
+static char socket_address [128];
 
 static void routine (NN_UNUSED void *arg)
 {
@@ -57,34 +59,38 @@ static void routine (NN_UNUSED void *arg)
 
 static void routine2 (NN_UNUSED void *arg)
 {
+    int ms;
     int s;
     int i;
-    int ms;
 
     s = test_socket (AF_SP, NN_PULL);
 
+    ms = 1000;
+    test_setsockopt (s, NN_SOL_SOCKET, NN_RCVTIMEO, &ms, sizeof (ms));
+    
     test_connect (s, socket_address);
 
-    ms = 2000;
-    test_setsockopt (s, NN_SOL_SOCKET, NN_RCVTIMEO, &ms, sizeof (ms));
-
-    for (i = 0; i < MESSAGES_PER_THREAD; ++i) {
-        test_recv (s, "hello");
+    for (i = 0; i != MESSAGES_PER_THREAD; ++i) {
+        nn_yield ();
+        test_recv (s, MSG);
     }
 
     test_close (s);
-    nn_atomic_dec(&active, 1);
+    nn_atomic_dec (&active, 1);
 }
 
 int main (int argc, const char *argv[])
 {
+    struct nn_thread threads [THREAD_COUNT];
+    int count;
+    int rc;
     int sb;
+    int ms;
     int i;
     int j;
-    struct nn_thread threads [THREAD_COUNT];
 
-    test_addr_from(socket_address, "tcp", "127.0.0.1",
-            get_test_port(argc, argv));
+    test_addr_from (socket_address, "tcp", "127.0.0.1",
+            get_test_port (argc, argv));
 
     /*  Stress the shutdown algorithm. */
 
@@ -96,11 +102,12 @@ int main (int argc, const char *argv[])
     test_bind (sb, socket_address);
 
     for (j = 0; j != TEST_LOOPS; ++j) {
-        for (i = 0; i != THREAD_COUNT; ++i)
+        for (i = 0; i != THREAD_COUNT; ++i) {
             nn_thread_init (&threads [i], routine, NULL);
+        }
         for (i = 0; i != THREAD_COUNT; ++i) {
             nn_thread_term (&threads [i]);
-	}
+        }
     }
 
     test_close (sb);
@@ -108,24 +115,42 @@ int main (int argc, const char *argv[])
     /*  Test race condition of sending message while socket shutting down  */
 
     sb = test_socket (AF_SP, NN_PUSH);
+
+    ms = 10;
+    test_setsockopt (sb, NN_SOL_SOCKET, NN_SNDTIMEO, &ms, sizeof (ms));
+    nn_assert (ms == 10);
+
     test_bind (sb, socket_address);
 
     for (j = 0; j != TEST_LOOPS; ++j) {
-	int ms;
-        nn_atomic_init(&active, TEST2_THREAD_COUNT);
-        for (i = 0; i != TEST2_THREAD_COUNT; ++i)
-            nn_thread_init (&threads [i], routine2, &threads[i]);
+        nn_atomic_init (&active, TEST2_THREAD_COUNT);
+        for (i = 0; i != TEST2_THREAD_COUNT; ++i) {
+            nn_thread_init (&threads [i], routine2, NULL);
+        }
+        
+        nn_sleep (100);
 
-	nn_sleep(100);
-	ms = 200;
-	test_setsockopt (sb, NN_SOL_SOCKET, NN_SNDTIMEO, &ms, sizeof (ms));
-        while (active.n) {
-            (void) nn_send (sb, "hello", 5, 0);
+        /*  Loop until the first timeout indicating all workers are gone. */
+        count = 0;
+        while (1) {
+            rc = nn_send (sb, MSG, MSG_LEN, 0);
+            if (rc == MSG_LEN) {
+                nn_yield ();
+                count++;
+                continue;
+            }
+            errno_assert (rc == -1 && nn_errno () == ETIMEDOUT && !active.n);
+            break;
         }
 
-        for (i = 0; i != TEST2_THREAD_COUNT; ++i)
+        /*  Once all workers are gone, ensure that the total number of messages
+            sent is at least the total expected workload... */
+        nn_assert (count >= MESSAGES_PER_THREAD * TEST2_THREAD_COUNT);
+
+        for (i = 0; i != TEST2_THREAD_COUNT; ++i) {
             nn_thread_term (&threads [i]);
-        nn_atomic_term(&active);
+        }
+        nn_atomic_term (&active);
     }
 
     test_close (sb);
