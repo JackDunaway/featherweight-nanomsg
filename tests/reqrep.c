@@ -95,9 +95,8 @@ int main ()
     req1 = test_socket (AF_SP, NN_REQ);
     test_connect (req1, SOCKET_ADDRESS);
     resend_ivl = 100;
-    rc = nn_setsockopt (req1, NN_REQ, NN_REQ_RESEND_IVL,
+    test_setsockopt (req1, NN_REQ, NN_REQ_RESEND_IVL,
         &resend_ivl, sizeof (resend_ivl));
-    errno_assert (rc == 0);
 
     test_send (req1, "ABC");
     test_recv (rep1, "ABC");
@@ -117,16 +116,14 @@ int main ()
     rep1 = test_socket (AF_SP, NN_REP);
     test_bind (rep1, SOCKET_ADDRESS);
     timeo = 200;
-    rc = nn_setsockopt (rep1, NN_SOL_SOCKET, NN_RCVTIMEO,
-       &timeo, sizeof (timeo));
-    errno_assert (rc == 0);
+    test_setsockopt (rep1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
     test_recv (rep1, "ABC");
 
     test_close (req1);
     test_close (rep1);
 
     /*  Check removing socket request sent to (It should
-        be sent immediatelly to other peer rather than relying
+        be sent immediately to other peer rather than relying
         on the resend algorithm). */
     req1 = test_socket (AF_SP, NN_REQ);
     test_bind (req1, SOCKET_ADDRESS);
@@ -136,12 +133,8 @@ int main ()
     test_connect (rep2, SOCKET_ADDRESS);
 
     timeo = 200;
-    rc = nn_setsockopt (rep1, NN_SOL_SOCKET, NN_RCVTIMEO,
-       &timeo, sizeof (timeo));
-    errno_assert (rc == 0);
-    rc = nn_setsockopt (rep2, NN_SOL_SOCKET, NN_RCVTIMEO,
-       &timeo, sizeof (timeo));
-    errno_assert (rc == 0);
+    test_setsockopt (rep1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
+    test_setsockopt (rep2, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
 
     test_send (req1, "ABC");
     /*  We got request through rep1  */
@@ -153,7 +146,6 @@ int main ()
     /*  Let's check it's delivered well  */
     test_send (rep2, "REPLY");
     test_recv (req1, "REPLY");
-
 
     test_close (req1);
     test_close (rep2);
@@ -168,6 +160,7 @@ int main ()
     rep1 = test_socket (AF_SP, NN_REP);
     test_bind (rep1, SOCKET_ADDRESS);
     timeo = 100;
+    test_setsockopt (rep1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
     test_recv (rep1, "DEF");
 
     test_close (req1);
