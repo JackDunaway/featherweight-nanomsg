@@ -54,6 +54,17 @@
         }\
     } while (0)
 
+/*  Unconditionally asserts when a code path defined as unreachable is executed
+    at runtime. Such a failure indicates a library developer logic error. */
+#define nn_assert_unreachable(reason) \
+    do {\
+        nn_backtrace_print (); \
+        fprintf (stderr, "Assertion failed: %s (%s:%d)\n", #reason, \
+            __FILE__, __LINE__);\
+        fflush (stderr);\
+        nn_err_abort ();\
+    } while (0)
+
 #define nn_assert_state(obj, state_name) \
     do {\
         if (nn_slow ((obj)->state != state_name)) {\
