@@ -191,6 +191,11 @@ NN_NORETURN void nn_err_abort (void);
 /*  Platform-independent low-level wrapper around `errno`. */
 int nn_err_errno (void);
 
+/*  Platform-independent low-level ability to clear `errno`. The intended usage
+    is more for testing to ensure the library adheres to its contract to set
+    errno, and not necessarily intended for library development. */
+void nn_clear_errno (void);
+
 /*  Converts an error code into a human-readable string. */
 const char *nn_err_strerror (int errnum);
 
