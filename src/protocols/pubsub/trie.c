@@ -21,7 +21,6 @@
 */
 
 #include <string.h>
-#include <assert.h>
 #include <stdio.h>
 
 #include "trie.h"
@@ -288,7 +287,7 @@ step2:
     ch = *node;
     *node = nn_alloc (sizeof (struct nn_trie_node) +
         sizeof (struct nn_trie_node*), "trie node");
-    assert (*node);
+    alloc_assert (*node);
     (*node)->refcount = 0;
     (*node)->prefix_len = pos;
     (*node)->type = 1;
@@ -311,7 +310,7 @@ step3:
     if ((*node)->type < NN_TRIE_SPARSE_MAX) {
         *node = nn_realloc (*node, sizeof (struct nn_trie_node) +
             ((*node)->type + 1) * sizeof (struct nn_trie_node*));
-        assert (*node);
+        alloc_assert (*node);
         (*node)->u.sparse.children [(*node)->type] = *data;
         ++(*node)->type;
         node = nn_node_child (*node, (*node)->type - 1);
@@ -330,7 +329,7 @@ step3:
             new_max = (*node)->u.dense.max > c ? (*node)->u.dense.max : c;
             *node = nn_realloc (*node, sizeof (struct nn_trie_node) +
                 (new_max - new_min + 1) * sizeof (struct nn_trie_node*));
-            assert (*node);
+            alloc_assert (*node);
             old_children = (*node)->u.dense.max - (*node)->u.dense.min + 1;
             new_children = new_max - new_min + 1;
             if ((*node)->u.dense.min != new_min) {
@@ -376,7 +375,7 @@ step3:
         *node = (struct nn_trie_node*) nn_alloc (sizeof (struct nn_trie_node) +
             (new_max - new_min + 1) * sizeof (struct nn_trie_node*),
             "trie node");
-        assert (*node);
+        alloc_assert (*node);
 
         /*  Fill in the new node. */
         (*node)->refcount = 0;
@@ -402,14 +401,14 @@ step3:
     /*  Step 4 -- Create new nodes for remaining part of the subscription. */
 step4:
 
-    assert (!*node);
+    nn_assert (!*node);
     while (1) {
 
         /*  Create a new node to hold the next part of the subscription. */
         more_nodes = size > NN_TRIE_PREFIX_MAX;
         *node = nn_alloc (sizeof (struct nn_trie_node) +
             (more_nodes ? sizeof (struct nn_trie_node*) : 0), "trie node");
-        assert (*node);
+        alloc_assert (*node);
 
         /*  Fill in the new node. */
         (*node)->refcount = 0;
@@ -523,7 +522,7 @@ static int nn_node_unsubscribe (struct nn_trie_node **self,
         for (index = 0; index != (*self)->type; ++index)
             if ((*self)->u.sparse.children [index] == *data)
                 break;
-        assert (index != (*self)->type);
+        nn_assert (index != (*self)->type);
 
         /*  Remove the destroyed child from both lists of children. */
         memmove (
@@ -537,7 +536,7 @@ static int nn_node_unsubscribe (struct nn_trie_node **self,
         --(*self)->type;
         *self = nn_realloc (*self, sizeof (struct nn_trie_node) +
             ((*self)->type * sizeof (struct nn_trie_node*)));
-        assert (*self);
+        alloc_assert (*self);
         
         /*  If there are no more children and no refcount, we can delete
             the node altogether. */
@@ -575,7 +574,7 @@ static int nn_node_unsubscribe (struct nn_trie_node **self,
              *self = nn_realloc (*self, sizeof (struct nn_trie_node) +
                  ((*self)->u.dense.max - new_min + 1) *
                  sizeof (struct nn_trie_node*));
-             assert (*self);
+             alloc_assert (*self);
              return 1;
         }
 
@@ -590,7 +589,7 @@ static int nn_node_unsubscribe (struct nn_trie_node **self,
              *self = nn_realloc (*self, sizeof (struct nn_trie_node) +
                  ((*self)->u.dense.max - (*self)->u.dense.min + 1) *
                  sizeof (struct nn_trie_node*));
-             assert (*self);
+             alloc_assert (*self);
              return 1;
         }
 
@@ -603,7 +602,7 @@ static int nn_node_unsubscribe (struct nn_trie_node **self,
     {
         new_node = nn_alloc (sizeof (struct nn_trie_node) +
             NN_TRIE_SPARSE_MAX * sizeof (struct nn_trie_node*), "trie node");
-        assert (new_node);
+        alloc_assert (new_node);
         new_node->refcount = 0;
         new_node->prefix_len = (*self)->prefix_len;
         memcpy (new_node->prefix, (*self)->prefix, new_node->prefix_len);
@@ -618,7 +617,7 @@ static int nn_node_unsubscribe (struct nn_trie_node **self,
                 ++j;
             }
         }
-        assert (j == NN_TRIE_SPARSE_MAX);
+        nn_assert (j == NN_TRIE_SPARSE_MAX);
         nn_free (*self);
         *self = new_node;
         return 1;
