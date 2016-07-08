@@ -41,6 +41,7 @@ void nn_yield (void)
 #else
 
 #include <time.h>
+#include <sched.h>
 
 void nn_sleep (int milliseconds)
 {
