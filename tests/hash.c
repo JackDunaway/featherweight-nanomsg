@@ -37,7 +37,7 @@ int main ()
     /*  Insert 10000 elements into the hash table. */
     for (k = 0; k != 10000; ++k) {
         item = nn_alloc (sizeof (struct nn_hash_item), "item");
-        nn_assert (item);
+        alloc_assert (item);
         if (k == 5000)
             item5000 = item;
         nn_hash_item_init (item);
