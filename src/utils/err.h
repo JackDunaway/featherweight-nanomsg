@@ -114,6 +114,19 @@
         }\
     } while (0)
 
+/*  Checks whether the condition is true and an error is indeed present. */
+#define nn_assert_is_error(cond, code) \
+    do {\
+        if (nn_slow (!(cond) || nn_errno () != code)) {\
+            nn_backtrace_print ();\
+            fprintf (stderr,\
+                "Expected %s and errno [%s=%d], yet errno is [%d] (%s:%d)\n",\
+                #cond, #code, (int) (code), nn_errno (), __FILE__, __LINE__);\
+            fflush (stderr);\
+            nn_err_abort ();\
+        }\
+    } while (0)
+
 /* Checks the condition. If false prints out the GetLastError info. */
 #define win_assert(x) \
     do {\
