@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../src/utils/alloc.c"
 #include "../src/utils/err.c"
 #include "../src/utils/sleep.c"
 
@@ -64,8 +65,8 @@ int main (int argc, char *argv [])
     rc = nn_setsockopt (s, NN_SOL_SOCKET, NN_LINGER, &opt, sizeof (opt));
     nn_assert (rc == 0);
 
-    buf = malloc (sz);
-    nn_assert (buf);
+    buf = nn_alloc (sz, "remote_thr_msg");
+    alloc_assert (buf);
     memset (buf, 111, sz);
 
     nbytes = nn_send (s, buf, 0, 0);
@@ -76,7 +77,7 @@ int main (int argc, char *argv [])
         nn_assert (nbytes == (int)sz);
     }
 
-    free (buf);
+    nn_free (buf);
 
     /*  Linger doesn't always do the trick, so sleep a bit to be sure. */
     nn_sleep (1000);

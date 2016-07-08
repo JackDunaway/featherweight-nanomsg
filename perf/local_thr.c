@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "../src/utils/alloc.c"
 #include "../src/utils/stopwatch.c"
 #include "../src/utils/err.c"
 
@@ -67,8 +68,8 @@ int main (int argc, char *argv [])
     rc = nn_setsockopt (s, NN_SOL_SOCKET, NN_LINGER, &opt, sizeof (opt));
     nn_assert (rc == 0);
 
-    buf = malloc (sz);
-    nn_assert (buf);
+    buf = nn_alloc (sz, "local_thr_msg");
+    alloc_assert (buf);
 
     nbytes = nn_recv (s, buf, sz, 0);
     nn_assert (nbytes == 0);
@@ -90,7 +91,7 @@ int main (int argc, char *argv [])
     printf ("throughput: %d [msg/s]\n", (int) thr);
     printf ("throughput: %.3f [Mb/s]\n", (double) mbs);
 
-    free (buf);
+    nn_free (buf);
 
     rc = nn_close (s);
     nn_assert (rc == 0);

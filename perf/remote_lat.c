@@ -29,8 +29,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../src/utils/stopwatch.c"
+#include "../src/utils/alloc.c"
 #include "../src/utils/err.c"
+#include "../src/utils/stopwatch.c"
 
 int main (int argc, char *argv [])
 {
@@ -67,8 +68,8 @@ int main (int argc, char *argv [])
     rc = nn_connect (s, connect_to);
     nn_assert (rc >= 0);
 
-    buf = malloc (sz);
-    nn_assert (buf);
+    buf = nn_alloc (sz, "remote_lat_msg");
+    alloc_assert (buf);
     memset (buf, 111, sz);
 
     nn_stopwatch_init (&sw);
@@ -85,7 +86,7 @@ int main (int argc, char *argv [])
     printf ("roundtrip count: %d\n", (int) rts);
     printf ("average latency: %.3f [us]\n", (double) lat);
 
-    free (buf);
+    nn_free (buf);
 
     rc = nn_close (s);
     nn_assert (rc == 0);
