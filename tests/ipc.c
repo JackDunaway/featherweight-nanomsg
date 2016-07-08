@@ -29,10 +29,14 @@
 
 /*  Tests IPC transport. */
 
+/*  Message large enough to trigger overlapped I/O on Windows. */
+#define LARGE_MSG_SZ 10000
+
 #define SOCKET_ADDRESS "ipc://test.ipc"
 
 int main ()
 {
+    char buf [LARGE_MSG_SZ];
     int sb;
     int sc;
     int i;
@@ -40,9 +44,6 @@ int main ()
 #if !defined(NN_HAVE_WINDOWS)
     int rc;
 #endif
-
-    int size;
-    char * buf;
 
     /*  Try closing a IPC socket while it not connected. */
     sc = test_socket (AF_SP, NN_PAIR);
@@ -76,15 +77,12 @@ int main ()
     }
 
     /*  Send something large enough to trigger overlapped I/O on Windows. */
-    size = 10000;
-    buf = malloc (size);
-    for (i = 0; i < size; ++i) {
-        buf[i] = 48 + i % 10;
+    for (i = 0; i < LARGE_MSG_SZ; ++i) {
+        buf [i] = 48 + i % 10;
     }
-    buf[size-1] = '\0';
+    buf [LARGE_MSG_SZ-1] = '\0';
     test_send (sc, buf);
     test_recv (sb, buf);
-    free (buf);
 
     test_close (sc);
     test_close (sb);
