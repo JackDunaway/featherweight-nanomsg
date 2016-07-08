@@ -55,8 +55,9 @@ int main (int argc, const char *argv[])
     timeo = 100;
     test_setsockopt (pair, NN_SOL_SOCKET, NN_SNDTIMEO,
         &timeo, sizeof (timeo));
+    nn_clear_errno ();
     rc = nn_send (pair, "ABC", 3, 0);
-    errno_assert (rc < 0 && nn_errno () == ETIMEDOUT);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
     test_close (pull);
     test_close (pair);
 
@@ -68,8 +69,9 @@ int main (int argc, const char *argv[])
     timeo = 100;
     test_setsockopt (pair, NN_SOL_SOCKET, NN_SNDTIMEO,
         &timeo, sizeof (timeo));
+    nn_clear_errno ();
     rc = nn_send (pair, "ABC", 3, 0);
-    errno_assert (rc < 0 && nn_errno () == ETIMEDOUT);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
     test_close (pull);
     test_close (pair);
 
@@ -83,8 +85,9 @@ int main (int argc, const char *argv[])
     timeo = 100;
     test_setsockopt (pair, NN_SOL_SOCKET, NN_SNDTIMEO,
         &timeo, sizeof (timeo));
+    nn_clear_errno ();
     rc = nn_send (pair, "ABC", 3, 0);
-    errno_assert (rc < 0 && nn_errno () == ETIMEDOUT);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
     test_close (pull);
     test_close (pair);
 
@@ -98,8 +101,9 @@ int main (int argc, const char *argv[])
     timeo = 100;
     test_setsockopt (pair, NN_SOL_SOCKET, NN_SNDTIMEO,
         &timeo, sizeof (timeo));
+    nn_clear_errno ();
     rc = nn_send (pair, "ABC", 3, 0);
-    errno_assert (rc < 0 && nn_errno () == ETIMEDOUT);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
     test_close (pull);
     test_close (pair);
 

@@ -108,9 +108,9 @@ int main ()
     sb = test_socket (AF_SP, NN_PAIR);
     test_bind (sb, SOCKET_ADDRESS);
     s1 = test_socket (AF_SP, NN_PAIR);
+    nn_clear_errno ();
     rc = nn_bind (s1, SOCKET_ADDRESS);
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EADDRINUSE);
+    nn_assert_is_error (rc == -1, EADDRINUSE);
     sc = test_socket (AF_SP, NN_PAIR);
     test_connect (sc, SOCKET_ADDRESS);
     nn_sleep (100);

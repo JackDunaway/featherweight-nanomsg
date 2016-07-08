@@ -53,8 +53,9 @@ int main ()
     test_connect (respondent3, SOCKET_ADDRESS);
 
     /* Check that attempt to recv with no survey pending is EFSM. */
+    nn_clear_errno ();
     rc = nn_recv (surveyor, buf, sizeof (buf), 0);
-    errno_assert (rc == -1 && nn_errno () == EFSM);
+    nn_assert_is_error (rc == -1, EFSM);
 
     /*  Send the survey. */
     test_send (surveyor, "ABC");
@@ -72,8 +73,9 @@ int main ()
     test_recv (surveyor, "DEF");
 
     /*  There are no more responses. Surveyor hits the deadline. */
+    nn_clear_errno ();
     rc = nn_recv (surveyor, buf, sizeof (buf), 0);
-    errno_assert (rc == -1 && nn_errno () == ETIMEDOUT);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
 
     /*  Third respondent answers (it have already missed the deadline). */
     test_recv (respondent3, "ABC");
@@ -83,12 +85,14 @@ int main ()
     test_send (surveyor, "ABC");
 
     /*  Check that stale response from third respondent is not delivered. */
+    nn_clear_errno ();
     rc = nn_recv (surveyor, buf, sizeof (buf), 0);
-    errno_assert (rc == -1 && nn_errno () == ETIMEDOUT);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
 
     /* Check that subsequent attempt to recv with no survey pending is EFSM. */
+    nn_clear_errno ();
     rc = nn_recv (surveyor, buf, sizeof (buf), 0);
-    errno_assert (rc == -1 && nn_errno () == EFSM);
+    nn_assert_is_error (rc == -1, EFSM);
 
     test_close (surveyor);
     test_close (respondent1);

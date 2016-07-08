@@ -46,8 +46,9 @@ void device4 (NN_UNUSED void *arg)
     test_bind (devg, socket_address_g);
 
     /*  Run the device. */
+    nn_clear_errno ();
     rc = nn_device (devf, devg);
-    nn_assert (rc < 0 && (nn_errno () == EBADF));
+    nn_assert_is_error (rc == -1, EBADF);
 
     /*  Clean up. */
     test_close (devg);

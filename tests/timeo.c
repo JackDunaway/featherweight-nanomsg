@@ -37,22 +37,28 @@ int main ()
 
     s = test_socket (AF_SP, NN_PAIR);
 
+    /*  errno is cleared and checked inside the stopwatch in the spirit of
+        ensuring correctness of `nn_recv()`, yet with the assumption it's
+        fast enough to not interfere with the timer assertion. */
     timeo = 100;
-    rc = nn_setsockopt (s, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
-    errno_assert (rc == 0);
+    test_setsockopt (s, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
     nn_stopwatch_init (&stopwatch);
+    nn_clear_errno ();
     rc = nn_recv (s, buf, sizeof (buf), 0);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
     elapsed = nn_stopwatch_term (&stopwatch);
-    errno_assert (rc < 0 && nn_errno () == ETIMEDOUT);
     time_assert (elapsed, 100000);
 
+    /*  errno is cleared and checked inside the stopwatch in the spirit of
+        ensuring correctness of `nn_send()`, yet with the assumption it's
+        fast enough to not interfere with the timer assertion. */
     timeo = 100;
-    rc = nn_setsockopt (s, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sizeof (timeo));
-    errno_assert (rc == 0);
+    test_setsockopt (s, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sizeof (timeo));
+    nn_clear_errno ();
     nn_stopwatch_init (&stopwatch);
     rc = nn_send (s, "ABC", 3, 0);
     elapsed = nn_stopwatch_term (&stopwatch);
-    errno_assert (rc < 0 && nn_errno () == ETIMEDOUT);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
     time_assert (elapsed, 100000);
 
     test_close (s);

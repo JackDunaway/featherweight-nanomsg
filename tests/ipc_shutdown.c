@@ -43,9 +43,12 @@ static void routine (NN_UNUSED void *arg)
 {
     int s;
 
+    nn_clear_errno ();
     s = nn_socket (AF_SP, NN_SUB);
-    if (s < 0 && nn_errno () == EMFILE)
+    if (s < 0) {
+        nn_assert_is_error (s == -1, EMFILE);
         return;
+    }
     errno_assert (s >= 0);
     test_connect (s, SOCKET_ADDRESS);
     test_close (s);

@@ -90,9 +90,12 @@ int main ()
     test_setsockopt (sc, NN_SOL_SOCKET, NN_SNDTIMEO, &val, sizeof (val));
     i = 0;
     while (1) {
+        nn_clear_errno ();
         rc = nn_send (sc, "0123456789", 10, 0);
-        if (rc < 0 && nn_errno () == ETIMEDOUT)
+        if (rc < 0) {
+            nn_assert_is_error (rc == -1, ETIMEDOUT);
             break;
+        }
         errno_assert (rc >= 0);
         nn_assert (rc == 10);
         ++i;
@@ -100,8 +103,9 @@ int main ()
     nn_assert (i == 20);
     test_recv (sb, "0123456789");
     test_send (sc, "0123456789");
+    nn_clear_errno ();
     rc = nn_send (sc, "0123456789", 10, 0);
-    nn_assert (rc < 0 && nn_errno () == ETIMEDOUT);
+    nn_assert_is_error (rc == -1, ETIMEDOUT);
     for (i = 0; i != 20; ++i) {
         test_recv (sb, "0123456789");
     }

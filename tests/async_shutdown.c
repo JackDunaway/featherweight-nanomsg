@@ -51,9 +51,9 @@ static void routine (NN_UNUSED void *arg)
 
     /*  We don't expect to actually receive a message here;
         therefore, the datatype of 'msg' is irrelevant. */
+    nn_clear_errno ();
     rc = nn_recv (s, &msg, sizeof(msg), 0);
-
-    errno_assert (rc == -1 && nn_errno () == EBADF);
+    nn_assert_is_error (rc == -1, EBADF);
 }
 
 int main (int argc, const char *argv[])

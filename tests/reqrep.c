@@ -47,10 +47,12 @@ int main ()
     test_connect (req2, SOCKET_ADDRESS);
 
     /*  Check invalid sequence of sends and recvs. */
+    nn_clear_errno ();
     rc = nn_send (rep1, "ABC", 3, 0);
-    nn_assert (rc == -1 && nn_errno () == EFSM);
+    nn_assert_is_error (rc == -1, EFSM);
+    nn_clear_errno ();
     rc = nn_recv (req1, buf, sizeof (buf), 0);
-    nn_assert (rc == -1 && nn_errno () == EFSM);
+    nn_assert_is_error (rc == -1, EFSM);
 
     /*  Check fair queueing the requests. */
     test_send (req2, "ABC");

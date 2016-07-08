@@ -181,8 +181,9 @@ int main ()
 
     /*  Check terminating the library from a different thread. */
     nn_thread_init (&thread, routine2, NULL);
+    nn_clear_errno ();
     rc = nn_recv (sb, buf, sizeof (buf), 0);
-    nn_assert (rc < 0 && nn_errno () == EBADF);
+    nn_assert_is_error (rc == -1, EBADF);
     nn_thread_term (&thread);
 
     /*  Clean up. */
