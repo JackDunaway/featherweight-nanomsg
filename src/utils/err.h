@@ -185,13 +185,23 @@
     typedef int CT_ASSERT_HELPER1(ct_assert_,__LINE__) [(x) ? 1 : -1]
 #endif
 
+/*  Platform-independent wrapper around `abort()`. */
 NN_NORETURN void nn_err_abort (void);
+
+/*  Platform-independent low-level wrapper around `errno`. */
 int nn_err_errno (void);
+
+/*  Converts an error code into a human-readable string. */
 const char *nn_err_strerror (int errnum);
+
+/*  Prints a stack trace. */
 void nn_backtrace_print (void);
 
 #ifdef NN_HAVE_WINDOWS
+/*  Convert Windows WSA return code to a POSIX error code. */
 int nn_err_wsa_to_posix (int wsaerr);
+
+/*  Prints a human-readable message (Windows only). */
 void nn_win_error (int err, char *buf, size_t bufsize);
 #endif
 
