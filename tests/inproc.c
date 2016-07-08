@@ -40,7 +40,8 @@ int main ()
     int s1, s2;
     int i;
     char buf [256];
-    int val;
+    int bufsz;
+    int timeo;
     struct nn_msghdr hdr;
     struct nn_iovec iovec;
     unsigned char body [3];
@@ -80,14 +81,14 @@ int main ()
 
     /*  Test whether queue limits are observed. */
     sb = test_socket (AF_SP, NN_PAIR);
-    val = 200;
-    test_setsockopt (sb, NN_SOL_SOCKET, NN_RCVBUF, &val, sizeof (val));
+    bufsz = 200;
+    test_setsockopt (sb, NN_SOL_SOCKET, NN_RCVBUF, &bufsz, sizeof (bufsz));
     test_bind (sb, SOCKET_ADDRESS);
     sc = test_socket (AF_SP, NN_PAIR);
     test_connect (sc, SOCKET_ADDRESS);
 
-    val = 200;
-    test_setsockopt (sc, NN_SOL_SOCKET, NN_SNDTIMEO, &val, sizeof (val));
+    timeo = 200;
+    test_setsockopt (sc, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sizeof (timeo));
     i = 0;
     while (1) {
         nn_clear_errno ();
@@ -100,7 +101,7 @@ int main ()
         nn_assert (rc == 10);
         ++i;
     }
-    nn_assert (i == 20);
+    nn_assert (i * 10 == bufsz);
     test_recv (sb, "0123456789");
     test_send (sc, "0123456789");
     nn_clear_errno ();
