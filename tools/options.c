@@ -22,12 +22,11 @@
 
 #include "options.h"
 
+#include "../src/utils/alloc.c"
 #include "../src/utils/err.c"
 
 #include <string.h>
 #include <stdio.h>
-#include <assert.h>
-#include <errno.h>
 #include <ctype.h>
 
 struct nn_parse_context {
@@ -65,7 +64,7 @@ static int nn_has_arg (struct nn_option *opt)
         case NN_OPT_READ_FILE:
             return 1;
     }
-    nn_assert (0);
+    nn_assert_unreachable ("option not defined in enum");
 }
 
 static void nn_print_usage (struct nn_parse_context *ctx, FILE *stream)
@@ -241,13 +240,6 @@ static void nn_option_error (char *message, struct nn_parse_context *ctx,
     exit (1);
 }
 
-
-static void nn_memory_error (struct nn_parse_context *ctx) {
-    fprintf (stderr, "%s: Memory error while parsing command-line",
-        ctx->argv[0]);
-    abort ();
-}
-
 static void nn_invalid_enum_value (struct nn_parse_context *ctx,
     int opt_index, char *argument)
 {
@@ -335,18 +327,17 @@ static void nn_append_string (struct nn_parse_context *ctx,
 
     lst = (struct nn_string_list *)(((char *)ctx->target) + opt->offset);
     nn_assert (lst);
+
     if (lst->items) {
         lst->num += 1;
-        lst->items = realloc (lst->items, sizeof (char *) * lst->num);
+        lst->items = nn_realloc (lst->items, sizeof (char *) * lst->num);
+        alloc_assert (lst->items);
     } else {
-        lst->items = malloc (sizeof (char *));
+        lst->items = nn_alloc (sizeof (char *), "lst->items");
+        alloc_assert (lst->items);
         lst->num = 1;
     }
-    if (!lst->items) {
-        nn_memory_error (ctx);
-    }
 
-    nn_assert (lst && lst->items);
     lst->items [lst->num - 1] = str;
 }
 
@@ -355,21 +346,20 @@ static void nn_append_string_to_free (struct nn_parse_context *ctx,
 {
     struct nn_string_list *lst;
 
-    lst = (struct nn_string_list *)(
-        ((char *)ctx->target) + opt->offset);
+    lst = (struct nn_string_list *)(((char *)ctx->target) + opt->offset);
     nn_assert (lst);
+
     if (lst->to_free) {
         lst->to_free_num += 1;
-        lst->to_free = realloc (lst->items,
+        lst->to_free = nn_realloc (lst->to_free,
                                 sizeof (char *) * lst->to_free_num);
+        alloc_assert (lst->to_free);
     } else {
-        lst->to_free = malloc (sizeof (char *));
+        lst->to_free = nn_alloc (sizeof (char *), "lst->to_free");
+        alloc_assert (lst->to_free);
         lst->to_free_num = 1;
     }
-    if (!lst->items) {
-        nn_memory_error (ctx);
-    }
-    nn_assert (lst->to_free);
+
     lst->to_free [lst->to_free_num - 1] = str;
 }
 
@@ -453,14 +443,15 @@ static void nn_process_option (struct nn_parse_context *ctx,
             return;
         case NN_OPT_LIST_APPEND_FMT:
             data_buf = strlen (argument) + strlen (opt->pointer);
-            data = malloc (data_buf);
+            data = nn_alloc (data_buf, "NN_OPT_LIST_APPEND_FMT");
+            alloc_assert (data);
 #if defined NN_HAVE_WINDOWS
             data_len = _snprintf_s (data, data_buf, _TRUNCATE, opt->pointer,
                 argument);
 #else
             data_len = snprintf (data, data_buf, opt->pointer, argument);
 #endif
-            assert (data_len < data_buf);
+            nn_assert (data_len < data_buf);
             nn_append_string (ctx, opt, data);
             nn_append_string_to_free (ctx, opt, data);
             return;
@@ -475,9 +466,8 @@ static void nn_process_option (struct nn_parse_context *ctx,
                     exit (2);
                 }
             }
-            data = malloc (4096);
-            if (!data)
-                nn_memory_error (ctx);
+            data = nn_alloc (4096, "NN_OPT_READ_FILE");
+            alloc_assert (data);
             data_len = 0;
             data_buf = 4096;
             for (;;) {
@@ -492,14 +482,13 @@ static void nn_process_option (struct nn_parse_context *ctx,
                     } else {
                         data_buf += 1 << 20;  /* grow 1 Mb each time */
                     }
-                    data = realloc (data, data_buf);
-                    if (!data)
-                        nn_memory_error (ctx);
+                    data = nn_realloc (data, data_buf);
+                    alloc_assert (data);
                 }
             }
             if (data_len != data_buf) {
-                data = realloc (data, data_len);
-                assert (data);
+                data = nn_realloc (data, data_len);
+                alloc_assert (data);
             }
             if (ferror (file)) {
 #if defined _MSC_VER
@@ -544,7 +533,7 @@ static void nn_parse_arg0 (struct nn_parse_context *ctx)
         if (!opt->longname)
             return;
         if (opt->arg0name && !strcmp (arg0, opt->arg0name)) {
-            assert (!nn_has_arg (opt));
+            nn_assert (!nn_has_arg (opt));
             ctx->last_option_usage[i] = ctx->argv[0];
             nn_process_option (ctx, i, NULL);
         }
@@ -750,6 +739,7 @@ void nn_parse_options (struct nn_commandline *cline,
 {
     struct nn_parse_context ctx;
     int num_options;
+    size_t sz;
 
     ctx.def = cline;
     ctx.options = cline->options;
@@ -758,10 +748,14 @@ void nn_parse_options (struct nn_commandline *cline,
     ctx.argv = argv;
     ctx.requires = cline->required_options;
 
-    for (num_options = 0; ctx.options[num_options].longname; ++num_options);
-    ctx.last_option_usage = calloc (sizeof (char *), num_options);
-    if  (!ctx.last_option_usage)
-        nn_memory_error (&ctx);
+    sz = 0;
+    for (num_options = 0; ctx.options[num_options].longname; ++num_options) {
+        sz += sizeof (char *);
+    }
+    
+    ctx.last_option_usage = nn_alloc (sz, "last_option_usage");
+    alloc_assert (ctx.last_option_usage);
+    memset (ctx.last_option_usage, 0, sz);
 
     ctx.mask = 0;
     ctx.args_left = argc - 1;
@@ -775,7 +769,7 @@ void nn_parse_options (struct nn_commandline *cline,
 
     nn_check_requires (&ctx);
 
-    free (ctx.last_option_usage);
+    nn_free (ctx.last_option_usage);
 
 }
 
@@ -795,14 +789,14 @@ void nn_free_options (struct nn_commandline *cline, void *target) {
             lst = (struct nn_string_list *)(((char *)target) + opt->offset);
             nn_assert (lst);
             if(lst->items) {
-                free(lst->items);
+                nn_free(lst->items);
                 lst->items = NULL;
             }
             if(lst->to_free) {
                 for(j = 0; j < lst->to_free_num; ++j) {
-                    free(lst->to_free[j]);
+                    nn_free(lst->to_free[j]);
                 }
-                free(lst->to_free);
+                nn_free(lst->to_free);
                 lst->to_free = NULL;
             }
             break;
@@ -810,7 +804,7 @@ void nn_free_options (struct nn_commandline *cline, void *target) {
         case NN_OPT_BLOB:
             blob = (struct nn_blob *)(((char *)target) + opt->offset);
             if(blob->need_free && blob->data) {
-                free(blob->data);
+                nn_free(blob->data);
                 blob->need_free = 0;
             }
             break;
