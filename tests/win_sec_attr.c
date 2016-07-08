@@ -61,7 +61,8 @@ int main ()
     PACE_HEADER ace = NULL;
     PACCESS_ALLOWED_ACE allowed_ace = NULL;
     PSID the_sid = NULL;
-    PSECURITY_DESCRIPTOR sd = NULL;
+    PSECURITY_DESCRIPTOR our_sd = NULL;
+    PSECURITY_DESCRIPTOR reported_sd = NULL;
 
     sc = test_socket (AF_SP, NN_PAIR);
     test_connect (sc, SOCKET_ADDRESS);
@@ -69,8 +70,8 @@ int main ()
     sb = test_socket (AF_SP, NN_PAIR);
 
     memset (&sec, 0, sizeof (sec));
-    sec.lpSecurityDescriptor = malloc (SECURITY_DESCRIPTOR_MIN_LENGTH);
-    ret = InitializeSecurityDescriptor (sec.lpSecurityDescriptor, SECURITY_DESCRIPTOR_REVISION);
+    our_sd = LocalAlloc (LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
+    ret = InitializeSecurityDescriptor (our_sd, SECURITY_DESCRIPTOR_REVISION);
     nn_assert (ret);
 
     SIDSize = sizeof (SIDAuthUsers);
@@ -86,17 +87,16 @@ int main ()
     ret2 = SetEntriesInAcl (1, &xa, NULL, &pACL);
     nn_assert (ret2 == ERROR_SUCCESS);
 
-    ret = SetSecurityDescriptorDacl (sec.lpSecurityDescriptor, TRUE, pACL, FALSE);
+    ret = SetSecurityDescriptorDacl (our_sd, TRUE, pACL, FALSE);
     nn_assert (ret);
 
+    sec.lpSecurityDescriptor = our_sd;
     sec.nLength = sizeof (sec);
     sec.bInheritHandle = TRUE;
 
     ret3 = nn_setsockopt (sb, NN_IPC, NN_IPC_SEC_ATTR, &sec, sizeof (sec));
     nn_assert (ret3 == 0);
     test_bind (sb, SOCKET_ADDRESS);
-
-    nn_sleep (200);
 
     test_send (sc, "0123456789012345678901234567890123456789");
     test_recv (sb, "0123456789012345678901234567890123456789");
@@ -114,7 +114,7 @@ int main ()
     nn_assert (pipeHandle != INVALID_HANDLE_VALUE);
 
     ret2 = GetSecurityInfo (pipeHandle, SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION,
-        NULL, NULL, &dacl, NULL, &sd);
+        NULL, NULL, &dacl, NULL, &reported_sd);
 
     nn_assert (ret2 == ERROR_SUCCESS);
     nn_assert (1 == dacl->AceCount);
@@ -131,14 +131,13 @@ int main ()
 
     equal = EqualSid ((PSID) &(allowed_ace->SidStart), &SIDAuthUsers);
     nn_assert (equal);
-    LocalFree (sd);
+    LocalFree (reported_sd);
 
     test_close (sc);
     test_close (sb);
 
     LocalFree (pACL);
-    
-    free (sec.lpSecurityDescriptor);
+    LocalFree (our_sd);
 
     return 0;
 }
