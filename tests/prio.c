@@ -105,8 +105,9 @@ int main ()
     test_recv (pull1, "ABC");
     test_close (pull1);
 
+    nn_clear_errno ();
     rc = nn_send (push1, "ABC", 3, NN_DONTWAIT);
-    nn_assert (rc == -1 && nn_errno() == EAGAIN);
+    nn_assert_is_error (rc == -1, EAGAIN);
 
     pull1 = test_socket (AF_SP, NN_PULL);
     test_connect (pull1, SOCKET_ADDRESS_A);

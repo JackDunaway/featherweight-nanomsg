@@ -37,12 +37,14 @@ static void worker (NN_UNUSED void *arg)
 
     /*  Launch blocking function to check that it will be unblocked once
         nn_term() is called from the main thread. */
+    nn_clear_errno ();
     rc = nn_recv (s, buf, sizeof (buf), 0);
-    nn_assert (rc == -1 && nn_errno () == EBADF);
+    nn_assert_is_error (rc == -1, EBADF);
 
     /*  Check that all subsequent operations fail in synchronous manner. */
+    nn_clear_errno ();
     rc = nn_recv (s, buf, sizeof (buf), 0);
-    nn_assert (rc == -1 && nn_errno () == EBADF);
+    nn_assert_is_error (rc == -1, EBADF);
     test_close (s);
 }
 
@@ -62,9 +64,9 @@ int main ()
     nn_term ();
 
     /*  Check that it's not possible to create new sockets after nn_term(). */
+    nn_clear_errno ();
     rc = nn_socket (AF_SP, NN_PAIR);
-    nn_assert (rc == -1);
-    errno_assert (nn_errno () == ETERM);
+    nn_assert_is_error (rc == -1, ETERM);
 
     /*  Wait till worker thread terminates. */
     nn_thread_term (&thread);

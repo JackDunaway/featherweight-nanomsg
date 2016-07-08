@@ -46,8 +46,9 @@ void device5 (NN_UNUSED void *arg)
     test_bind (dev1, socket_address_i);
 
     /*  Run the device. */
+    nn_clear_errno ();
     rc = nn_device (dev0, dev1);
-    nn_assert (rc < 0 && nn_errno () == EBADF);
+    nn_assert_is_error (rc == -1, EBADF);
 
     /*  Clean up. */
     test_close (dev0);
@@ -66,8 +67,9 @@ void device6 (NN_UNUSED void *arg)
     test_bind (dev3, socket_address_j);
 
     /*  Run the device. */
+    nn_clear_errno ();
     rc = nn_device (dev2, dev3);
-    nn_assert (rc < 0 && nn_errno () == EBADF);
+    nn_assert_is_error (rc == -1, EBADF);
 
     /*  Clean up. */
     test_close (dev2);

@@ -43,8 +43,9 @@ int main ()
     rc = nn_setsockopt (sub1, NN_SUB, NN_SUB_SUBSCRIBE, "", 0);
     errno_assert (rc == 0);
     sz = sizeof (buf);
+    nn_clear_errno ();
     rc = nn_getsockopt (sub1, NN_SUB, NN_SUB_SUBSCRIBE, buf, &sz);
-    nn_assert (rc == -1 && nn_errno () == ENOPROTOOPT);
+    nn_assert_is_error (rc == -1, ENOPROTOOPT);
     test_connect (sub1, SOCKET_ADDRESS);
     sub2 = test_socket (AF_SP, NN_SUB);
     rc = nn_setsockopt (sub2, NN_SUB, NN_SUB_SUBSCRIBE, "", 0);

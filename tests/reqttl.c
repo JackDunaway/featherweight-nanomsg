@@ -41,8 +41,9 @@ void device (NN_UNUSED void *arg)
     int rc;
 
     /*  Run the device. */
+    nn_clear_errno ();
     rc = nn_device (dev0, dev1);
-    nn_assert (rc < 0 && nn_errno () == EBADF);
+    nn_assert_is_error (rc == -1, EBADF);
 
     /*  Clean up. */
     test_close (dev0);
@@ -101,18 +102,21 @@ int main (int argc, const char *argv[])
 
     /*  Test to make sure option TTL cannot be set below 1. */
     maxttl = -1;
+    nn_clear_errno ();
     rc = nn_setsockopt(end1, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
-    nn_assert (rc < 0 && nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
     nn_assert (maxttl == -1);
     maxttl = 0;
+    nn_clear_errno ();
     rc = nn_setsockopt(end1, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
-    nn_assert (rc < 0 && nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
     nn_assert (maxttl == 0);
 
     /*  Test to set non-integer size */
     maxttl = 8;
+    nn_clear_errno ();
     rc = nn_setsockopt(end1, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, 1);
-    nn_assert (rc < 0 && nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
     nn_assert (maxttl == 8);
 
     test_send (end0, "XYZ");

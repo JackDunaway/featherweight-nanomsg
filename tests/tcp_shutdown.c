@@ -49,10 +49,12 @@ static void routine (NN_UNUSED void *arg)
 {
     int s;
 
+    nn_clear_errno ();
     s = nn_socket (AF_SP, NN_SUB);
-    if (s < 0 && nn_errno () == EMFILE)
+    if (s < 0) {
+        nn_assert_is_error (s == -1, EMFILE);
         return;
-    errno_assert (s >= 0);
+    }
     test_connect (s, socket_address);
     test_close (s);
 }
@@ -133,13 +135,14 @@ int main (int argc, const char *argv[])
         /*  Loop until the first timeout indicating all workers are gone. */
         count = 0;
         while (1) {
+            nn_clear_errno ();
             rc = nn_send (sb, MSG, MSG_LEN, 0);
             if (rc == MSG_LEN) {
                 nn_yield ();
                 count++;
                 continue;
             }
-            errno_assert (rc == -1 && nn_errno () == ETIMEDOUT && !active.n);
+            nn_assert_is_error (rc == -1 && !active.n, ETIMEDOUT);
             break;
         }
 

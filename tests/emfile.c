@@ -23,7 +23,8 @@
 #include "../src/nn.h"
 #include "../src/pair.h"
 #include "../src/tcp.h"
-#include "../src/utils/err.c"
+
+#include "testutil.h"
 
 #define MAX_SOCKETS 1000
 
@@ -35,9 +36,10 @@ int main ()
 
     /*  First, just create as much SP sockets as possible. */
     for (i = 0; i != MAX_SOCKETS; ++i) {
+        nn_clear_errno ();
         socks [i] = nn_socket (AF_SP, NN_PAIR);
         if (socks [i] < 0) {
-            errno_assert (nn_errno () == EMFILE);
+            nn_assert_is_error (socks [i] == -1, EMFILE);
             break;
         }
     }

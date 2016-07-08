@@ -116,49 +116,61 @@ int main (int argc, const char *argv[])
     errno_assert (rc >= 0);
 
     /*  Try using invalid address strings. */
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://*:");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://*:1000000");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://*:some_port");
-    nn_assert (rc < 0);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://eth10000;127.0.0.1:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == ENODEV);
+    nn_assert_is_error (rc == -1, ENODEV);
 
+    nn_clear_errno ();
     rc = nn_bind (sc, "ws://127.0.0.1:");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
-    rc = nn_bind (sc, "ws://127.0.0.1:1000000");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
-    rc = nn_bind (sc, "ws://eth10000:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == ENODEV);
+    nn_assert_is_error (rc == -1, EINVAL);
 
+    nn_clear_errno ();
+    rc = nn_bind (sc, "ws://127.0.0.1:1000000");
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
+    rc = nn_bind (sc, "ws://eth10000:5555");
+    nn_assert_is_error (rc == -1, ENODEV);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://-hostname:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://abc.123.---.#:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://[::1]:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://abc.123.:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://abc...123:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
+
+    nn_clear_errno ();
     rc = nn_connect (sc, "ws://.123:5555");
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
 
     test_close (sc);
 
@@ -193,9 +205,9 @@ int main (int argc, const char *argv[])
     test_bind (sb, socket_address);
     sb2 = test_socket (AF_SP, NN_PAIR);
 
+    nn_clear_errno ();
     rc = nn_bind (sb2, socket_address);
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EADDRINUSE);
+    nn_assert_is_error (rc == -1, EADDRINUSE);
     test_close(sb);
     test_close(sb2);
 
@@ -205,9 +217,9 @@ int main (int argc, const char *argv[])
     rc = nn_setsockopt (sb, NN_SOL_SOCKET, NN_RCVMAXSIZE, &opt, sizeof (opt));
     nn_assert (rc >= 0);
     opt = -2;
+    nn_clear_errno ();
     rc = nn_setsockopt (sb, NN_SOL_SOCKET, NN_RCVMAXSIZE, &opt, sizeof (opt));
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EINVAL);
+    nn_assert_is_error (rc == -1, EINVAL);
     test_close (sb);
 
     /*  Test NN_RCVMAXSIZE limit */
