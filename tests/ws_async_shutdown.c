@@ -34,7 +34,7 @@ static char socket_address [128];
 #define TEST_LOOPS 10
 #define TEST_THREADS 10
 #define MSG "ws"
-#define MSG_LEN sizeof (MSG)
+#define MSG_LEN sizeof (MSG) - 1
 
 static void routine (NN_UNUSED void *arg)
 {
@@ -48,7 +48,7 @@ static void routine (NN_UNUSED void *arg)
 
     while (1) {
         rc = nn_recv (s, &msg, sizeof (msg), 0);
-        if (rc == MSG_LEN - 1) {
+        if (rc == MSG_LEN) {
             continue;
         }
 
