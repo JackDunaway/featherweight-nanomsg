@@ -410,6 +410,7 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
 
         nn_assert (!self->pipesendbuf);
         self->pipesendbuf = nn_alloc (len, "named pipe sendbuf");
+        alloc_assert (self->pipesendbuf);
 
         idx = 0;
         for (i = 0; i != iovcnt; ++i) {
