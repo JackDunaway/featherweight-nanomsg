@@ -20,39 +20,79 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/utils/err.c"
+#include "testutil.h"
 
 int main ()
 {
-    int i;
     struct nn_symbol_properties sym;
+    const char *name;
     int value;
+    int sz;
+    int i;
 
-    nn_assert (nn_symbol (-1, NULL) == NULL);
-    nn_assert (nn_errno () == EINVAL);
-    nn_assert (nn_symbol_info (-1, &sym, (int) sizeof (sym)) == 0);
+    /*  This value is arbitrary but known not to collide on any field. */
+    const struct nn_symbol_properties invalid = { -42, "", -42, -42, -42};
 
-    nn_assert (nn_symbol (2000, NULL) == NULL);
-    nn_assert (nn_errno () == EINVAL);
-    nn_assert (nn_symbol_info (2000, &sym, (int) sizeof (sym)) == 0);
+    sz = sizeof (sym);
 
+    /*  Test symbol index below valid range. */
+    nn_clear_errno ();
+    name = nn_symbol (-1, NULL);
+    nn_assert_is_error (name == NULL, EINVAL);
+    nn_assert (nn_symbol_info (-1, &sym, sz) == 0);
+
+    /*  Test symbol index above valid range. */
+    nn_clear_errno ();
+    name = nn_symbol (2000, NULL);
+    nn_assert_is_error (name == NULL, EINVAL);
+    nn_assert (nn_symbol_info (2000, &sym, sz) == 0);
+
+    /*  Test symbol index within valid range. */
     nn_assert (nn_symbol (6, &value) != NULL);
     nn_assert (value != 0);
-    nn_assert (nn_symbol_info (6, &sym, (int) sizeof (sym)) == sizeof (sym));
+    nn_assert (nn_symbol_info (6, &sym, sz) == sizeof (sym));
 
-    for (i = 0; ; ++i) {
-        const char* name = nn_symbol (i, &value);
-        if (name == NULL) {
-            nn_assert (nn_errno () == EINVAL);
+    i = 0;
+    while (1) {
+        /*  Reset each iteration to an invalid sentinel. */
+        value = invalid.value;
+
+        /*  Reset errno each iteration to ensure it adheres to contract to set
+            errno on failure. Note that the value is not tested on success,
+            since the value of errno on success is not defined. */
+        nn_clear_errno ();
+
+        name = nn_symbol (i, &value);
+        if (name) {
+            /*  Ensure sentinel value has been replaced by valid value. */
+            nn_assert (value != invalid.value);
+            sym = invalid;
+            nn_assert (nn_symbol_info (i, &sym, sz) == sizeof (sym));
+            nn_assert (sym.name == name);
+            nn_assert (sym.value == value);
+            nn_assert (sym.ns != invalid.ns);
+            nn_assert (sym.type != invalid.type);
+            nn_assert (sym.unit != invalid.unit);
+        }
+        else {
+            /*  Ensure errno contains expected value specified by function.  */
+            nn_assert_is_error (name == NULL, EINVAL);
+            
+            /*  This function is expected to fail also, but does not specify
+                a postcondition on errno. */
+            nn_assert (nn_symbol_info (i, &sym, sz) == 0);
+
             break;
         }
+        i++;
     }
 
-    for (i = 0; ; ++i) {
-        if (nn_symbol_info (i, &sym, sizeof (sym)) == 0)
-            break;
-    }
+    /*  This number is the expected number of symbols to be exported. This
+        value is intentionally hard-coded, but should be equal to
+        SYM_VALUE_NAMES_LEN. This brittleness is meant to alert developers
+        during infrequent changes to exported symbols to come back to this
+        test and evaluate the other heuristics. */
+    nn_assert (i == 121);
 
     return 0;
 }
-
