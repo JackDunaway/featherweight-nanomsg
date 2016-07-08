@@ -27,18 +27,10 @@
 
 #include "testutil.h"
 
-/*
- * Nanomsg never zero copies anymore - it used to be an attribute of
- * the inproc transport, but frankly its a mistake for anyone to depend
- * on that.  The implementation must be free to copy, move data, etc.
- * The only thing that should be guaranteed is that the "ownership" of the
- * message on send is passed to libnanomsg.  libnanomsg may give that message
- * to an inproc receiver, or it can do something else (like copy the data)
- * with it.
- */
-#if 0
-
 #include <string.h>
+
+#define NN_TEST_MSG1 "Hello World!"
+#define NN_TEST_MSG_LEN1 sizeof (NN_TEST_MSG1) - 1
 
 void test_allocmsg_reqrep ()
 {
@@ -49,39 +41,43 @@ void test_allocmsg_reqrep ()
     struct nn_msghdr hdr;
 
     /*  Try to create an oversized message. */
+    nn_clear_errno ();
     p = nn_allocmsg (-1, 0);
-    nn_assert (!p && nn_errno () == ENOMEM);
+    nn_assert_is_error (!p, ENOMEM);
+    nn_clear_errno ();
     p = nn_allocmsg (-3, 0);
-    nn_assert (!p && nn_errno () == ENOMEM);
+    nn_assert_is_error (!p, ENOMEM);
 
     /*  Try to create a message of unknown type. */
+    nn_clear_errno ();
     p = nn_allocmsg (100, 333);
-    nn_assert (!p && nn_errno () == EINVAL);
+    nn_assert_is_error (!p, EINVAL);
 
     /*  Create a socket. */
     req = test_socket (AF_SP_RAW, NN_REQ);
 
-    /*  Make send fail and check whether the zero-copy buffer is left alone
+    /*  Make send fail and check whether the buffer is left alone
         rather than deallocated. */
     p = nn_allocmsg (100, 0);
-    nn_assert (p);
+    alloc_assert (p);
+    nn_clear_errno ();
     rc = nn_send (req, &p, NN_MSG, NN_DONTWAIT);
-    nn_assert (rc < 0);
-    errno_assert (nn_errno () == EAGAIN);
+    nn_assert_is_error (rc < 0, EAGAIN);
     memset (p, 0, 100);
     rc = nn_freemsg (p);
     errno_assert (rc == 0);
 
     /*  Same thing with nn_sendmsg(). */
     p = nn_allocmsg (100, 0);
-    nn_assert (p);
+    alloc_assert (p);
     iov.iov_base = &p;
     iov.iov_len = NN_MSG;
     memset (&hdr, 0, sizeof (hdr));
     hdr.msg_iov = &iov;
     hdr.msg_iovlen = 1;
-    nn_sendmsg (req, &hdr, NN_DONTWAIT);
-    errno_assert (nn_errno () == EAGAIN);
+    nn_clear_errno ();
+    rc = nn_sendmsg (req, &hdr, NN_DONTWAIT);
+    nn_assert_is_error (rc == -1, EAGAIN);
     memset (p, 0, 100);
     rc = nn_freemsg (p);
     errno_assert (rc == 0);
@@ -99,44 +95,42 @@ void test_reallocmsg_reqrep ()
     void *p2;
 
     /*  Create sockets. */
-    req = nn_socket (AF_SP, NN_REQ);
-    rep = nn_socket (AF_SP, NN_REP);
-    rc = nn_bind (rep, "inproc://test");
-    errno_assert (rc >= 0);
-    rc = nn_connect (req, "inproc://test");
-    errno_assert (rc >= 0);
+    req = test_socket (AF_SP, NN_REQ);
+    rep = test_socket (AF_SP, NN_REP);
+    rc = test_bind (rep, "inproc://test");
+    rc = test_connect (req, "inproc://test");
 
     /*  Create message, make sure we handle overflow. */
     p = nn_allocmsg (100, 0);
-    nn_assert (p);
+    alloc_assert (p);
+    nn_clear_errno ();
     p2 = nn_reallocmsg (p, (size_t)-3);
-    errno_assert (nn_errno () == ENOMEM);
-    nn_assert (p2 == NULL);
+    nn_assert_is_error (!p2, ENOMEM);
 
     /*  Realloc to fit data size. */
-    memcpy (p, "Hello World!", 12);
-    p = nn_reallocmsg (p, 12);
-    nn_assert (p);
+    memcpy (p, NN_TEST_MSG1, NN_TEST_MSG_LEN1);
+    p = nn_reallocmsg (p, NN_TEST_MSG_LEN1);
+    alloc_assert (p);
     rc = nn_send (req, &p, NN_MSG, 0);
-    errno_assert (rc == 12);
+    errno_assert (rc == NN_TEST_MSG_LEN1);
 
     /*  Receive request and send response. */
     rc = nn_recv (rep, &p, NN_MSG, 0);
-    errno_assert (rc == 12);
+    errno_assert (rc == NN_TEST_MSG_LEN1);
     rc = nn_send (rep, &p, NN_MSG, 0);
-    errno_assert (rc == 12);
+    errno_assert (rc == NN_TEST_MSG_LEN1);
 
     /*  Receive response and free message. */
     rc = nn_recv (req, &p, NN_MSG, 0);
-    errno_assert (rc == 12);
-    rc = memcmp (p, "Hello World!", 12);
+    errno_assert (rc == NN_TEST_MSG_LEN1);
+    rc = memcmp (p, NN_TEST_MSG1, NN_TEST_MSG_LEN1);
     nn_assert (rc == 0);
     rc = nn_freemsg (p);
     errno_assert (rc == 0);
 
     /*  Clean up. */
-    nn_close (req);
-    nn_close (rep);
+    test_close (req);
+    test_close (rep);
 }
 
 void test_reallocmsg_pubsub ()
@@ -150,46 +144,48 @@ void test_reallocmsg_pubsub ()
     void *p2;
 
     /*  Create sockets. */
-    pub = nn_socket (AF_SP, NN_PUB);
-    sub1 = nn_socket (AF_SP, NN_SUB);
-    sub2 = nn_socket (AF_SP, NN_SUB);
-    rc = nn_bind (pub, "inproc://test");
-    errno_assert (rc >= 0);
-    rc = nn_connect (sub1, "inproc://test");
-    errno_assert (rc >= 0);
-    rc = nn_connect (sub2, "inproc://test");
-    errno_assert (rc >= 0);
-    rc = nn_setsockopt (sub1, NN_SUB, NN_SUB_SUBSCRIBE, "", 0);
-    errno_assert (rc == 0);
-    rc = nn_setsockopt (sub2, NN_SUB, NN_SUB_SUBSCRIBE, "", 0);
-    errno_assert (rc == 0);
+    pub = test_socket (AF_SP, NN_PUB);
+    sub1 = test_socket (AF_SP, NN_SUB);
+    sub2 = test_socket (AF_SP, NN_SUB);
+    test_bind (pub, "inproc://test");
+    test_connect (sub1, "inproc://test");
+    test_connect (sub2, "inproc://test");
+    test_setsockopt (sub1, NN_SUB, NN_SUB_SUBSCRIBE, "", 0);
+    test_setsockopt (sub2, NN_SUB, NN_SUB_SUBSCRIBE, "", 0);
 
     /*  Publish message. */
     p = nn_allocmsg (12, 0);
-    nn_assert (p);
-    memcpy (p, "Hello World!", 12);
+    alloc_assert (p);
+    memcpy (p, NN_TEST_MSG1, NN_TEST_MSG_LEN1);
     rc = nn_send (pub, &p, NN_MSG, 0);
-    errno_assert (rc == 12);
+    errno_assert (rc == NN_TEST_MSG_LEN1);
 
-    /*  Receive messages, both messages are the same object with inproc. */
+    /*  Receive messages and ensure they are the same message. */
     rc = nn_recv (sub1, &p1, NN_MSG, 0);
-    errno_assert (rc == 12);
+    errno_assert (rc == NN_TEST_MSG_LEN1);
     rc = nn_recv (sub2, &p2, NN_MSG, 0);
-    errno_assert (rc == 12);
-    nn_assert (p1 == p2);
-    rc = memcmp (p1, "Hello World!", 12);
+    errno_assert (rc == NN_TEST_MSG_LEN1);
+    rc = memcmp (p1, NN_TEST_MSG1, NN_TEST_MSG_LEN1);
     nn_assert (rc == 0);
-    rc = memcmp (p2, "Hello World!", 12);
+    rc = memcmp (p2, NN_TEST_MSG1, NN_TEST_MSG_LEN1);
     nn_assert (rc == 0);
-
-    /*  Reallocate one message, both messages shouldn't be the same object
-        anymore. */
-    p1 = nn_reallocmsg (p1, 15);
-    errno_assert (p1);
-    nn_assert (p1 != p2);
-    memcpy (((char*) p1) + 12, " 42", 3);
-    rc = memcmp (p1, "Hello World! 42", 15);
-    nn_assert (rc == 0);
+    
+    /*  libnanomsg never zero copies anymore - it used to be an attribute of
+        the inproc transport, but frankly its a mistake for anyone to depend
+        on that. The implementation must be free to copy, move data, etc.
+        The only thing that should be guaranteed is that the "ownership" of the
+        message on send is passed to libnanomsg. libnanomsg may give that
+        message to an inproc receiver, or it can do something else (like copy
+        the data) with it. The rationale for deprecating this behavior is that
+        multiple recipient sockets, or even two peer sockets as a trivial pair,
+        regardless the scalability protocol, shouldn't be concerned with
+        potentially interfering with one another by having concurrent access to
+        the same memory location. If they did, a key value proposition
+        of libnanomsg to protect memory access across threads is eliminated. An
+        application needing such capability is likely better served by
+        synchronization primitives instead of a dangerously-low-level zero-copy
+        feature within libnanomsg. */
+    /*  nn_assert (p1 == p2); */
 
     /*  Release messages. */
     rc = nn_freemsg (p1);
@@ -198,19 +194,17 @@ void test_reallocmsg_pubsub ()
     errno_assert (rc == 0);
 
     /*  Clean up. */
-    nn_close (sub2);
-    nn_close (sub1);
-    nn_close (pub);
+    test_close (sub2);
+    test_close (sub1);
+    test_close (pub);
 }
-#endif
 
 int main ()
 {
-#if 0
     test_allocmsg_reqrep ();
     test_reallocmsg_reqrep ();
     test_reallocmsg_pubsub ();
-#endif
+
     return 0;
 }
 
