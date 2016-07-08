@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../src/utils/alloc.c"
 #include "../src/utils/err.c"
 #include "../src/utils/sleep.c"
 
@@ -66,8 +67,8 @@ int main (int argc, char *argv [])
     rc = nn_bind (s, bind_to);
     nn_assert (rc >= 0);
 
-    buf = malloc (sz);
-    nn_assert (buf);
+    buf = nn_alloc (sz, "local_lat_msg");
+    alloc_assert (buf);
     memset (buf, 111, sz);
 
     for (i = 0; i != rts; i++) {
@@ -77,7 +78,7 @@ int main (int argc, char *argv [])
         nn_assert (nbytes == (int)sz);
     }
 
-    free (buf);
+    nn_free (buf);
 
     /*  Linger doesn't always work, so stick around another second. */
     nn_sleep (1000);
