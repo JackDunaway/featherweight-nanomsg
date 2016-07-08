@@ -47,8 +47,7 @@ int main ()
         --i;
         if (i == -1)
             break;
-        rc = nn_close (socks [i]);
-        errno_assert (rc == 0);
+        test_close (socks [i]);
     }
 
     return 0;

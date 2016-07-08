@@ -214,8 +214,7 @@ int main (int argc, const char *argv[])
     /*  Test that NN_RCVMAXSIZE can be -1, but not lower */
     sb = test_socket (AF_SP, NN_PAIR);
     opt = -1;
-    rc = nn_setsockopt (sb, NN_SOL_SOCKET, NN_RCVMAXSIZE, &opt, sizeof (opt));
-    nn_assert (rc >= 0);
+    test_setsockopt (sb, NN_SOL_SOCKET, NN_RCVMAXSIZE, &opt, sizeof (opt));
     opt = -2;
     nn_clear_errno ();
     rc = nn_setsockopt (sb, NN_SOL_SOCKET, NN_RCVMAXSIZE, &opt, sizeof (opt));
