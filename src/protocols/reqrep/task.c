@@ -23,13 +23,21 @@
 
 #include "task.h"
 #include "../../utils/attr.h"
+#include "../../utils/err.h"
 
-void nn_task_init (struct nn_task *self, uint32_t id)
+void nn_task_init (struct nn_task *self, uint32_t id, int src,
+    struct nn_fsm *owner)
 {
     self->id = id;
+    self->sent_to = NULL;
+    nn_msg_init (&self->request, 0);
+    nn_msg_init (&self->reply, 0);
+    nn_timer_init (&self->timer, src, owner);
 }
 
-void nn_task_term (NN_UNUSED struct nn_task *self)
+void nn_task_term (struct nn_task *self)
 {
+    nn_timer_term (&self->timer);
+    nn_msg_term (&self->reply);
+    nn_msg_term (&self->request);
 }
-

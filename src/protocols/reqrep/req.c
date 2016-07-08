@@ -89,14 +89,10 @@ void nn_req_init (struct nn_req *self,
         there should be no key clashes even if the executable is re-started. */
     nn_random_generate (&self->lastid, sizeof (self->lastid));
 
-    self->task.sent_to = NULL;
-
-    nn_msg_init (&self->task.request, 0);
-    nn_msg_init (&self->task.reply, 0);
-    nn_timer_init (&self->task.timer, NN_REQ_SRC_RESEND_TIMER, &self->fsm);
     self->resend_ivl = NN_REQ_DEFAULT_RESEND_IVL;
 
-    nn_task_init (&self->task, self->lastid);
+    nn_task_init (&self->task, self->lastid, NN_REQ_SRC_RESEND_TIMER,
+        &self->fsm);
 
     /*  Start the state machine. */
     nn_fsm_start (&self->fsm);
@@ -104,10 +100,7 @@ void nn_req_init (struct nn_req *self,
 
 void nn_req_term (struct nn_req *self)
 {
-    nn_timer_term (&self->task.timer);
     nn_task_term (&self->task);
-    nn_msg_term (&self->task.reply);
-    nn_msg_term (&self->task.request);
     nn_fsm_term (&self->fsm);
     nn_xreq_term (&self->xreq);
 }

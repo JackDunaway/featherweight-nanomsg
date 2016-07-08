@@ -50,7 +50,8 @@ struct nn_task {
     struct nn_pipe *sent_to;
 };
 
-void nn_task_init (struct nn_task *self, uint32_t id);
+void nn_task_init (struct nn_task *self, uint32_t id, int src,
+    struct nn_fsm *owner);
 void nn_task_term (struct nn_task *self);
 
 #endif
