@@ -34,7 +34,7 @@
 
 /*  Stress test the TCP transport. */
 
-#define THREAD_COUNT 100
+#define THREAD_COUNT 10
 #define TEST2_THREAD_COUNT 10
 #define MESSAGES_PER_THREAD 10
 #define TEST_LOOPS 10
