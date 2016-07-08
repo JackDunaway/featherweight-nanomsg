@@ -28,9 +28,12 @@
 #include "../src/tcp.h"
 
 #include "testutil.h"
+
 #include "../src/utils/attr.h"
-#include "../src/utils/thread.c"
+
 #include "../src/utils/atomic.c"
+#include "../src/utils/sem.c"
+#include "../src/utils/thread.c"
 
 /*  Stress test the TCP transport. */
 
@@ -59,18 +62,29 @@ static void routine (NN_UNUSED void *arg)
     test_close (s);
 }
 
-static void routine2 (NN_UNUSED void *arg)
+static void routine2 (void *arg)
 {
+    struct nn_sem *ready;
     int ms;
     int s;
     int i;
 
-    s = test_socket (AF_SP, NN_PULL);
+    ready = arg;
+
+    nn_clear_errno ();
+    s = nn_socket (AF_SP, NN_PULL);
+    if (s < 0) {
+        nn_assert_is_error (s == -1, EMFILE);
+        nn_sem_post (ready);
+        return;
+    }
 
     ms = 1000;
     test_setsockopt (s, NN_SOL_SOCKET, NN_RCVTIMEO, &ms, sizeof (ms));
     
     test_connect (s, socket_address);
+
+    nn_sem_post (ready);
 
     for (i = 0; i != MESSAGES_PER_THREAD; ++i) {
         nn_yield ();
@@ -84,6 +98,7 @@ static void routine2 (NN_UNUSED void *arg)
 int main (int argc, const char *argv[])
 {
     struct nn_thread threads [THREAD_COUNT];
+    struct nn_sem ready;
     int count;
     int rc;
     int sb;
@@ -125,12 +140,14 @@ int main (int argc, const char *argv[])
     test_bind (sb, socket_address);
 
     for (j = 0; j != TEST_LOOPS; ++j) {
+
         nn_atomic_init (&active, TEST2_THREAD_COUNT);
+        nn_sem_init (&ready);
         for (i = 0; i != TEST2_THREAD_COUNT; ++i) {
-            nn_thread_init (&threads [i], routine2, NULL);
+            nn_thread_init (&threads [i], routine2, &ready);
+            nn_sem_wait (&ready);
         }
-        
-        nn_sleep (100);
+        nn_sem_term (&ready);
 
         /*  Loop until the first timeout indicating all workers are gone. */
         count = 0;
