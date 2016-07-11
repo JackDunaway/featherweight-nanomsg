@@ -159,7 +159,7 @@ static void NN_UNUSED test_recv_impl (char *file, int line, int sock, char *data
     /*  We allocate plus one byte so that we are sure that message received
         has correct length and not truncated  */
     buf = malloc (data_len+1);
-    alloc_assert (buf);
+    nn_assert_alloc (buf);
 
     rc = nn_recv (sock, buf, data_len+1, 0);
     if (rc < 0) {
