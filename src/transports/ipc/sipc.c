@@ -24,7 +24,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/wire.h"
 #include "../../utils/attr.h"
 
@@ -181,12 +180,12 @@ static void nn_sipc_shutdown (struct nn_fsm *self, int src, int type,
 
     sipc = nn_cont (self, struct nn_sipc, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_pipebase_stop (&sipc->pipebase);
         nn_streamhdr_stop (&sipc->streamhdr);
         sipc->state = NN_SIPC_STATE_STOPPING;
     }
-    if (nn_slow (sipc->state == NN_SIPC_STATE_STOPPING)) {
+    if (sipc->state == NN_SIPC_STATE_STOPPING) {
         if (nn_streamhdr_isidle (&sipc->streamhdr)) {
             nn_usock_swap_owner (sipc->usock, &sipc->usock_owner);
             sipc->usock = NULL;
@@ -279,7 +278,7 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
 
                  /*  Start the pipe. */
                  rc = nn_pipebase_start (&sipc->pipebase);
-                 if (nn_slow (rc < 0)) {
+                 if (rc < 0) {
                     sipc->state = NN_SIPC_STATE_DONE;
                     nn_fsm_raise (&sipc->fsm, &sipc->done, NN_SIPC_ERROR);
                     return;

@@ -27,7 +27,6 @@
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/err.h"
 
 struct nn_ins {

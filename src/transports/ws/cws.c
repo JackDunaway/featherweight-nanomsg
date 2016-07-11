@@ -39,7 +39,6 @@
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
 #include "../../utils/alloc.h"
-#include "../../utils/fast.h"
 #include "../../utils/attr.h"
 
 #include <string.h>
@@ -175,9 +174,9 @@ int nn_cws_create (void *hint, struct nn_epbase **epbase)
     hostlen = resource - hostname;
 
     /*  Parse the port; assume port 80 if not explicitly declared. */
-    if (nn_slow (colon != NULL)) {
+    if (colon != NULL) {
         rc = nn_port_resolve (colon + 1, resource - colon - 1);
-        if (nn_slow (rc < 0)) {
+        if (rc < 0) {
             nn_epbase_term (&self->epbase);
             return -EINVAL;
         }
@@ -305,7 +304,7 @@ static void nn_cws_shutdown (struct nn_fsm *self, int src, int type,
 
     cws = nn_cont (self, struct nn_cws, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (!nn_sws_isidle (&cws->sws)) {
             nn_epbase_stat_increment (&cws->epbase,
                 NN_STAT_DROPPED_CONNECTIONS, 1);
@@ -313,7 +312,7 @@ static void nn_cws_shutdown (struct nn_fsm *self, int src, int type,
         }
         cws->state = NN_CWS_STATE_STOPPING_SWS_FINAL;
     }
-    if (nn_slow (cws->state == NN_CWS_STATE_STOPPING_SWS_FINAL)) {
+    if (cws->state == NN_CWS_STATE_STOPPING_SWS_FINAL) {
         if (!nn_sws_isidle (&cws->sws))
             return;
         nn_backoff_stop (&cws->retry);
@@ -321,7 +320,7 @@ static void nn_cws_shutdown (struct nn_fsm *self, int src, int type,
         nn_dns_stop (&cws->dns);
         cws->state = NN_CWS_STATE_STOPPING;
     }
-    if (nn_slow (cws->state == NN_CWS_STATE_STOPPING)) {
+    if (cws->state == NN_CWS_STATE_STOPPING) {
         if (!nn_backoff_isidle (&cws->retry) ||
               !nn_usock_isidle (&cws->usock) ||
               !nn_dns_isidle (&cws->dns))
@@ -631,7 +630,7 @@ static void nn_cws_start_connecting (struct nn_cws *self,
     rc = nn_iface_resolve (nn_chunkref_data (&self->nic),
     nn_chunkref_size (&self->nic), ipv4only, &local, &locallen);
 
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CWS_STATE_WAITING;
         return;
@@ -649,7 +648,7 @@ static void nn_cws_start_connecting (struct nn_cws *self,
 
     /*  Try to start the underlying socket. */
     rc = nn_usock_start (&self->usock, remote.ss_family, SOCK_STREAM, 0);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CWS_STATE_WAITING;
         return;
@@ -669,7 +668,7 @@ static void nn_cws_start_connecting (struct nn_cws *self,
 
     /*  Bind the socket to the local network interface. */
     rc = nn_usock_bind (&self->usock, (struct sockaddr*) &local, locallen);
-    if (nn_slow (rc != 0)) {
+    if (rc != 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CWS_STATE_WAITING;
         return;

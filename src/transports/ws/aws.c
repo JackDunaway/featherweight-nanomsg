@@ -108,7 +108,7 @@ static void nn_aws_shutdown (struct nn_fsm *self, int src, int type,
 
     aws = nn_cont (self, struct nn_aws, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (!nn_sws_isidle (&aws->sws)) {
             nn_epbase_stat_increment (aws->epbase,
                 NN_STAT_DROPPED_CONNECTIONS, 1);
@@ -116,13 +116,13 @@ static void nn_aws_shutdown (struct nn_fsm *self, int src, int type,
         }
         aws->state = NN_AWS_STATE_STOPPING_SWS_FINAL;
     }
-    if (nn_slow (aws->state == NN_AWS_STATE_STOPPING_SWS_FINAL)) {
+    if (aws->state == NN_AWS_STATE_STOPPING_SWS_FINAL) {
         if (!nn_sws_isidle (&aws->sws))
             return;
         nn_usock_stop (&aws->usock);
         aws->state = NN_AWS_STATE_STOPPING;
     }
-    if (nn_slow (aws->state == NN_AWS_STATE_STOPPING)) {
+    if (aws->state == NN_AWS_STATE_STOPPING) {
         if (!nn_usock_isidle (&aws->usock))
             return;
        if (aws->listener) {

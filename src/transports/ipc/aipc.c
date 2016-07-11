@@ -115,7 +115,7 @@ static void nn_aipc_shutdown (struct nn_fsm *self, int src, int type,
 
     aipc = nn_cont (self, struct nn_aipc, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (!nn_sipc_isidle (&aipc->sipc)) {
             nn_epbase_stat_increment (aipc->epbase,
                 NN_STAT_DROPPED_CONNECTIONS, 1);
@@ -123,13 +123,13 @@ static void nn_aipc_shutdown (struct nn_fsm *self, int src, int type,
         }
         aipc->state = NN_AIPC_STATE_STOPPING_SIPC_FINAL;
     }
-    if (nn_slow (aipc->state == NN_AIPC_STATE_STOPPING_SIPC_FINAL)) {
+    if (aipc->state == NN_AIPC_STATE_STOPPING_SIPC_FINAL) {
         if (!nn_sipc_isidle (&aipc->sipc))
             return;
         nn_usock_stop (&aipc->usock);
         aipc->state = NN_AIPC_STATE_STOPPING;
     }
-    if (nn_slow (aipc->state == NN_AIPC_STATE_STOPPING)) {
+    if (aipc->state == NN_AIPC_STATE_STOPPING) {
         if (!nn_usock_isidle (&aipc->usock))
             return;
        if (aipc->listener) {

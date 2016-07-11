@@ -25,7 +25,6 @@
 #define NN_EFD_RETRIES 1000
 
 #include "err.h"
-#include "fast.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -84,7 +83,7 @@ int nn_efd_init (struct nn_efd *self)
 
     /*  Create listening socket. */
     listener = socket (AF_INET, SOCK_STREAM, 0);
-    if (nn_slow (listener == SOCKET_ERROR))
+    if (listener == SOCKET_ERROR)
         goto wsafail;
     brc = SetHandleInformation ((HANDLE) listener, HANDLE_FLAG_INHERIT, 0);
     nn_assert_win (brc);
@@ -94,7 +93,7 @@ int nn_efd_init (struct nn_efd *self)
     reuseaddr = 1;
     rc = setsockopt (listener, SOL_SOCKET, SO_REUSEADDR,
         (char*) &reuseaddr, sizeof (reuseaddr));
-    if (nn_slow (rc == SOCKET_ERROR))
+    if (rc == SOCKET_ERROR)
         goto wsafail;
 
     /*  Bind the listening socket to the local port. */
@@ -103,14 +102,14 @@ int nn_efd_init (struct nn_efd *self)
     addr.sin_addr.s_addr = htonl (INADDR_LOOPBACK);
     addr.sin_port = htons (NN_EFD_PORT);
     rc = bind (listener, (const struct sockaddr*) &addr, sizeof (addr));
-    if (nn_slow (rc == SOCKET_ERROR))
+    if (rc == SOCKET_ERROR)
         goto wsafail;
 
     /*  Start listening for the incomming connections. In normal case we are
         going to accept just a single connection, so backlog buffer of size
         1 is sufficient. */
     rc = listen (listener, 1);
-    if (nn_slow (rc == SOCKET_ERROR))
+    if (rc == SOCKET_ERROR)
         goto wsafail;
 
     /*  The following code is in the loop, because windows sometimes delays
@@ -120,7 +119,7 @@ int nn_efd_init (struct nn_efd *self)
 
         /*  Create the writer socket. */
         self->w = socket (AF_INET, SOCK_STREAM, 0);
-        if (nn_slow (listener == SOCKET_ERROR))
+        if (listener == SOCKET_ERROR)
             goto wsafail;
         brc = SetHandleInformation ((HANDLE) self->w, HANDLE_FLAG_INHERIT, 0);
         nn_assert_win (brc);
@@ -131,16 +130,16 @@ int nn_efd_init (struct nn_efd *self)
         nodelay = 1;
         rc = setsockopt (self->w, IPPROTO_TCP, TCP_NODELAY, (char*) &nodelay,
             sizeof (nodelay));
-        if (nn_slow (rc == SOCKET_ERROR))
+        if (rc == SOCKET_ERROR)
             goto wsafail;
 
         /*  Connect the writer socket to the listener socket. */
         rc = connect (self->w, (struct sockaddr*) &addr, sizeof (addr));
-        if (nn_slow (rc == SOCKET_ERROR)) {
+        if (rc == SOCKET_ERROR) {
             rc = nn_err_wsa_to_posix (WSAGetLastError ());
             if (rc == EADDRINUSE) {
                 rc = closesocket (self->w);
-                if (nn_slow (rc == INVALID_SOCKET))
+                if (rc == INVALID_SOCKET)
                     goto wsafail;
                 continue;
             }
@@ -156,23 +155,23 @@ int nn_efd_init (struct nn_efd *self)
         /*  Accept new incoming connection. */
         addrlen = sizeof (addr);
         self->r = accept (listener, (struct sockaddr*) &addr, &addrlen);
-        if (nn_slow (self->r == INVALID_SOCKET || addrlen != sizeof (addr)))
+        if (self->r == INVALID_SOCKET || addrlen != sizeof (addr))
             goto wsafail2;
 
         /*  Check that the connection actually comes from the localhost. */
-        if (nn_fast (addr.sin_addr.s_addr == htonl (INADDR_LOOPBACK)))
+        if (addr.sin_addr.s_addr == htonl (INADDR_LOOPBACK))
             break;
 
         /*  If not so, close the connection and try again. */
         rc = closesocket (self->r);
-        if (nn_slow (rc == INVALID_SOCKET))
+        if (rc == INVALID_SOCKET)
             goto wsafail;
     }
 
     /*  Listener socket can be closed now as no more connections for this efd
         are going to be established anyway. */
     rc = closesocket (listener);
-    if (nn_slow (rc == INVALID_SOCKET))
+    if (rc == INVALID_SOCKET)
         goto wsafail;
 
     /*  Leave the critical section. */
@@ -244,7 +243,7 @@ void nn_efd_signal (struct nn_efd *self)
     unsigned char c = 0xec;
     SOCKET s = self->w;
 
-    if (nn_fast (s != INVALID_SOCKET)) {
+    if (s != INVALID_SOCKET) {
         rc = send (s, (char*) &c, 1, 0);
         nn_assert_win (rc != SOCKET_ERROR);
         nn_assert (rc == 1);
@@ -258,13 +257,13 @@ void nn_efd_unsignal (struct nn_efd *self)
 
     while (1) {
         SOCKET s = self->r;
-        if (nn_slow (s == INVALID_SOCKET))
+        if (s == INVALID_SOCKET)
             break;
         rc = recv (s, (char*) buf, sizeof (buf), 0);
         if (rc == SOCKET_ERROR && WSAGetLastError () == WSAEWOULDBLOCK)
             rc = 0;
-        if (nn_fast (rc < sizeof (buf)))
         nn_assert_win (rc != SOCKET_ERROR);
+        if (rc < sizeof (buf))
             break;
     }
 }

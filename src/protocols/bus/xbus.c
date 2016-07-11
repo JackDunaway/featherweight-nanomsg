@@ -27,7 +27,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
 #include "../../utils/attr.h"
@@ -178,7 +177,7 @@ int nn_xbus_recv (struct nn_sockbase *self, struct nn_msg *msg)
 
         /*  Get next message in fair-queued manner. */
         rc = nn_fq_recv (&xbus->inpipes, msg, &pipe);
-        if (nn_slow (rc < 0))
+        if (rc < 0)
             return rc;
 
         /*  The message should have no header. Drop malformed messages. */

@@ -34,7 +34,6 @@
 #include "../../utils/alloc.h"
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/wire.h"
 #include "../../utils/attr.h"
 #include "../../utils/random.h"
@@ -248,11 +247,11 @@ static void nn_ws_handshake_shutdown (struct nn_fsm *self, int src, int type,
 
     handshaker = nn_cont (self, struct nn_ws_handshake, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_timer_stop (&handshaker->timer);
         handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING;
     }
-    if (nn_slow (handshaker->state == NN_WS_HANDSHAKE_STATE_STOPPING)) {
+    if (handshaker->state == NN_WS_HANDSHAKE_STATE_STOPPING) {
         if (!nn_timer_isidle (&handshaker->timer))
             return;
         handshaker->state = NN_WS_HANDSHAKE_STATE_IDLE;

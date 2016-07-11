@@ -36,7 +36,6 @@
 #include "../../utils/cont.h"
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
-#include "../../utils/fast.h"
 
 #include <string.h>
 
@@ -119,13 +118,13 @@ int nn_btcp_create (void *hint, struct nn_epbase **epbase)
     /*  Parse the port. */
     end = addr + strlen (addr);
     pos = strrchr (addr, ':');
-    if (nn_slow (!pos)) {
+    if (!pos) {
         nn_epbase_term (&self->epbase);
         return -EINVAL;
     }
     ++pos;
     rc = nn_port_resolve (pos, end - pos);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_epbase_term (&self->epbase);
         return -EINVAL;
     }
@@ -138,7 +137,7 @@ int nn_btcp_create (void *hint, struct nn_epbase **epbase)
 
     /*  Parse the address. */
     rc = nn_iface_resolve (addr, pos - addr - 1, ipv4only, &ss, &sslen);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_epbase_term (&self->epbase);
         return -ENODEV;
     }
@@ -201,7 +200,7 @@ static void nn_btcp_shutdown (struct nn_fsm *self, int src, int type,
 
     btcp = nn_cont (self, struct nn_btcp, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (btcp->atcp) {
             nn_atcp_stop (btcp->atcp);
             btcp->state = NN_BTCP_STATE_STOPPING_ATCP;
@@ -210,7 +209,7 @@ static void nn_btcp_shutdown (struct nn_fsm *self, int src, int type,
             btcp->state = NN_BTCP_STATE_STOPPING_USOCK;
         }
     }
-    if (nn_slow (btcp->state == NN_BTCP_STATE_STOPPING_ATCP)) {
+    if (btcp->state == NN_BTCP_STATE_STOPPING_ATCP) {
         if (!nn_atcp_isidle (btcp->atcp))
             return;
         nn_atcp_term (btcp->atcp);
@@ -219,7 +218,7 @@ static void nn_btcp_shutdown (struct nn_fsm *self, int src, int type,
         nn_usock_stop (&btcp->usock);
         btcp->state = NN_BTCP_STATE_STOPPING_USOCK;
     }
-    if (nn_slow (btcp->state == NN_BTCP_STATE_STOPPING_USOCK)) {
+    if (btcp->state == NN_BTCP_STATE_STOPPING_USOCK) {
        if (!nn_usock_isidle (&btcp->usock))
             return;
         for (it = nn_list_begin (&btcp->atcps);
@@ -231,7 +230,7 @@ static void nn_btcp_shutdown (struct nn_fsm *self, int src, int type,
         btcp->state = NN_BTCP_STATE_STOPPING_ATCPS;
         goto atcps_stopping;
     }
-    if (nn_slow (btcp->state == NN_BTCP_STATE_STOPPING_ATCPS)) {
+    if (btcp->state == NN_BTCP_STATE_STOPPING_ATCPS) {
         nn_assert (src == NN_BTCP_SRC_ATCP && type == NN_ATCP_STOPPED);
         atcp = (struct nn_atcp *) srcptr;
         nn_list_erase (&btcp->atcps, &atcp->item);

@@ -147,12 +147,12 @@ void nn_req_in (struct nn_sockbase *self, struct nn_pipe *pipe)
 
         /*  Get new reply. */
         rc = nn_xreq_recv (&req->xreq.sockbase, &req->task.reply);
-        if (nn_slow (rc == -EAGAIN))
+        if (rc == -EAGAIN)
             return;
         errnum_assert (rc == 0, -rc);
 
         /*  No request was sent. Getting a reply doesn't make sense. */
-        if (nn_slow (!nn_req_inprogress (req))) {
+        if (!nn_req_inprogress (req)) {
             nn_msg_term (&req->task.reply);
             continue;
         }
@@ -253,11 +253,11 @@ int nn_req_crecv (struct nn_sockbase *self, struct nn_msg *msg)
     req = nn_cont (self, struct nn_req, xreq.sockbase);
 
     /*  No request was sent. Waiting for a reply doesn't make sense. */
-    if (nn_slow (!nn_req_inprogress (req)))
+    if (!nn_req_inprogress (req))
         return -EFSM;
 
     /*  If reply was not yet recieved, wait further. */
-    if (nn_slow (req->state != NN_REQ_STATE_DONE))
+    if (req->state != NN_REQ_STATE_DONE)
         return -EAGAIN;
 
     /*  If the reply was already received, just pass it to the caller. */
@@ -281,7 +281,7 @@ int nn_req_setopt (struct nn_sockbase *self, int level, int option,
         return -ENOPROTOOPT;
 
     if (option == NN_REQ_RESEND_IVL) {
-        if (nn_slow (optvallen != sizeof (int)))
+        if (optvallen != sizeof (int))
             return -EINVAL;
         req->resend_ivl = *(int*) optval;
         return 0;
@@ -301,7 +301,7 @@ int nn_req_getopt (struct nn_sockbase *self, int level, int option,
         return -ENOPROTOOPT;
 
     if (option == NN_REQ_RESEND_IVL) {
-        if (nn_slow (*optvallen < sizeof (int)))
+        if (*optvallen < sizeof (int))
             return -EINVAL;
         *(int*) optval = req->resend_ivl;
         *optvallen = sizeof (int);
@@ -318,11 +318,11 @@ void nn_req_shutdown (struct nn_fsm *self, int src, int type,
 
     req = nn_cont (self, struct nn_req, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_timer_stop (&req->task.timer);
         req->state = NN_REQ_STATE_STOPPING;
     }
-    if (nn_slow (req->state == NN_REQ_STATE_STOPPING)) {
+    if (req->state == NN_REQ_STATE_STOPPING) {
         if (!nn_timer_isidle (&req->task.timer))
             return;
         req->state = NN_REQ_STATE_IDLE;
@@ -606,7 +606,7 @@ void nn_req_action_send (struct nn_req *self, int allow_delay)
 
     /*  If the request cannot be sent at the moment wait till
         new outbound pipe arrives. */
-    if (nn_slow (rc == -EAGAIN)) {
+    if (rc == -EAGAIN) {
         nn_assert (allow_delay == 1);
         nn_msg_term (&msg);
         self->state = NN_REQ_STATE_DELAYED;
@@ -616,7 +616,7 @@ void nn_req_action_send (struct nn_req *self, int allow_delay)
     /*  Request was successfully sent. Set up the re-send timer
         in case the request gets lost somewhere further out
         in the topology. */
-    if (nn_fast (rc == 0)) {
+    if (rc == 0) {
         nn_timer_start (&self->task.timer, self->resend_ivl);
         nn_assert (to);
         self->task.sent_to = to;
@@ -646,7 +646,7 @@ void nn_req_rm (struct nn_sockbase *self, struct nn_pipe *pipe) {
     req = nn_cont (self, struct nn_req, xreq.sockbase);
 
     nn_xreq_rm (self, pipe);
-    if (nn_slow (pipe == req->task.sent_to)) {
+    if (pipe == req->task.sent_to) {
         nn_fsm_action (&req->fsm, NN_REQ_ACTION_PIPE_RM);
     }
 }

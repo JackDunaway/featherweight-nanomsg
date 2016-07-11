@@ -105,7 +105,7 @@ static void nn_atcp_shutdown (struct nn_fsm *self, int src, int type,
 
     atcp = nn_cont (self, struct nn_atcp, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (!nn_stcp_isidle (&atcp->stcp)) {
             nn_epbase_stat_increment (atcp->epbase,
                 NN_STAT_DROPPED_CONNECTIONS, 1);
@@ -113,13 +113,13 @@ static void nn_atcp_shutdown (struct nn_fsm *self, int src, int type,
         }
         atcp->state = NN_ATCP_STATE_STOPPING_STCP_FINAL;
     }
-    if (nn_slow (atcp->state == NN_ATCP_STATE_STOPPING_STCP_FINAL)) {
+    if (atcp->state == NN_ATCP_STATE_STOPPING_STCP_FINAL) {
         if (!nn_stcp_isidle (&atcp->stcp))
             return;
         nn_usock_stop (&atcp->usock);
         atcp->state = NN_ATCP_STATE_STOPPING;
     }
-    if (nn_slow (atcp->state == NN_ATCP_STATE_STOPPING)) {
+    if (atcp->state == NN_ATCP_STATE_STOPPING) {
         if (!nn_usock_isidle (&atcp->usock))
             return;
        if (atcp->listener) {

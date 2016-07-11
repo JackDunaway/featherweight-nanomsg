@@ -22,7 +22,6 @@
 
 #include "timerset.h"
 
-#include "../utils/fast.h"
 #include "../utils/cont.h"
 #include "../utils/clock.h"
 #include "../utils/err.h"
@@ -82,7 +81,7 @@ int nn_timerset_timeout (struct nn_timerset *self)
 {
     int timeout;
 
-    if (nn_fast (nn_list_empty (&self->timeouts)))
+    if (nn_list_empty (&self->timeouts))
         return -1;
 
     timeout = (int) (nn_cont (nn_list_begin (&self->timeouts),
@@ -95,7 +94,7 @@ int nn_timerset_event (struct nn_timerset *self, struct nn_timerset_hndl **hndl)
     struct nn_timerset_hndl *first;
 
     /*  If there's no timeout, there's no event to report. */
-    if (nn_fast (nn_list_empty (&self->timeouts)))
+    if (nn_list_empty (&self->timeouts))
         return -EAGAIN;
 
     /*  If no timeout have expired yet, there's no event to return. */

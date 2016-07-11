@@ -24,7 +24,6 @@
 
 #include "../utils/err.h"
 #include "../utils/cont.h"
-#include "../utils/fast.h"
 
 void nn_ctx_init (struct nn_ctx *self, struct nn_pool *pool,
     nn_ctx_onleave onleave)
@@ -63,7 +62,7 @@ void nn_ctx_leave (struct nn_ctx *self)
     }
 
     /*  Notify the owner that we are leaving the context. */
-    if (nn_fast (self->onleave != NULL))
+    if (self->onleave != NULL)
         self->onleave (self);
 
     /*  Shortcut in the case there are no external events. */

@@ -61,7 +61,7 @@ int nn_efd_wait (struct nn_efd *self, int timeout)
     for (;;) {
         pfd.fd = nn_efd_getfd (self);
         pfd.events = POLLIN;
-        if (nn_slow (pfd.fd < 0))
+        if (pfd.fd < 0)
             return -EBADF;
 
         switch (expire) {
@@ -86,10 +86,10 @@ int nn_efd_wait (struct nn_efd *self, int timeout)
             }
         }
         rc = poll (&pfd, 1, timeout);
-        if (nn_slow (rc < 0 && errno == EINTR))
+        if (rc < 0 && errno == EINTR)
             return -EINTR;
         errno_assert (rc >= 0);
-        if (nn_slow (rc == 0)) {
+        if (rc == 0) {
             if (expire == 0)
                 return -ETIMEDOUT;
             if ((expire != (uint64_t)-1) && (expire < nn_clock_ms())) {
@@ -119,7 +119,7 @@ int nn_efd_wait (struct nn_efd *self, int timeout)
     }
 
     for (;;) {
-        if (nn_slow (fd == INVALID_SOCKET)) {
+        if (fd == INVALID_SOCKET) {
             return -EBADF;
         }
         FD_SET (fd, &self->fds);
@@ -147,7 +147,7 @@ int nn_efd_wait (struct nn_efd *self, int timeout)
         }
         rc = select (0, &self->fds, NULL, NULL, &tv);
 
-        if (nn_slow (rc == SOCKET_ERROR)) {
+        if (rc == SOCKET_ERROR) {
             rc = nn_err_wsa_to_posix (WSAGetLastError ());
             errno = rc;
 

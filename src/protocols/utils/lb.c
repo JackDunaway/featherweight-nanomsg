@@ -70,7 +70,7 @@ int nn_lb_send (struct nn_lb *self, struct nn_msg *msg, struct nn_pipe **to)
 
     /*  Pipe is NULL only when there are no avialable pipes. */
     pipe = nn_priolist_getpipe (&self->priolist);
-    if (nn_slow (!pipe))
+    if (!pipe)
         return -EAGAIN;
 
     /*  Send the messsage. */

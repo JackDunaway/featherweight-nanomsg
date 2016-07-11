@@ -204,7 +204,7 @@ int nn_usock_setsockopt (struct nn_usock *self, int level, int optname,
     nn_assert (optlen < INT_MAX);
 
     rc = setsockopt (self->s, level, optname, (char*) optval, (int) optlen);
-    if (nn_slow (rc == SOCKET_ERROR))
+    if (rc == SOCKET_ERROR)
         return -nn_err_wsa_to_posix (WSAGetLastError ());
 
     return 0;
@@ -237,7 +237,7 @@ int nn_usock_bind (struct nn_usock *self, const struct sockaddr *addr,
 
     nn_assert (addrlen < INT_MAX);
     rc = bind (self->s, addr, (int) addrlen);
-    if (nn_slow (rc == SOCKET_ERROR))
+    if (rc == SOCKET_ERROR)
        return -nn_err_wsa_to_posix (WSAGetLastError ());
 
     return 0;
@@ -254,7 +254,7 @@ int nn_usock_listen (struct nn_usock *self, int backlog)
         created in the listening state, so no need to do anything here. */
     if (self->domain != AF_UNIX) {
         rc = listen (self->s, backlog);
-        if (nn_slow (rc == SOCKET_ERROR))
+        if (rc == SOCKET_ERROR)
            return -nn_err_wsa_to_posix (WSAGetLastError ());
     }
 
@@ -295,7 +295,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *listener)
         &listener->in.olpd);
 
     /*  Immediate success. */
-    if (nn_fast (brc == TRUE)) {
+    if (brc == TRUE) {
         nn_fsm_action (&listener->fsm, NN_USOCK_ACTION_DONE);
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_DONE);
         return;
@@ -358,13 +358,13 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
     }
 
     /*  Immediate success. */
-    if (nn_fast (winerror == ERROR_SUCCESS)) {
+    if (winerror == ERROR_SUCCESS) {
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_DONE);
         return;
     }
 
     /*  Immediate error. */
-    if (nn_slow (winerror != WSA_IO_PENDING)) {
+    if (winerror != WSA_IO_PENDING) {
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_ERROR);
         return;
     }
@@ -417,7 +417,7 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
             idx += iov [i].iov_len;
         }
         brc = WriteFile (self->p, self->pipesendbuf, (DWORD) len, NULL, &self->out.olpd);
-        if (nn_fast (brc || GetLastError() == ERROR_IO_PENDING)) {
+        if (brc || GetLastError() == ERROR_IO_PENDING) {
             nn_worker_op_start (&self->out, 0);
             return;
         }
@@ -429,12 +429,12 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
     }
 
     rc = WSASend (self->s, wbuf, iovcnt, NULL, 0, &self->out.olpd, NULL);
-    if (nn_fast (rc == 0)) {
+    if (rc == 0) {
         nn_worker_op_start (&self->out, 0);
         return;
     }
     error = WSAGetLastError();
-    if (nn_fast (error == WSA_IO_PENDING)) {
+    if (error == WSA_IO_PENDING) {
         nn_worker_op_start (&self->out, 0);
         return;
     }
@@ -479,12 +479,12 @@ void nn_usock_recv (struct nn_usock *self, void *buf, size_t len, int *fd)
         error = (rc == 0) ? ERROR_SUCCESS : WSAGetLastError ();
     }
 
-    if (nn_fast (error == ERROR_SUCCESS)) {
+    if (error == ERROR_SUCCESS) {
         nn_worker_op_start (&self->in, 1);
         return;
     }
 
-    if (nn_fast (error == WSA_IO_PENDING)) {
+    if (error == WSA_IO_PENDING) {
         nn_worker_op_start (&self->in, 1);
         return;
     }
@@ -614,7 +614,7 @@ void nn_usock_accept_pipe (struct nn_usock *self, struct nn_usock *listener)
     winerror = GetLastError();
 
     /*  Immediate success. */
-    if (nn_fast (winerror == ERROR_PIPE_CONNECTED)) {
+    if (winerror == ERROR_PIPE_CONNECTED) {
         nn_fsm_action (&listener->fsm, NN_USOCK_ACTION_DONE);
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_DONE);
         return;
@@ -662,7 +662,7 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
 
     usock = nn_cont (self, struct nn_usock, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
 
         /*  Socket in ACCEPTING state cannot be closed.
             Stop the socket being accepted first. */
@@ -704,11 +704,11 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
         usock->state = NN_USOCK_STATE_STOPPING;
         return;
     }
-    if (nn_slow (usock->state == NN_USOCK_STATE_STOPPING_ACCEPT)) {
+    if (usock->state == NN_USOCK_STATE_STOPPING_ACCEPT) {
         nn_assert (src == NN_FSM_ACTION && type == NN_USOCK_ACTION_DONE);
         goto finish1;
     }
-    if (nn_slow (usock->state == NN_USOCK_STATE_STOPPING)) {
+    if (usock->state == NN_USOCK_STATE_STOPPING) {
         if (!nn_worker_op_isidle (&usock->in) ||
               !nn_worker_op_isidle (&usock->out))
             return;

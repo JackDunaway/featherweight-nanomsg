@@ -32,7 +32,6 @@
 #include "../../utils/cont.h"
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
-#include "../../utils/fast.h"
 
 #include <string.h>
 #if defined NN_HAVE_WINDOWS
@@ -164,7 +163,7 @@ static void nn_bipc_shutdown (struct nn_fsm *self, int src, int type,
 
     bipc = nn_cont (self, struct nn_bipc, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (bipc->aipc) {
             nn_aipc_stop (bipc->aipc);
             bipc->state = NN_BIPC_STATE_STOPPING_AIPC;
@@ -173,7 +172,7 @@ static void nn_bipc_shutdown (struct nn_fsm *self, int src, int type,
             bipc->state = NN_BIPC_STATE_STOPPING_USOCK;
         }
     }
-    if (nn_slow (bipc->state == NN_BIPC_STATE_STOPPING_AIPC)) {
+    if (bipc->state == NN_BIPC_STATE_STOPPING_AIPC) {
         if (!nn_aipc_isidle (bipc->aipc))
             return;
         nn_aipc_term (bipc->aipc);
@@ -190,7 +189,7 @@ static void nn_bipc_shutdown (struct nn_fsm *self, int src, int type,
         nn_usock_stop (&bipc->usock);
         bipc->state = NN_BIPC_STATE_STOPPING_USOCK;
     }
-    if (nn_slow (bipc->state == NN_BIPC_STATE_STOPPING_USOCK)) {
+    if (bipc->state == NN_BIPC_STATE_STOPPING_USOCK) {
        if (!nn_usock_isidle (&bipc->usock))
             return;
         for (it = nn_list_begin (&bipc->aipcs);
@@ -202,7 +201,7 @@ static void nn_bipc_shutdown (struct nn_fsm *self, int src, int type,
         bipc->state = NN_BIPC_STATE_STOPPING_AIPCS;
         goto aipcs_stopping;
     }
-    if (nn_slow (bipc->state == NN_BIPC_STATE_STOPPING_AIPCS)) {
+    if (bipc->state == NN_BIPC_STATE_STOPPING_AIPCS) {
         nn_assert (src == NN_BIPC_SRC_AIPC && type == NN_AIPC_STOPPED);
         aipc = (struct nn_aipc *) srcptr;
         nn_list_erase (&bipc->aipcs, &aipc->item);

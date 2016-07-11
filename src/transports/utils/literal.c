@@ -23,7 +23,6 @@
 #include "literal.h"
 
 #include "../../utils/err.h"
-#include "../../utils/fast.h"
 
 #include <string.h>
 
@@ -41,7 +40,7 @@ static int nn_inet_pton(int family, const char *src, void *dst)
     struct sockaddr_storage addr;
     int addr_len = sizeof(addr);
 
-    if (nn_slow (family != AF_INET && family != AF_INET6)) {
+    if (family != AF_INET && family != AF_INET6) {
         errno = EAFNOSUPPORT;
         return -1;
     }

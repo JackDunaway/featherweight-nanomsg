@@ -24,7 +24,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/wire.h"
 #include "../../utils/attr.h"
 
@@ -176,12 +175,12 @@ static void nn_stcp_shutdown (struct nn_fsm *self, int src, int type,
 
     stcp = nn_cont (self, struct nn_stcp, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_pipebase_stop (&stcp->pipebase);
         nn_streamhdr_stop (&stcp->streamhdr);
         stcp->state = NN_STCP_STATE_STOPPING;
     }
-    if (nn_slow (stcp->state == NN_STCP_STATE_STOPPING)) {
+    if (stcp->state == NN_STCP_STATE_STOPPING) {
         if (nn_streamhdr_isidle (&stcp->streamhdr)) {
             nn_usock_swap_owner (stcp->usock, &stcp->usock_owner);
             stcp->usock = NULL;
@@ -275,7 +274,7 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
 
                  /*  Start the pipe. */
                  rc = nn_pipebase_start (&stcp->pipebase);
-                 if (nn_slow (rc < 0)) {
+                 if (rc < 0) {
                     stcp->state = NN_STCP_STATE_DONE;
                     nn_fsm_raise (&stcp->fsm, &stcp->done, NN_STCP_ERROR);
                     return;

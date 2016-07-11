@@ -25,7 +25,6 @@
 
 #include "trie.h"
 #include "../../utils/alloc.h"
-#include "../../utils/fast.h"
 #include "../../utils/err.h"
 
 /*  Double check that the size of node structure is as small as
@@ -628,7 +627,7 @@ found:
     /*  We are at the end of the subscription here. */
 
     /*  Subscription doesn't exist. */
-    if (nn_slow (!*self || !nn_node_has_subscribers (*self)))
+    if (!*self || !nn_node_has_subscribers (*self))
         return -EINVAL;
 
     /*  Subscription exists. Unsubscribe. */

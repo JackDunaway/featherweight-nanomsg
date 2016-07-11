@@ -26,7 +26,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/wire.h"
 #include "../../utils/attr.h"
 
@@ -118,11 +117,11 @@ static void nn_streamhdr_shutdown (struct nn_fsm *self, int src, int type,
 
     streamhdr = nn_cont (self, struct nn_streamhdr, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_timer_stop (&streamhdr->timer);
         streamhdr->state = NN_STREAMHDR_STATE_STOPPING;
     }
-    if (nn_slow (streamhdr->state == NN_STREAMHDR_STATE_STOPPING)) {
+    if (streamhdr->state == NN_STREAMHDR_STATE_STOPPING) {
         if (!nn_timer_isidle (&streamhdr->timer))
             return;
         streamhdr->state = NN_STREAMHDR_STATE_IDLE;

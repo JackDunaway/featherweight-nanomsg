@@ -24,7 +24,6 @@
 #include "timer.h"
 
 #include "../utils/cont.h"
-#include "../utils/fast.h"
 #include "../utils/err.h"
 #include "../utils/attr.h"
 
@@ -94,12 +93,12 @@ static void nn_timer_shutdown (struct nn_fsm *self, int src, int type,
 
     timer = nn_cont (self, struct nn_timer, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         timer->state = NN_TIMER_STATE_STOPPING;
         nn_worker_execute (timer->worker, &timer->stop_task);
         return;
     }
-    if (nn_slow (timer->state == NN_TIMER_STATE_STOPPING)) {
+    if (timer->state == NN_TIMER_STATE_STOPPING) {
         if (src != NN_TIMER_SRC_STOP_TASK)
             return;
         nn_assert (type == NN_WORKER_TASK_EXECUTE);

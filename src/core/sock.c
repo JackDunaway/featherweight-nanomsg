@@ -32,7 +32,6 @@
 #include "../utils/err.h"
 #include "../utils/cont.h"
 #include "../utils/clock.h"
-#include "../utils/fast.h"
 #include "../utils/alloc.h"
 #include "../utils/msg.h"
 
@@ -92,14 +91,14 @@ int nn_sock_init (struct nn_sock *self, struct nn_socktype *socktype, int fd)
         memset (&self->sndfd, 0xcd, sizeof (self->sndfd));
     else {
         rc = nn_efd_init (&self->sndfd);
-        if (nn_slow (rc < 0))
+        if (rc < 0)
             return rc;
     }
     if (socktype->flags & NN_SOCKTYPE_FLAG_NORECV)
         memset (&self->rcvfd, 0xcd, sizeof (self->rcvfd));
     else {
         rc = nn_efd_init (&self->rcvfd);
-        if (nn_slow (rc < 0)) {
+        if (rc < 0) {
             if (!(socktype->flags & NN_SOCKTYPE_FLAG_NOSEND))
                 nn_efd_term (&self->sndfd);
             return rc;
@@ -207,7 +206,7 @@ int nn_sock_term (struct nn_sock *self)
         have a way to defer resource deallocation. */
     for (;;) {
         rc = nn_sem_wait (&self->termsem);
-        if (nn_slow (rc == -EINTR))
+        if (rc == -EINTR)
             continue;
         errnum_assert (rc == 0, -rc);
         break;
@@ -216,7 +215,7 @@ int nn_sock_term (struct nn_sock *self)
     /*  Also, wait for all holds on the socket to be released.  */
     for (;;) {
         rc = nn_sem_wait (&self->relesem);
-        if (nn_slow (rc == -EINTR))
+        if (rc == -EINTR)
             continue;
         errnum_assert (rc == 0, -rc);
         break;
@@ -496,13 +495,13 @@ int nn_sock_add_ep (struct nn_sock *self, struct nn_transport *transport,
 
     /*  Instantiate the endpoint. */
     ep = nn_alloc (sizeof (struct nn_ep), "endpoint");
-    if (nn_slow (ep == NULL)) {
+    if (ep == NULL) {
         nn_ctx_leave (&self->ctx);
         return -ENOMEM;
     }
     rc = nn_ep_init (ep, NN_SOCK_SRC_EP, self, self->eid, transport,
         bind, addr);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_free (ep);
         nn_ctx_leave (&self->ctx);
         return rc;
@@ -567,7 +566,7 @@ int nn_sock_send (struct nn_sock *self, struct nn_msg *msg, int flags)
     int timeout;
 
     /*  Some sockets types cannot be used for sending messages. */
-    if (nn_slow (self->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND))
+    if (self->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)
         return -ENOTSUP;
 
     nn_ctx_enter (&self->ctx);
@@ -604,21 +603,21 @@ int nn_sock_send (struct nn_sock *self, struct nn_msg *msg, int flags)
 
         /*  Try to send the message in a non-blocking way. */
         rc = self->sockbase->vfptr->send (self->sockbase, msg);
-        if (nn_fast (rc == 0)) {
+        if (rc == 0) {
             nn_ctx_leave (&self->ctx);
             return 0;
         }
         nn_assert (rc < 0);
 
         /*  Any unexpected error is forwarded to the caller. */
-        if (nn_slow (rc != -EAGAIN)) {
+        if (rc != -EAGAIN) {
             nn_ctx_leave (&self->ctx);
             return rc;
         }
 
         /*  If the message cannot be sent at the moment and the send call
             is non-blocking, return immediately. */
-        if (nn_fast (flags & NN_DONTWAIT)) {
+        if (flags & NN_DONTWAIT) {
             nn_ctx_leave (&self->ctx);
             return -EAGAIN;
         }
@@ -627,11 +626,11 @@ int nn_sock_send (struct nn_sock *self, struct nn_msg *msg, int flags)
             for sending. */
         nn_ctx_leave (&self->ctx);
         rc = nn_efd_wait (&self->sndfd, timeout);
-        if (nn_slow (rc == -ETIMEDOUT))
+        if (rc == -ETIMEDOUT)
             return -ETIMEDOUT;
-        if (nn_slow (rc == -EINTR))
+        if (rc == -EINTR)
             return -EINTR;
-        if (nn_slow (rc == -EBADF))
+        if (rc == -EBADF)
             return -EBADF;
         errnum_assert (rc == 0, rc);
         nn_ctx_enter (&self->ctx);
@@ -659,7 +658,7 @@ int nn_sock_recv (struct nn_sock *self, struct nn_msg *msg, int flags)
     int timeout;
 
     /*  Some sockets types cannot be used for receiving messages. */
-    if (nn_slow (self->socktype->flags & NN_SOCKTYPE_FLAG_NORECV))
+    if (self->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)
         return -ENOTSUP;
 
     nn_ctx_enter (&self->ctx);
@@ -696,21 +695,21 @@ int nn_sock_recv (struct nn_sock *self, struct nn_msg *msg, int flags)
 
         /*  Try to receive the message in a non-blocking way. */
         rc = self->sockbase->vfptr->recv (self->sockbase, msg);
-        if (nn_fast (rc == 0)) {
+        if (rc == 0) {
             nn_ctx_leave (&self->ctx);
             return 0;
         }
         nn_assert (rc < 0);
 
         /*  Any unexpected error is forwarded to the caller. */
-        if (nn_slow (rc != -EAGAIN)) {
+        if (rc != -EAGAIN) {
             nn_ctx_leave (&self->ctx);
             return rc;
         }
 
         /*  If the message cannot be received at the moment and the recv call
             is non-blocking, return immediately. */
-        if (nn_fast (flags & NN_DONTWAIT)) {
+        if (flags & NN_DONTWAIT) {
             nn_ctx_leave (&self->ctx);
             return -EAGAIN;
         }
@@ -719,11 +718,11 @@ int nn_sock_recv (struct nn_sock *self, struct nn_msg *msg, int flags)
             for receiving. */
         nn_ctx_leave (&self->ctx);
         rc = nn_efd_wait (&self->rcvfd, timeout);
-        if (nn_slow (rc == -ETIMEDOUT))
+        if (rc == -ETIMEDOUT)
             return -ETIMEDOUT;
-        if (nn_slow (rc == -EINTR))
+        if (rc == -EINTR)
             return -EINTR;
-        if (nn_slow (rc == -EBADF))
+        if (rc == -EBADF)
             return -EBADF;
         errnum_assert (rc == 0, rc);
         nn_ctx_enter (&self->ctx);
@@ -748,7 +747,7 @@ int nn_sock_add (struct nn_sock *self, struct nn_pipe *pipe)
     int rc;
 
     rc = self->sockbase->vfptr->add (self->sockbase, pipe);
-    if (nn_slow (rc >= 0)) {
+    if (rc >= 0) {
         nn_sock_stat_increment (self, NN_STAT_CURRENT_CONNECTIONS, 1);
     }
     return rc;
@@ -769,7 +768,7 @@ static void nn_sock_onleave (struct nn_ctx *self)
 
     /*  If nn_close() was already called there's no point in adjusting the
         snd/rcv file descriptors. */
-    if (nn_slow (sock->state != NN_SOCK_STATE_ACTIVE))
+    if (sock->state != NN_SOCK_STATE_ACTIVE)
         return;
 
     /*  Check whether socket is readable and/or writable at the moment. */
@@ -818,18 +817,18 @@ static struct nn_optset *nn_sock_optset (struct nn_sock *self, int id)
     index = (-id) - 1;
 
     /*  Check for invalid indices. */
-    if (nn_slow (index < 0 || index >= NN_MAX_TRANSPORT))
+    if (index < 0 || index >= NN_MAX_TRANSPORT)
         return NULL;
 
     /*  If the option set already exists return it. */
-    if (nn_fast (self->optsets [index] != NULL))
+    if (self->optsets [index] != NULL)
         return self->optsets [index];
 
     /*  If the option set doesn't exist yet, create it. */
     tp = nn_global_transport (id);
-    if (nn_slow (!tp))
+    if (!tp)
         return NULL;
-    if (nn_slow (!tp->optset))
+    if (!tp->optset)
         return NULL;
     self->optsets [index] = tp->optset ();
 
@@ -845,7 +844,7 @@ static void nn_sock_shutdown (struct nn_fsm *self, int src, int type,
 
     sock = nn_cont (self, struct nn_sock, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_assert (sock->state == NN_SOCK_STATE_ACTIVE);
 
         /*  Close sndfd and rcvfd. This should make any current
@@ -871,7 +870,7 @@ static void nn_sock_shutdown (struct nn_fsm *self, int src, int type,
         sock->state = NN_SOCK_STATE_STOPPING_EPS;
         goto finish2;
     }
-    if (nn_slow (sock->state == NN_SOCK_STATE_STOPPING_EPS)) {
+    if (sock->state == NN_SOCK_STATE_STOPPING_EPS) {
 
         if (!(src == NN_SOCK_SRC_EP && type == NN_EP_STOPPED)) {
             /*  If we got here waiting for EPs to teardown, but src is
@@ -899,7 +898,7 @@ finish2:
         sock->sockbase->vfptr->stop (sock->sockbase);
         return;
     }
-    if (nn_slow (sock->state == NN_SOCK_STATE_STOPPING)) {
+    if (sock->state == NN_SOCK_STATE_STOPPING) {
 
         /*  We get here when the deallocation of the socket was delayed by the
             specific socket type. */

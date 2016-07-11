@@ -29,7 +29,6 @@
 #include "../../utils/alloc.h"
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/wire.h"
 #include "../../utils/attr.h"
 #include "../../utils/random.h"
@@ -845,13 +844,13 @@ static void nn_sws_shutdown (struct nn_fsm *self, int src, int type,
 
     sws = nn_cont (self, struct nn_sws, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         /*  TODO: Consider sending a close code here? */
         nn_pipebase_stop (&sws->pipebase);
         nn_ws_handshake_stop (&sws->handshaker);
         sws->state = NN_SWS_STATE_STOPPING;
     }
-    if (nn_slow (sws->state == NN_SWS_STATE_STOPPING)) {
+    if (sws->state == NN_SWS_STATE_STOPPING) {
         if (nn_ws_handshake_isidle (&sws->handshaker)) {
             nn_usock_swap_owner (sws->usock, &sws->usock_owner);
             sws->usock = NULL;
@@ -945,7 +944,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
 
                  /*  Start the pipe. */
                  rc = nn_pipebase_start (&sws->pipebase);
-                 if (nn_slow (rc < 0)) {
+                 if (rc < 0) {
                     sws->state = NN_SWS_STATE_DONE;
                     nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
                     return;

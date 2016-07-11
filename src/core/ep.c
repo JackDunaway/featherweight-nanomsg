@@ -28,7 +28,6 @@
 
 #include "../utils/err.h"
 #include "../utils/cont.h"
-#include "../utils/fast.h"
 #include "../utils/attr.h"
 
 #include <string.h>
@@ -142,12 +141,12 @@ static void nn_ep_shutdown (struct nn_fsm *self, int src, int type,
 
     ep = nn_cont (self, struct nn_ep, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         ep->epbase->vfptr->stop (ep->epbase);
         ep->state = NN_EP_STATE_STOPPING;
         return;
     }
-    if (nn_slow (ep->state == NN_EP_STATE_STOPPING)) {
+    if (ep->state == NN_EP_STATE_STOPPING) {
         if (src != NN_FSM_ACTION || type != NN_EP_ACTION_STOPPED)
             return;
         ep->state = NN_EP_STATE_IDLE;

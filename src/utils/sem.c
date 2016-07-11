@@ -22,7 +22,6 @@
 
 #include "sem.h"
 #include "err.h"
-#include "fast.h"
 
 #if defined NN_HAVE_OSX
 
@@ -72,14 +71,14 @@ int nn_sem_wait (struct nn_sem *self)
         and may break with future versions of Darwin. */
     rc = pthread_mutex_lock (&self->mutex);
     errnum_assert (rc == 0, rc);
-    if (nn_fast (self->signaled)) {
+    if (self->signaled) {
         rc = pthread_mutex_unlock (&self->mutex);
         errnum_assert (rc == 0, rc);
         return 0;
     }
     rc = pthread_cond_wait (&self->cond, &self->mutex);
     errnum_assert (rc == 0, rc);
-    if (nn_slow (!self->signaled)) {
+    if (!self->signaled) {
         rc = pthread_mutex_unlock (&self->mutex);
         errnum_assert (rc == 0, rc);
         return -EINTR;
@@ -156,7 +155,7 @@ int nn_sem_wait (struct nn_sem *self)
     int rc;
 
     rc = sem_wait (&self->sem);
-    if (nn_slow (rc < 0 && errno == EINTR))
+    if (rc < 0 && errno == EINTR)
         return -EINTR;
     errno_assert (rc == 0);
     return 0;

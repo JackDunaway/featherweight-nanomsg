@@ -96,7 +96,7 @@ int nn_rep_send (struct nn_sockbase *self, struct nn_msg *msg)
     rep = nn_cont (self, struct nn_rep, xrep.sockbase);
 
     /*  If no request was received, there's nowhere to send the reply to. */
-    if (nn_slow (!(rep->flags & NN_REP_INPROGRESS)))
+    if (!(rep->flags & NN_REP_INPROGRESS))
         return -EFSM;
 
     /*  Move the stored backtrace into the message header. */
@@ -121,14 +121,14 @@ int nn_rep_recv (struct nn_sockbase *self, struct nn_msg *msg)
     rep = nn_cont (self, struct nn_rep, xrep.sockbase);
 
     /*  If a request is already being processed, cancel it. */
-    if (nn_slow (rep->flags & NN_REP_INPROGRESS)) {
+    if (rep->flags & NN_REP_INPROGRESS) {
         nn_chunkref_term (&rep->backtrace);
         rep->flags &= ~NN_REP_INPROGRESS;
     }
 
     /*  Receive the request. */
     rc = nn_xrep_recv (&rep->xrep.sockbase, msg);
-    if (nn_slow (rc == -EAGAIN))
+    if (rc == -EAGAIN)
         return -EAGAIN;
     errnum_assert (rc == 0, -rc);
 

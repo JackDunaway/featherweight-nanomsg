@@ -32,7 +32,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/wire.h"
 #include "../../utils/alloc.h"
 #include "../../utils/random.h"
@@ -213,7 +212,7 @@ static int nn_surveyor_send (struct nn_sockbase *self, struct nn_msg *msg)
     nn_msg_init (msg, 0);
 
     /*  Cancel any ongoing survey, if any. */
-    if (nn_slow (nn_surveyor_inprogress (surveyor))) {
+    if (nn_surveyor_inprogress (surveyor)) {
 
         /*  First check whether the survey can be sent at all. */
         if (!(nn_xsurveyor_events (&surveyor->xsurveyor.sockbase) &
@@ -241,7 +240,7 @@ static int nn_surveyor_recv (struct nn_sockbase *self, struct nn_msg *msg)
     surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
 
     /*  If no survey is going on return EFSM error. */
-    if (nn_slow (!nn_surveyor_inprogress (surveyor))) {
+    if (!nn_surveyor_inprogress (surveyor)) {
         if (surveyor->timedout == NN_SURVEYOR_TIMEDOUT) {
             surveyor->timedout = 0;
             return -ETIMEDOUT;
@@ -253,7 +252,7 @@ static int nn_surveyor_recv (struct nn_sockbase *self, struct nn_msg *msg)
 
         /*  Get next response. */
         rc = nn_xsurveyor_recv (&surveyor->xsurveyor.sockbase, msg);
-        if (nn_slow (rc == -EAGAIN))
+        if (rc == -EAGAIN)
             return -EAGAIN;
         errnum_assert (rc == 0, -rc);
 
@@ -262,7 +261,7 @@ static int nn_surveyor_recv (struct nn_sockbase *self, struct nn_msg *msg)
         if (nn_slow (nn_chunkref_size (&msg->sphdr) != sizeof (uint32_t)))
             continue;
         surveyid = nn_getl (nn_chunkref_data (&msg->sphdr));
-        if (nn_slow (surveyid != surveyor->surveyid))
+        if (surveyid != surveyor->surveyid)
             continue;
 
         /*  Discard the header and return the message to the user. */
@@ -285,7 +284,7 @@ static int nn_surveyor_setopt (struct nn_sockbase *self, int level, int option,
         return -ENOPROTOOPT;
 
     if (option == NN_SURVEYOR_DEADLINE) {
-        if (nn_slow (optvallen != sizeof (int)))
+        if (optvallen != sizeof (int))
             return -EINVAL;
         surveyor->deadline = *(int*) optval;
         return 0;
@@ -305,7 +304,7 @@ static int nn_surveyor_getopt (struct nn_sockbase *self, int level, int option,
         return -ENOPROTOOPT;
 
     if (option == NN_SURVEYOR_DEADLINE) {
-        if (nn_slow (*optvallen < sizeof (int)))
+        if (*optvallen < sizeof (int))
             return -EINVAL;
         *(int*) optval = surveyor->deadline;
         *optvallen = sizeof (int);
@@ -322,11 +321,11 @@ static void nn_surveyor_shutdown (struct nn_fsm *self, int src, int type,
 
     surveyor = nn_cont (self, struct nn_surveyor, fsm);
 
-    if (nn_slow (src== NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src== NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_timer_stop (&surveyor->timer);
         surveyor->state = NN_SURVEYOR_STATE_STOPPING;
     }
-    if (nn_slow (surveyor->state == NN_SURVEYOR_STATE_STOPPING)) {
+    if (surveyor->state == NN_SURVEYOR_STATE_STOPPING) {
         if (!nn_timer_isidle (&surveyor->timer))
             return;
         surveyor->state = NN_SURVEYOR_STATE_IDLE;

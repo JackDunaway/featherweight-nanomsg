@@ -27,7 +27,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/list.h"
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
@@ -166,7 +165,7 @@ int nn_xsurveyor_recv (struct nn_sockbase *self, struct nn_msg *msg)
     xsurveyor = nn_cont (self, struct nn_xsurveyor, sockbase);
 
     rc = nn_fq_recv (&xsurveyor->inpipes, msg, NULL);
-    if (nn_slow (rc < 0))
+    if (rc < 0)
         return rc;
 
     /*  Split the header from the body, if needed. */

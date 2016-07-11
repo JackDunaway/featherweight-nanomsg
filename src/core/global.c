@@ -378,7 +378,7 @@ struct nn_cmsghdr *nn_cmsg_nxthdr_ (const struct nn_msghdr *mhdr,
     size_t headsz;
 
     /*  Early return if no message is provided. */
-    if (nn_slow (mhdr == NULL))
+    if (mhdr == NULL)
         return NULL;
 
     /*  Get the actual data. */
@@ -392,7 +392,7 @@ struct nn_cmsghdr *nn_cmsg_nxthdr_ (const struct nn_msghdr *mhdr,
     }
 
     /*  Ancillary data allocation was not even large enough for one element. */
-    if (nn_slow (sz < NN_CMSG_SPACE (0)))
+    if (sz < NN_CMSG_SPACE (0))
         return NULL;
 
     /*  If cmsg is set to NULL we are going to return first property.
@@ -425,12 +425,12 @@ int nn_global_create_socket (int domain, int protocol)
     /* The function is called with lock held */
 
     /*  Only AF_SP and AF_SP_RAW domains are supported. */
-    if (nn_slow (domain != AF_SP && domain != AF_SP_RAW)) {
+    if (domain != AF_SP && domain != AF_SP_RAW) {
         return -EAFNOSUPPORT;
     }
 
     /*  If socket limit was reached, report error. */
-    if (nn_slow (self.nsocks >= NN_MAX_SOCKETS)) {
+    if (self.nsocks >= NN_MAX_SOCKETS) {
         return -EMFILE;
     }
 
@@ -477,7 +477,7 @@ int nn_socket (int domain, int protocol)
     nn_mutex_lock (&self.lock);
 
     /*  If nn_term() was already called, return ETERM. */
-    if (nn_slow (self.flags & NN_CTX_FLAG_TERM)) {
+    if (self.flags & NN_CTX_FLAG_TERM) {
         nn_mutex_unlock (&self.lock);
         errno = ETERM;
         return -1;
@@ -507,7 +507,7 @@ int nn_close (int s)
 
     nn_mutex_lock (&self.lock);
     rc = nn_global_hold_socket_locked (&sock, s);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_mutex_unlock (&self.lock);
         errno = -rc;
         return -1;
@@ -529,7 +529,7 @@ int nn_close (int s)
         all other consumers of the socket have dropped their holds, and
         all endpoints have cleanly exited. */
     rc = nn_sock_term (sock);
-    if (nn_slow (rc == -EINTR)) {
+    if (rc == -EINTR) {
         nn_global_rele_socket (sock);
         errno = EINTR;
         return -1;
@@ -558,18 +558,18 @@ int nn_setsockopt (int s, int level, int option, const void *optval,
     struct nn_sock *sock;
 
     rc = nn_global_hold_socket (&sock, s);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         errno = -rc;
         return -1;
     }
 
-    if (nn_slow (!optval && optvallen)) {
+    if (!optval && optvallen) {
         rc = -EFAULT;
         goto fail;
     }
 
     rc = nn_sock_setopt (sock, level, option, optval, optvallen);
-    if (nn_slow (rc < 0))
+    if (rc < 0)
         goto fail;
     errnum_assert (rc == 0, -rc);
     nn_global_rele_socket (sock);
@@ -588,18 +588,18 @@ int nn_getsockopt (int s, int level, int option, void *optval,
     struct nn_sock *sock;
 
     rc = nn_global_hold_socket (&sock, s);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         errno = -rc;
         return -1;
     }
 
-    if (nn_slow (!optval && optvallen)) {
+    if (!optval && optvallen) {
         rc = -EFAULT;
         goto fail;
     }
 
     rc = nn_sock_getopt (sock, level, option, optval, optvallen);
-    if (nn_slow (rc < 0))
+    if (rc < 0)
         goto fail;
     errnum_assert (rc == 0, -rc);
     nn_global_rele_socket (sock);
@@ -623,7 +623,7 @@ int nn_bind (int s, const char *addr)
     }
 
     rc = nn_global_create_ep (sock, addr, 1);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_global_rele_socket (sock);
         errno = -rc;
         return -1;
@@ -639,7 +639,7 @@ int nn_connect (int s, const char *addr)
     struct nn_sock *sock;
 
     rc = nn_global_hold_socket (&sock, s);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         errno = -rc;
         return -1;
     }
@@ -661,13 +661,13 @@ int nn_shutdown (int s, int how)
     struct nn_sock *sock;
 
     rc = nn_global_hold_socket (&sock, s);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         errno = -rc;
         return -1;
     }
 
     rc = nn_sock_rm_ep (sock, how);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_global_rele_socket (sock);
         errno = -rc;
         return -1;
@@ -724,24 +724,24 @@ int nn_sendmsg (int s, const struct nn_msghdr *msghdr, int flags)
     struct nn_sock *sock;
 
     rc = nn_global_hold_socket (&sock, s);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         errno = -rc;
         return -1;
     }
 
-    if (nn_slow (!msghdr)) {
+    if (!msghdr) {
         rc = -EINVAL;
         goto fail;
     }
 
-    if (nn_slow (msghdr->msg_iovlen < 0)) {
+    if (msghdr->msg_iovlen < 0) {
         rc = -EMSGSIZE;
         goto fail;
     }
 
     if (msghdr->msg_iovlen == 1 && msghdr->msg_iov [0].iov_len == NN_MSG) {
         chunk = *(void**) msghdr->msg_iov [0].iov_base;
-        if (nn_slow (chunk == NULL)) {
+        if (chunk == NULL) {
             rc = -EFAULT;
             goto fail;
         }
@@ -755,15 +755,15 @@ int nn_sendmsg (int s, const struct nn_msghdr *msghdr, int flags)
         sz = 0;
         for (i = 0; i != msghdr->msg_iovlen; ++i) {
             iov = &msghdr->msg_iov [i];
-            if (nn_slow (iov->iov_len == NN_MSG)) {
+            if (iov->iov_len == NN_MSG) {
                rc = -EINVAL;
                goto fail;
             }
-            if (nn_slow (!iov->iov_base && iov->iov_len)) {
+            if (!iov->iov_base && iov->iov_len) {
                 rc = -EFAULT;
                 goto fail;
             }
-            if (nn_slow (sz + iov->iov_len < sz)) {
+            if (sz + iov->iov_len < sz) {
                 rc = -EINVAL;
                 goto fail;
             }
@@ -824,7 +824,7 @@ int nn_sendmsg (int s, const struct nn_msghdr *msghdr, int flags)
 
     /*  Send it further down the stack. */
     rc = nn_sock_send (sock, &msg, flags);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
 
         /*  If we are dealing with user-supplied buffer, detach it from
             the message object. */
@@ -868,24 +868,24 @@ int nn_recvmsg (int s, struct nn_msghdr *msghdr, int flags)
     struct nn_sock *sock;
 
     rc = nn_global_hold_socket (&sock, s);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         errno = -rc;
         return -1;
     }
 
-    if (nn_slow (!msghdr)) {
+    if (!msghdr) {
         rc = -EINVAL;
         goto fail;
     }
 
-    if (nn_slow (msghdr->msg_iovlen < 0)) {
+    if (msghdr->msg_iovlen < 0) {
         rc = -EMSGSIZE;
         goto fail;
     }
 
     /*  Get a message. */
     rc = nn_sock_recv (sock, &msg, flags);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         goto fail;
     }
 
@@ -901,7 +901,7 @@ int nn_recvmsg (int s, struct nn_msghdr *msghdr, int flags)
         sz = nn_chunkref_size (&msg.body);
         for (i = 0; i != msghdr->msg_iovlen; ++i) {
             iov = &msghdr->msg_iov [i];
-            if (nn_slow (iov->iov_len == NN_MSG)) {
+            if (iov->iov_len == NN_MSG) {
                 nn_msg_term (&msg);
                 rc = -EINVAL;
                 goto fail;
@@ -990,7 +990,7 @@ uint64_t nn_get_statistic (int s, int statistic)
     uint64_t val;
 
     rc = nn_global_hold_socket (&sock, s);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         errno = -rc;
         return (uint64_t)-1;
     }
@@ -1149,15 +1149,15 @@ int nn_global_hold_socket_locked(struct nn_sock **sockp, int s)
 {
     struct nn_sock *sock;
 
-    if (nn_slow (s < 0 || s >= NN_MAX_SOCKETS || self.socks == NULL))
+    if (s < 0 || s >= NN_MAX_SOCKETS || self.socks == NULL)
         return -EBADF;
 
     sock = self.socks[s];
-    if (nn_slow (sock == NULL)) {
+    if (sock == NULL) {
         return -EBADF;
     }
 
-    if (nn_slow (nn_sock_hold (sock) != 0)) {
+    if (nn_sock_hold (sock) != 0) {
         return -EBADF;
     }
     *sockp = sock;

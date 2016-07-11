@@ -26,7 +26,6 @@
 
 #include "../utils/err.h"
 #include "../utils/cont.h"
-#include "../utils/fast.h"
 
 #define NN_WORKER_MAX_EVENTS 32
 
@@ -150,7 +149,7 @@ static void nn_worker_routine (void *arg)
         /*  Process all expired timers. */
         while (1) {
             rc = nn_timerset_event (&self->timerset, &thndl);
-            if (nn_fast (rc == -EAGAIN))
+            if (rc == -EAGAIN)
                 break;
             errnum_assert (rc == 0, -rc);
             timer = nn_cont (thndl, struct nn_worker_timer, hndl);
@@ -166,14 +165,14 @@ static void nn_worker_routine (void *arg)
         brc = GetQueuedCompletionStatusEx (self->cp, entries,
             NN_WORKER_MAX_EVENTS, &count, timeout < 0 ? INFINITE : timeout,
             FALSE);
-        if (nn_slow (!brc && GetLastError () == WAIT_TIMEOUT))
+        if (!brc && GetLastError () == WAIT_TIMEOUT)
             continue;
         nn_assert_win (brc);
 
         for (i = 0; i != count; ++i) {
 
             /*  Process I/O completion events. */
-            if (nn_fast (entries [i].lpOverlapped != NULL)) {
+            if (entries [i].lpOverlapped != NULL) {
                 op = nn_cont (entries [i].lpOverlapped,
                     struct nn_worker_op, olpd);
 
@@ -207,8 +206,7 @@ static void nn_worker_routine (void *arg)
             }
 
             /*  Worker thread shutdown is requested. */
-            if (nn_slow (entries [i].lpCompletionKey ==
-                  (ULONG_PTR) &nn_worker_stop))
+            if (entries [i].lpCompletionKey == (ULONG_PTR) &nn_worker_stop)
                 return;
 
             /*  Process tasks. */

@@ -31,7 +31,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
 #include "../../utils/attr.h"
@@ -170,7 +169,7 @@ static int nn_xsub_recv (struct nn_sockbase *self, struct nn_msg *msg)
         messages to receive. */
     while (1) {
         rc = nn_fq_recv (&xsub->fq, msg, NULL);
-        if (nn_slow (rc == -EAGAIN))
+        if (rc == -EAGAIN)
             return -EAGAIN;
         errnum_assert (rc >= 0, -rc);
         rc = nn_trie_match (&xsub->trie, nn_chunkref_data (&msg->body),

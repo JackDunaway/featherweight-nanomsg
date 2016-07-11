@@ -80,7 +80,6 @@ set (NN_SOURCES
     utils/efd.c
     utils/err.h
     utils/err.c
-    utils/fast.h
     utils/fd.h
     utils/hash.h
     utils/hash.c
