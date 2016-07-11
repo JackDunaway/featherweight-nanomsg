@@ -198,6 +198,7 @@ wsafail2:
     nn_assert_win (brc != 0);
 wsafail3:
     brc = CloseHandle (sync);
+    nn_assert_win (brc != 0);
     return -rc;
 }
 
