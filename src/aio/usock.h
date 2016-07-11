@@ -46,9 +46,145 @@
 #define NN_USOCK_BATCH_SIZE 2048
 
 #if defined NN_HAVE_WINDOWS
-#include "usock_win.h"
+#include "fsm.h"
+#include "worker.h"
+
+#include "../utils/win.h"
+
+struct nn_usock {
+
+    /*  The state machine. */
+    struct nn_fsm fsm;
+    int state;
+
+    union {
+
+        /*  The actual underlying socket. Can be used as a HANDLE too. */
+        SOCKET s;
+
+        /*  Named pipe handle. Cannot be used as a SOCKET. */
+        HANDLE p;
+    };
+
+    /*  For NamedPipes, closing an accepted pipe differs from other pipes.
+    If the NamedPipe was accepted, this member is set to 1. 0 otherwise. */
+    int isaccepted;
+
+    /*  Asynchronous operations being executed on the socket. */
+    struct nn_worker_op in;
+    struct nn_worker_op out;
+
+    /*  When accepting new socket, they have to be created with same
+    type as the listening socket. Thus, in listening socket we
+    have to store its exact type. */
+    int domain;
+    int type;
+    int protocol;
+
+    /*  Events raised by the usock. */
+    struct nn_fsm_event event_established;
+    struct nn_fsm_event event_sent;
+    struct nn_fsm_event event_received;
+    struct nn_fsm_event event_error;
+
+    /*  In ACCEPTING state points to the socket being accepted.
+    In BEING_ACCEPTED state points to the listener socket. */
+    struct nn_usock *asock;
+
+    /*  Buffer allocated for output of AcceptEx function. If accepting is not
+    done on this socket, the field is set to NULL. */
+    void *ainfo;
+
+    /*  For NamedPipes, we store the address inside the socket. */
+    struct sockaddr_un pipename;
+
+    /*  For now we allocate a new buffer for each write to a named pipe. */
+    void *pipesendbuf;
+
+    /* Pointer to the security attribute structure */
+    SECURITY_ATTRIBUTES *sec_attr;
+
+    /* Out Buffer and In Buffer size */
+    int outbuffersz;
+    int inbuffersz;
+
+    /*  Errno remembered in NN_USOCK_ERROR state  */
+    int errnum;
+};
 #else
-#include "usock_posix.h"
+#include "fsm.h"
+#include "worker.h"
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/uio.h>
+
+struct nn_usock {
+
+    /*  State machine base class. */
+    struct nn_fsm fsm;
+    int state;
+
+    /*  The worker thread the usock is associated with. */
+    struct nn_worker *worker;
+
+    /*  The underlying OS socket and handle that represents it in the poller. */
+    int s;
+    struct nn_worker_fd wfd;
+
+    /*  Members related to receiving data. */
+    struct {
+
+        /*  The buffer being filled in at the moment. */
+        uint8_t *buf;
+        size_t len;
+
+        /*  Buffer for batch-reading inbound data. */
+        uint8_t *batch;
+
+        /*  Size of the batch buffer. */
+        size_t batch_len;
+
+        /*  Current position in the batch buffer. The data preceding this
+        position were already received by the user. The data that follow
+        will be received in the future. */
+        size_t batch_pos;
+
+        /*  File descriptor received via SCM_RIGHTS, if any. */
+        int *pfd;
+    } in;
+
+    /*  Members related to sending data. */
+    struct {
+
+        /*  msghdr being sent at the moment. */
+        struct msghdr hdr;
+
+        /*  List of buffers being sent at the moment. Referenced from 'hdr'. */
+        struct iovec iov [NN_USOCK_MAX_IOVCNT];
+    } out;
+
+    /*  Asynchronous tasks for the worker. */
+    struct nn_worker_task task_connecting;
+    struct nn_worker_task task_connected;
+    struct nn_worker_task task_accept;
+    struct nn_worker_task task_send;
+    struct nn_worker_task task_recv;
+    struct nn_worker_task task_stop;
+
+    /*  Events raised by the usock. */
+    struct nn_fsm_event event_established;
+    struct nn_fsm_event event_sent;
+    struct nn_fsm_event event_received;
+    struct nn_fsm_event event_error;
+
+    /*  In ACCEPTING state points to the socket being accepted.
+    In BEING_ACCEPTED state points to the listener socket. */
+    struct nn_usock *asock;
+
+    /*  Errno remembered in NN_USOCK_ERROR state  */
+    int errnum;
+};
 #endif
 
 void nn_usock_init (struct nn_usock *self, int src, struct nn_fsm *owner);

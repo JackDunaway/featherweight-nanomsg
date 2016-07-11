@@ -242,17 +242,8 @@ set (NN_SOURCES
 
 if (WIN32)
     list (APPEND NN_SOURCES
-        aio/usock_win.h
-        aio/usock_win.inc
         utils/win.h
     )
-elseif (UNIX)
-    list (APPEND NN_SOURCES
-        aio/usock_posix.h
-        aio/usock_posix.inc
-    )
-else ()
-    message (FATAL_ERROR "Assertion failed; this path is unreachable.")
 endif ()
 
 if (NN_HAVE_EPOLL)
