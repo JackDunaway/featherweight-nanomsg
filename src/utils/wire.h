@@ -25,6 +25,18 @@
 
 #include <stdint.h>
 
+/*  Length, in octets, of the Request ID packed into the header of a message
+    as defined within nanomsg RFCs. */
+#define NN_WIRE_REQID_LEN sizeof (uint32_t)
+
+/*  Returns non-zero for the final Request ID in a stack indicating the
+    receiving socket should process the message rather than forward it. */
+#define nn_reqid_is_final(id) ((id) & 0x80000000)
+
+/*  Returns the next serial Request ID with the most important bit set
+    to indicate that this is the bottom of the backtrace stack. */
+#define nn_reqid_next(id) ((++(id)) | 0x80000000)
+
 uint16_t nn_gets (const uint8_t *buf);
 void nn_puts (uint8_t *buf, uint16_t val);
 uint32_t nn_getl (const uint8_t *buf);

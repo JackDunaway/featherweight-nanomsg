@@ -160,14 +160,14 @@ int nn_xrespondent_send (struct nn_sockbase *self, struct nn_msg *msg)
     xrespondent = nn_cont (self, struct nn_xrespondent, sockbase);
 
     /*  We treat invalid peer ID as if the peer was non-existent. */
-    if (nn_slow (nn_chunkref_size (&msg->sphdr) < sizeof (uint32_t))) {
+    if (nn_chunkref_size (&msg->sphdr) < NN_WIRE_REQID_LEN) {
         nn_msg_term (msg);
         return 0;
     }
 
     /*  Retrieve destination peer ID. Trim it from the header. */
     key = nn_getl (nn_chunkref_data (&msg->sphdr));
-    nn_chunkref_trim (&msg->sphdr, 4);
+    nn_chunkref_trim (&msg->sphdr, NN_WIRE_REQID_LEN);
 
     /*  Find the appropriate pipe to send the message to. If there's none,
         or if it's not ready for sending, silently drop the message. */
@@ -219,13 +219,13 @@ int nn_xrespondent_recv (struct nn_sockbase *self, struct nn_msg *msg)
 
         while (1) {
 	    /*  Ignore the malformed surveys without the bottom of the stack. */
-	    if (nn_slow ((i + 1) * sizeof (uint32_t) > sz)) {
+	    if ((i + 1) * NN_WIRE_REQID_LEN > sz) {
                 nn_msg_term (msg);
                 return -EAGAIN;
             }
 
             /*  If the bottom of the backtrace stack is reached, proceed. */
-            if (nn_getl ((uint8_t*)(((uint32_t*) data) + i)) & 0x80000000)
+            if (nn_reqid_is_final (nn_getl ((uint8_t*)(((uint32_t*) data) + i))))
                 break;
 
             ++i;
@@ -240,16 +240,16 @@ int nn_xrespondent_recv (struct nn_sockbase *self, struct nn_msg *msg)
 
         nn_assert (nn_chunkref_size (&msg->sphdr) == 0);
         nn_chunkref_term (&msg->sphdr);
-        nn_chunkref_init (&msg->sphdr, i * sizeof (uint32_t));
-        memcpy (nn_chunkref_data (&msg->sphdr), data, i * sizeof (uint32_t));
-        nn_chunkref_trim (&msg->body, i * sizeof (uint32_t));
+        nn_chunkref_init (&msg->sphdr, i * NN_WIRE_REQID_LEN);
+        memcpy (nn_chunkref_data (&msg->sphdr), data, i * NN_WIRE_REQID_LEN);
+        nn_chunkref_trim (&msg->body, i * NN_WIRE_REQID_LEN);
     }
 
     /*  Prepend the header by the pipe key. */
     pipedata = nn_pipe_getdata (pipe);
-    nn_chunkref_init (&ref, nn_chunkref_size (&msg->sphdr) + sizeof (uint32_t));
+    nn_chunkref_init (&ref, nn_chunkref_size (&msg->sphdr) + NN_WIRE_REQID_LEN);
     nn_putl (nn_chunkref_data (&ref), pipedata->outitem.key);
-    memcpy (((uint8_t *) nn_chunkref_data (&ref)) + sizeof (uint32_t),
+    memcpy (((uint8_t *) nn_chunkref_data (&ref)) + NN_WIRE_REQID_LEN,
         nn_chunkref_data (&msg->sphdr), nn_chunkref_size (&msg->sphdr));
     nn_chunkref_term (&msg->sphdr);
     nn_chunkref_mv (&msg->sphdr, &ref);

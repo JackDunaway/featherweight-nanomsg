@@ -197,13 +197,12 @@ static int nn_surveyor_send (struct nn_sockbase *self, struct nn_msg *msg)
     surveyor = nn_cont (self, struct nn_surveyor, xsurveyor.sockbase);
 
     /*  Generate new survey ID. */
-    ++surveyor->surveyid;
-    surveyor->surveyid |= 0x80000000;
+    surveyor->surveyid = nn_reqid_next (surveyor->surveyid);
 
     /*  Tag the survey body with survey ID. */
     nn_assert (nn_chunkref_size (&msg->sphdr) == 0);
     nn_chunkref_term (&msg->sphdr);
-    nn_chunkref_init (&msg->sphdr, 4);
+    nn_chunkref_init (&msg->sphdr, NN_WIRE_REQID_LEN);
     nn_putl (nn_chunkref_data (&msg->sphdr), surveyor->surveyid);
 
     /*  Store the survey, so that it can be sent later on. */
@@ -258,7 +257,7 @@ static int nn_surveyor_recv (struct nn_sockbase *self, struct nn_msg *msg)
 
         /*  Get the survey ID. Ignore any stale responses. */
         /*  TODO: This should be done asynchronously! */
-        if (nn_slow (nn_chunkref_size (&msg->sphdr) != sizeof (uint32_t)))
+        if (nn_chunkref_size (&msg->sphdr) != NN_WIRE_REQID_LEN)
             continue;
         surveyid = nn_getl (nn_chunkref_data (&msg->sphdr));
         if (surveyid != surveyor->surveyid)

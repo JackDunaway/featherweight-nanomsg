@@ -158,19 +158,18 @@ void nn_req_in (struct nn_sockbase *self, struct nn_pipe *pipe)
         }
 
         /*  Ignore malformed replies. */
-        if (nn_slow (nn_chunkref_size (&req->task.reply.sphdr) !=
-              sizeof (uint32_t))) {
+        if (nn_chunkref_size (&req->task.reply.sphdr) != NN_WIRE_REQID_LEN) {
             nn_msg_term (&req->task.reply);
             continue;
         }
 
         /*  Ignore replies with incorrect request IDs. */
         reqid = nn_getl (nn_chunkref_data (&req->task.reply.sphdr));
-        if (nn_slow (!(reqid & 0x80000000))) {
+        if (!nn_reqid_is_final (reqid)) {
             nn_msg_term (&req->task.reply);
             continue;
         }
-        if (nn_slow (reqid != (req->task.id | 0x80000000))) {
+        if (req->task.id != reqid) {
             nn_msg_term (&req->task.reply);
             continue;
         }
@@ -227,16 +226,16 @@ int nn_req_csend (struct nn_sockbase *self, struct nn_msg *msg)
 
     req = nn_cont (self, struct nn_req, xreq.sockbase);
 
-    /*  Generate new request ID for the new request and put it into message
-        header. The most important bit is set to 1 to indicate that this is
-        the bottom of the backtrace stack. */
-    ++req->task.id;
+    /*  Generate new Request ID.  */
+    req->task.id = nn_reqid_next (req->task.id);
+
+    /*  Tag the request with the Request ID. */
     nn_assert (nn_chunkref_size (&msg->sphdr) == 0);
     nn_chunkref_term (&msg->sphdr);
-    nn_chunkref_init (&msg->sphdr, 4);
-    nn_putl (nn_chunkref_data (&msg->sphdr), req->task.id | 0x80000000);
+    nn_chunkref_init (&msg->sphdr, NN_WIRE_REQID_LEN);
+    nn_putl (nn_chunkref_data (&msg->sphdr), req->task.id);
 
-    /*  Store the message so that it can be re-sent if there's no reply. */
+    /*  Store the request so that it can be re-sent if there's no reply. */
     nn_msg_term (&req->task.request);
     nn_msg_mv (&req->task.request, msg);
 
