@@ -167,6 +167,7 @@ if (WIN32)
     set(NN_REQUIRED_LIBRARIES ${NN_REQUIRED_LIBRARIES} ws2_32)
     set(NN_REQUIRED_LIBRARIES ${NN_REQUIRED_LIBRARIES} mswsock)
     set(NN_REQUIRED_LIBRARIES ${NN_REQUIRED_LIBRARIES} advapi32)
+    set(NN_REQUIRED_LIBRARIES ${NN_REQUIRED_LIBRARIES} dbghelp)
     nn_check_sym (InitializeConditionVariable windows.h NN_HAVE_CONDVAR)
     if (NOT NN_HAVE_CONDVAR)
         message (FATAL_ERROR

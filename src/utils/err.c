@@ -23,33 +23,83 @@
 
 #include "err.h"
 
-#ifdef NN_HAVE_WINDOWS
-#include "win.h"
+#include <stdlib.h>
+
+#ifndef NN_BACKTRACE_DEPTH
+#define NN_BACKTRACE_DEPTH 50
 #endif
 
-#ifdef NN_HAVE_BACKTRACE
+#if defined NN_HAVE_WINDOWS
+#include "win.h"
+/*  This warning is disabled to suppress a innocuous but verbose bug when
+    compiling with with MSVS2015. This suppression may be removed once a MSVS
+    patch is released enabling this solution to build without two such
+    occurences of this 4091 warning per project. -JRD, 2016-07-11 */
+#pragma warning (push)
+#pragma warning (disable:4091)
+#include <DbgHelp.h>
+#pragma warning (pop)
+
+#ifndef NN_BACKTRACE_MAX_SYMBOL_LEN
+#define NN_BACKTRACE_MAX_SYMBOL_LEN 255
+#endif
+
+void nn_backtrace_print (void)
+{
+    void *frames [NN_BACKTRACE_DEPTH];
+    USHORT num_captured;
+    HANDLE proc;
+    SYMBOL_INFO *info;
+    char buf [sizeof (*info) + sizeof (CHAR) * (NN_BACKTRACE_MAX_SYMBOL_LEN + 1)];
+    IMAGEHLP_LINE64 line;
+    DWORD disp;
+    BOOL brc;
+    int i;
+
+    proc = GetCurrentProcess ();
+    brc = SymInitialize (proc, NULL, TRUE);
+    if (brc != TRUE)
+        return;
+
+    /*  Skip printing information for call to this function itself. */
+    num_captured = CaptureStackBackTrace (1, NN_BACKTRACE_DEPTH, frames, NULL);
+    if (num_captured == 0)
+        return;
+
+    info = (SYMBOL_INFO *) buf;
+    for (i = 0; i < num_captured - 1; i++) {
+        memset (info, 0, sizeof (buf) / sizeof (buf [0]));
+        /*  Leave room for NULL terminator. */
+        info->MaxNameLen = NN_BACKTRACE_MAX_SYMBOL_LEN;
+        info->SizeOfStruct = sizeof (*info);
+        SymFromAddr (proc, (DWORD64) frames [i], NULL, info);
+        memset (&line, 0, sizeof (line));
+        line.SizeOfStruct = sizeof (line);
+        SymGetLineFromAddr64 (proc, (DWORD64) frames [i], &disp, &line);
+        fprintf (stderr, "%02d: %s (line %d) %s\n", num_captured - i - 1,
+            info->Name, line.LineNumber, line.FileName);
+    }
+}
+
+#elif defined NN_HAVE_BACKTRACE
 #include <execinfo.h>
 
 void nn_backtrace_print (void)
 {
-    void *frames[50];
+    void *frames [NN_BACKTRACE_DEPTH];
     int size;
-    size = backtrace (frames, sizeof (frames) / sizeof (frames[0]));
+    size = backtrace (frames, NN_BACKTRACE_DEPTH);
     if (size > 1) {
         /*  Don't include the frame nn_backtrace_print itself. */
         backtrace_symbols_fd (&frames[1], size-1, fileno (stderr));
     }
 }
 
-/* XXX: Add Windows backtraces */
-
 #else
 void nn_backtrace_print (void)
 {
 }
 #endif
-
-#include <stdlib.h>
 
 void nn_err_abort (void)
 {
