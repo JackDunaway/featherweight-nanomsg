@@ -363,7 +363,7 @@ static int nn_btcp_listen (struct nn_btcp *self)
         sslen = sizeof (struct sockaddr_in6);
         break;
     default:
-        nn_assert (0);
+        nn_assert_unreachable ("Unexpected ss_family.");
     }
 
     /*  Start listening for incoming connections. */

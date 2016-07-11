@@ -53,7 +53,10 @@
     } while (0)
 
 /*  Unconditionally asserts when a code path defined as unreachable is executed
-    at runtime. Such a failure indicates a library developer logic error. */
+    at runtime. Such a failure indicates a library developer logic error, such
+    as an unexpected value encountered within a function that does not satisfy
+    a precondition and should have been prevented with an error return code at
+    runtime. */
 #define nn_assert_unreachable(reason) \
     do {\
         nn_backtrace_print (); \

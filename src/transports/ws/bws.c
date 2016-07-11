@@ -364,8 +364,9 @@ static int nn_bws_listen (struct nn_bws *self)
         ((struct sockaddr_in6*) &ss)->sin6_port = htons (port);
         sslen = sizeof (struct sockaddr_in6);
     }
-    else
-        nn_assert (0);
+    else {
+        nn_assert_unreachable ("Unexpected ss_family.");
+    }
 
     /*  Start listening for incoming connections. */
     rc = nn_usock_start (&self->usock, ss.ss_family, SOCK_STREAM, 0);

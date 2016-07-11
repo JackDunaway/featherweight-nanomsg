@@ -174,7 +174,7 @@ int nn_usock_start (struct nn_usock *self, int domain, int type, int protocol)
 
 void nn_usock_start_fd (struct nn_usock *self, int fd)
 {
-    nn_assert (0);
+    nn_assert_unreachable ("This should never be invoked on Windows.");
 }
 
 void nn_usock_stop (struct nn_usock *self)
@@ -497,9 +497,7 @@ void nn_usock_recv (struct nn_usock *self, void *buf, size_t len, int *fd)
         return;
    }
 
-    /*  This state is unexpected and unreachable, yet the Windows error
-        information is printed. */
-    nn_assert_unreachable (nn_assert_win (0));
+    nn_assert_unreachable ("Unexpected [error] code.");
 }
 
 static void nn_usock_create_io_completion (struct nn_usock *self)

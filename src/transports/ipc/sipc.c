@@ -358,7 +358,7 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
                     return;
 
                 default:
-                    nn_assert (0);
+                    nn_assert_unreachable ("Unexpected [instate] value.");
                 }
 
             case NN_USOCK_SHUTDOWN:

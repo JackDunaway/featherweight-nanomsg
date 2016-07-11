@@ -187,8 +187,7 @@ int nn_device_entry (struct nn_device_recipe *device, int s1, int s2,
             return nn_device_oneway (device, s2, s1);
     }
 
-    /*  This should never happen. */
-    nn_assert (0);
+    nn_assert_unreachable ("Return case should have already been satisfied.");
 }
 
 int nn_device_loopback (struct nn_device_recipe *device, int s)

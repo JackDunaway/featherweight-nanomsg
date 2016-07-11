@@ -319,8 +319,7 @@ static int nn_utf8_code_point (const uint8_t *buffer, size_t len)
     if (buffer [0] >= 0xF5)
         return NN_SWS_UTF8_INVALID;
 
-    /*  Algorithm error; a case above should have been satisfied. */
-    nn_assert (0);
+    nn_assert_unreachable ("Return case should have already been satisfied.");
 }
 
 static void nn_sws_mask_payload (uint8_t *payload, size_t payload_len,
@@ -458,8 +457,7 @@ static int nn_sws_send (struct nn_pipebase *self, struct nn_msg *msg)
         sws->outhdr [1] |= NN_SWS_FRAME_BITMASK_NOT_MASKED;
     }
     else {
-        /*  Developer error; sws object was not constructed properly. */
-        nn_assert (0);
+        nn_assert_unreachable ("Unexpected [sws->mode] value.");
     }
 
     /*  Start async sending. */
@@ -561,8 +559,7 @@ static int nn_sws_recv (struct nn_pipebase *self, struct nn_msg *msg)
         break;
 
     default:
-        /*  Unexpected state. */
-        nn_assert (0);
+        nn_assert_unreachable ("Unexpected [instate] value.");
         break;
     }
 
@@ -631,7 +628,7 @@ static void nn_sws_validate_utf8_chunk (struct nn_sws *self)
     }
 
     if (self->utf8_code_pt_fragment_len >= NN_SWS_UTF8_MAX_CODEPOINT_LEN)
-        nn_assert (0);
+        nn_assert_unreachable ("UTF-8 parsing failed.");
 
     while (len > 0) {
         code_point_len = nn_utf8_code_point (pos, len);
@@ -802,8 +799,7 @@ static void nn_sws_fail_conn (struct nn_sws *self, int code, char *reason)
         self->fail_msg_len += NN_SWS_FRAME_SIZE_MASK;
         break;
     default:
-        /*  Developer error. */
-        nn_assert (0);
+        nn_assert_unreachable ("Unexpected [mode] value.");
     }
 
     payload_pos = (uint8_t*) (&self->fail_msg [self->fail_msg_len]);
@@ -1031,8 +1027,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                             break;
                         }
                     default:
-                        /*  Only two modes of this endpoint are expected. */
-                        nn_assert (0);
+                        nn_assert_unreachable ("Unexpected [mode] value.");
                         return;
                     }
 
@@ -1065,8 +1060,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                         sws->ext_hdr_len += NN_SWS_FRAME_SIZE_PAYLOAD_63;
                     }
                     else {
-                        /*  Developer error parsing/handling length. */
-                        nn_assert (0);
+                        nn_assert_unreachable ("Unexpected [ext_hdr_len] value.");
                         return;
                     }
 
@@ -1457,8 +1451,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                         return;
 
                     default:
-                        /*  This should have been prevented upstream. */
-                        nn_assert (0);
+                        nn_assert_unreachable ("Unexpected [opcode] value.");
                         return;
                     }
 

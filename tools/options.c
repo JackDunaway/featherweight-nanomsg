@@ -64,7 +64,7 @@ static int nn_has_arg (struct nn_option *opt)
         case NN_OPT_READ_FILE:
             return 1;
     }
-    nn_assert_unreachable ("option not defined in enum");
+    nn_assert_unreachable ("Unexpected [opt->type] not defined in enum.");
 }
 
 static void nn_print_usage (struct nn_parse_context *ctx, FILE *stream)

@@ -234,7 +234,7 @@ invalidhdr:
                 streamhdr->state = NN_STREAMHDR_STATE_STOPPING_TIMER_ERROR;
                 return;
             default:
-                nn_assert (0);
+                nn_fsm_bad_action (streamhdr->state, src, type);
             }
 
         case NN_STREAMHDR_SRC_TIMER:
