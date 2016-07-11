@@ -144,7 +144,7 @@ int nn_usock_start (struct nn_usock *self, int domain, int type, int protocol)
         /*  Disable inheriting the socket to the child processes. */
 #if defined HANDLE_FLAG_INHERIT
         brc = SetHandleInformation (self->p, HANDLE_FLAG_INHERIT, 0);
-        win_assert (brc);
+        nn_assert_win (brc);
 #endif
 
         /*  IPv4 mapping for IPv6 sockets is disabled by default. Switch it on. */
@@ -153,7 +153,7 @@ int nn_usock_start (struct nn_usock *self, int domain, int type, int protocol)
             only = 0;
             rc = setsockopt (self->s, IPPROTO_IPV6, IPV6_V6ONLY,
                 (const char*) &only, sizeof (only));
-            wsa_assert (rc != SOCKET_ERROR);
+            nn_assert_win (rc != SOCKET_ERROR);
         }
 #endif
 
@@ -233,7 +233,7 @@ int nn_usock_bind (struct nn_usock *self, const struct sockaddr *addr,
     opt = 1;
     rc = setsockopt (self->s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
         (const char*) &opt, sizeof (opt));
-    wsa_assert (rc != SOCKET_ERROR);
+    nn_assert_win (rc != SOCKET_ERROR);
 
     nn_assert (addrlen < INT_MAX);
     rc = bind (self->s, addr, (int) addrlen);
@@ -302,7 +302,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *listener)
     }
 
     /*  We don't expect a synchronous failure at this point. */
-    wsa_assert (nn_slow (WSAGetLastError () == WSA_IO_PENDING));
+    nn_assert_win (WSAGetLastError () == WSA_IO_PENDING);
 
     /*  Pair the two sockets. */
     nn_assert (!self->asock);
@@ -345,8 +345,7 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
         brc = WSAIoctl (self->s, SIO_GET_EXTENSION_FUNCTION_POINTER,
             &fid, sizeof (fid), &pconnectex, sizeof (pconnectex),
             &nbytes, NULL, NULL) == 0;
-        wsa_assert (brc == TRUE);
-        nn_assert (nbytes == sizeof (pconnectex));
+        nn_assert_win (brc == TRUE && nbytes == sizeof (pconnectex));
 
         /*  Ensure it is safe to cast this value to what might be a smaller
             integer type to conform to the pconnectex function signature. */
@@ -423,7 +422,7 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
             return;
         }
         error = GetLastError();
-        win_assert (error == ERROR_NO_DATA);
+        nn_assert_win (error == ERROR_NO_DATA);
         self->errnum = EINVAL;
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_ERROR);
         return;
@@ -439,7 +438,7 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
         nn_worker_op_start (&self->out, 0);
         return;
     }
-    wsa_assert (error == WSAECONNABORTED || error == WSAECONNRESET ||
+    nn_assert_win (error == WSAECONNABORTED || error == WSAECONNRESET ||
         error == WSAENETDOWN || error == WSAENETRESET ||
         error == WSAENOBUFS || error == WSAEWOULDBLOCK);
     self->errnum = nn_err_wsa_to_posix (error);
@@ -498,7 +497,9 @@ void nn_usock_recv (struct nn_usock *self, void *buf, size_t len, int *fd)
         return;
    }
 
-    wsa_assert (0);
+    /*  This state is unexpected and unreachable, yet the Windows error
+        information is printed. */
+    nn_assert_unreachable (nn_assert_win (0));
 }
 
 static void nn_usock_create_io_completion (struct nn_usock *self)
@@ -534,7 +535,7 @@ static void nn_usock_create_pipe (struct nn_usock *self, const char *name)
         self->sec_attr);
 
     /* TODO: How to properly handle self->p == INVALID_HANDLE_VALUE? */
-    win_assert (self->p != INVALID_HANDLE_VALUE);
+    nn_assert_win (self->p != INVALID_HANDLE_VALUE);
 
     self->isaccepted = 1;
     nn_usock_create_io_completion (self);
@@ -620,7 +621,7 @@ void nn_usock_accept_pipe (struct nn_usock *self, struct nn_usock *listener)
     }
 
     /*  We don't expect a synchronous failure at this point. */
-    wsa_assert (nn_slow (winerror == WSA_IO_PENDING));
+    nn_assert_win (winerror == WSA_IO_PENDING);
 
     /*  Pair the two sockets. */
     nn_assert (!self->asock);
@@ -644,13 +645,13 @@ static void nn_usock_close (struct nn_usock *self)
             DisconnectNamedPipe(self->p);
         brc = CloseHandle (self->p);
         self->p = INVALID_HANDLE_VALUE;
-        win_assert (brc);
+        nn_assert_win (brc);
     }
     else
     {
         rc = closesocket (self->s);
         self->s = INVALID_SOCKET;
-        wsa_assert (rc == 0);
+        nn_assert_win (rc == 0);
     }
 }
 
@@ -1055,12 +1056,12 @@ static int nn_usock_cancel_io (struct nn_usock *self)
     rc = 0;
     if (!nn_worker_op_isidle (&self->in)) {
         brc = CancelIoEx (self->p, &self->in.olpd);
-        win_assert (brc || GetLastError () == ERROR_NOT_FOUND);
+        nn_assert_win (brc || GetLastError () == ERROR_NOT_FOUND);
         rc = 1;
     }
     if (!nn_worker_op_isidle (&self->out)) {
         brc = CancelIoEx (self->p, &self->out.olpd);
-        win_assert (brc || GetLastError () == ERROR_NOT_FOUND);
+        nn_assert_win (brc || GetLastError () == ERROR_NOT_FOUND);
         rc = 1;
     }
 

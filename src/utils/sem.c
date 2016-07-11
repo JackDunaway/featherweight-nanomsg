@@ -96,7 +96,7 @@ int nn_sem_wait (struct nn_sem *self)
 void nn_sem_init (struct nn_sem *self)
 {
     self->h = CreateEvent (NULL, FALSE, FALSE, NULL);
-    win_assert (self->h);
+    nn_assert_win (self->h);
 }
 
 void nn_sem_term (struct nn_sem *self)
@@ -104,7 +104,7 @@ void nn_sem_term (struct nn_sem *self)
     BOOL brc;
 
     brc = CloseHandle (self->h);
-    win_assert (brc);
+    nn_assert_win (brc);
 }
 
 void nn_sem_post (struct nn_sem *self)
@@ -112,7 +112,7 @@ void nn_sem_post (struct nn_sem *self)
     BOOL brc;
 
     brc = SetEvent (self->h);
-    win_assert (brc);
+    nn_assert_win (brc);
 }
 
 int nn_sem_wait (struct nn_sem *self)
@@ -120,8 +120,7 @@ int nn_sem_wait (struct nn_sem *self)
     DWORD rc;
 
     rc = WaitForSingleObject (self->h, INFINITE);
-    win_assert (rc != WAIT_FAILED);
-    nn_assert (rc == WAIT_OBJECT_0);
+    nn_assert_win (rc == WAIT_OBJECT_0);
 
     return 0;
 }

@@ -127,29 +127,16 @@
         }\
     } while (0)
 
-/* Checks the condition. If false prints out the GetLastError info. */
-#define win_assert(x) \
+/*  Checks the condition. If false prints out the WSAGetLastError info. Note
+    that it is assumed that `WSAGetLastError()` covers the range of errors
+    expected also from `GetLastError()` within this library. */
+#define nn_assert_win(x) \
     do {\
         if (nn_slow (!(x))) {\
             char errstr [256];\
             DWORD errnum = WSAGetLastError ();\
             nn_backtrace_print (); \
             nn_win_error ((int) errnum, errstr, 256);\
-            fprintf (stderr, "%s [%d] (%s:%d)\n",\
-                errstr, (int) errnum, __FILE__, __LINE__);\
-            fflush (stderr);\
-            nn_err_abort ();\
-        }\
-    } while (0)
-
-/* Checks the condition. If false prints out the WSAGetLastError info. */
-#define wsa_assert(x) \
-    do {\
-        if (nn_slow (!(x))) {\
-            char errstr [256];\
-            DWORD errnum = WSAGetLastError ();\
-            nn_backtrace_print (); \
-            nn_win_error (errnum, errstr, 256);\
             fprintf (stderr, "%s [%d] (%s:%d)\n",\
                 errstr, (int) errnum, __FILE__, __LINE__);\
             fflush (stderr);\

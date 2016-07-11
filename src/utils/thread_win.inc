@@ -38,7 +38,7 @@ void nn_thread_init (struct nn_thread *self,
     self->arg = arg;
     self->handle = (HANDLE) _beginthreadex (NULL, 0,
         nn_thread_main_routine, (void*) self, 0 , NULL);
-    win_assert (self->handle != NULL);
+    nn_assert_win (self->handle);
 }
 
 void nn_thread_term (struct nn_thread *self)
@@ -47,7 +47,7 @@ void nn_thread_term (struct nn_thread *self)
     BOOL brc;
 
     rc = WaitForSingleObject (self->handle, INFINITE);
-    win_assert (rc != WAIT_FAILED);
+    nn_assert_win (rc != WAIT_FAILED);
     brc = CloseHandle (self->handle);
-    win_assert (brc != 0);
+    nn_assert_win (brc != 0);
 }
