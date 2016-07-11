@@ -246,8 +246,6 @@ if (WIN32)
         aio/usock_win.inc
         aio/worker_win.h
         aio/worker_win.inc
-        utils/thread_win.h
-        utils/thread_win.inc
         utils/win.h
     )
 elseif (UNIX)
@@ -256,8 +254,6 @@ elseif (UNIX)
         aio/usock_posix.inc
         aio/worker_posix.h
         aio/worker_posix.inc
-        utils/thread_posix.h
-        utils/thread_posix.inc
     )
 else ()
     message (FATAL_ERROR "Assertion failed; this path is unreachable.")
