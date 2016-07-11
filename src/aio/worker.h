@@ -28,9 +28,91 @@
 #include "timerset.h"
 
 #if defined NN_HAVE_WINDOWS
-#include "worker_win.h"
+
+#include "../utils/win.h"
+#include "../utils/thread.h"
+
+struct nn_worker_task {
+    int src;
+    struct nn_fsm *owner;
+};
+
+#define NN_WORKER_OP_DONE 1
+#define NN_WORKER_OP_ERROR 2
+
+struct nn_worker_op {
+    int src;
+    struct nn_fsm *owner;
+    int state;
+
+    /*  This structure is to be used by the user, not nn_worker_op itself.
+        Actual usage is specific to the asynchronous operation in question. */
+    OVERLAPPED olpd;
+};
+
+void nn_worker_op_init (struct nn_worker_op *self, int src,
+    struct nn_fsm *owner);
+void nn_worker_op_term (struct nn_worker_op *self);
+
+/*  Call this function when asynchronous operation is started.
+    If 'zeroiserror' is set to 1, zero bytes transferred will be treated
+    as an error. */
+void nn_worker_op_start (struct nn_worker_op *self, int zeroiserror);
+
+int nn_worker_op_isidle (struct nn_worker_op *self);
+
+struct nn_worker {
+    HANDLE cp;
+    struct nn_timerset timerset;
+    struct nn_thread thread;
+};
+
+HANDLE nn_worker_getcp (struct nn_worker *self);
 #else
-#include "worker_posix.h"
+#include "../utils/queue.h"
+#include "../utils/mutex.h"
+#include "../utils/thread.h"
+#include "../utils/efd.h"
+
+#include "poller.h"
+
+#define NN_WORKER_FD_IN NN_POLLER_IN
+#define NN_WORKER_FD_OUT NN_POLLER_OUT
+#define NN_WORKER_FD_ERR NN_POLLER_ERR
+
+struct nn_worker_fd {
+    int src;
+    struct nn_fsm *owner;
+    struct nn_poller_hndl hndl;
+};
+
+void nn_worker_fd_init (struct nn_worker_fd *self, int src,
+    struct nn_fsm *owner);
+void nn_worker_fd_term (struct nn_worker_fd *self);
+
+struct nn_worker_task {
+    int src;
+    struct nn_fsm *owner;
+    struct nn_queue_item item;
+};
+
+struct nn_worker {
+    struct nn_mutex sync;
+    struct nn_queue tasks;
+    struct nn_queue_item stop;
+    struct nn_efd efd;
+    struct nn_poller poller;
+    struct nn_poller_hndl efd_hndl;
+    struct nn_timerset timerset;
+    struct nn_thread thread;
+};
+
+void nn_worker_add_fd (struct nn_worker *self, int s, struct nn_worker_fd *fd);
+void nn_worker_rm_fd(struct nn_worker *self, struct nn_worker_fd *fd);
+void nn_worker_set_in (struct nn_worker *self, struct nn_worker_fd *fd);
+void nn_worker_reset_in (struct nn_worker *self, struct nn_worker_fd *fd);
+void nn_worker_set_out (struct nn_worker *self, struct nn_worker_fd *fd);
+void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd);
 #endif
 
 #define NN_WORKER_TIMER_TIMEOUT 1
