@@ -244,16 +244,12 @@ if (WIN32)
     list (APPEND NN_SOURCES
         aio/usock_win.h
         aio/usock_win.inc
-        aio/worker_win.h
-        aio/worker_win.inc
         utils/win.h
     )
 elseif (UNIX)
     list (APPEND NN_SOURCES
         aio/usock_posix.h
         aio/usock_posix.inc
-        aio/worker_posix.h
-        aio/worker_posix.inc
     )
 else ()
     message (FATAL_ERROR "Assertion failed; this path is unreachable.")
