@@ -31,6 +31,7 @@
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
 #include "../../utils/attr.h"
+#include "../../utils/wire.h"
 
 #include <stddef.h>
 
@@ -170,16 +171,16 @@ int nn_xsurveyor_recv (struct nn_sockbase *self, struct nn_msg *msg)
 
     /*  Split the header from the body, if needed. */
     if (!(rc & NN_PIPE_PARSED)) {
-        if (nn_slow (nn_chunkref_size (&msg->body) < sizeof (uint32_t))) {
+        if (nn_chunkref_size (&msg->body) < NN_WIRE_REQID_LEN) {
             nn_msg_term (msg);
             return -EAGAIN;
         }
         nn_assert (nn_chunkref_size (&msg->sphdr) == 0);
         nn_chunkref_term (&msg->sphdr);
-        nn_chunkref_init (&msg->sphdr, sizeof (uint32_t));
+        nn_chunkref_init (&msg->sphdr, NN_WIRE_REQID_LEN);
         memcpy (nn_chunkref_data (&msg->sphdr), nn_chunkref_data (&msg->body),
-           sizeof (uint32_t));
-        nn_chunkref_trim (&msg->body, sizeof (uint32_t));
+            NN_WIRE_REQID_LEN);
+        nn_chunkref_trim (&msg->body, NN_WIRE_REQID_LEN);
     }
 
     return 0;
