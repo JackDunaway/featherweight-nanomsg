@@ -30,9 +30,8 @@
 
 int main ()
 {
-    int rc;
-    int i;
     int socks [MAX_SOCKETS];
+    int i;
 
     /*  First, just create as much SP sockets as possible. */
     for (i = 0; i != MAX_SOCKETS; ++i) {
