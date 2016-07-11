@@ -227,7 +227,7 @@ void nn_ws_handshake_start (struct nn_ws_handshake *self,
         break;
     default:
         /*  Developer error; unexpected mode. */
-        nn_assert (0);
+        nn_assert_unreachable ("Unexpected [mode] value.");
         break;
     }
 
@@ -427,8 +427,7 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
                         handshaker->recv_len, NULL);
                     return;
                 default:
-                    /*  Unexpected mode. */
-                    nn_assert (0);
+                    nn_assert_unreachable ("Unexpected [mode] value.");
                     return;
                 }
 
@@ -1314,8 +1313,7 @@ static void nn_ws_handshake_server_reply (struct nn_ws_handshake *self)
             code = "400 Unrecognized Socket Type";
             break;
         default:
-            /*  Unexpected failure response. */
-            nn_assert (0);
+            nn_assert_unreachable ("Unexpected [response_code] value.");
             break;
         }
 

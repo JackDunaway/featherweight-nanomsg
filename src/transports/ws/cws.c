@@ -643,8 +643,9 @@ static void nn_cws_start_connecting (struct nn_cws *self,
         ((struct sockaddr_in*) &remote)->sin_port = htons (self->remote_port);
     else if (remote.ss_family == AF_INET6)
         ((struct sockaddr_in6*) &remote)->sin6_port = htons (self->remote_port);
-    else
-        nn_assert (0);
+    else {
+        nn_assert_unreachable ("Unexpected ss_family.");
+    }
 
     /*  Try to start the underlying socket. */
     rc = nn_usock_start (&self->usock, remote.ss_family, SOCK_STREAM, 0);

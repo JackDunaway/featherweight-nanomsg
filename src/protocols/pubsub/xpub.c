@@ -133,8 +133,9 @@ static void nn_xpub_rm (struct nn_sockbase *self, struct nn_pipe *pipe)
 static void nn_xpub_in (NN_UNUSED struct nn_sockbase *self,
                        NN_UNUSED struct nn_pipe *pipe)
 {
-    /*  We shouldn't get any messages from subscribers. */
-    nn_assert (0);
+    /*  TODO: This must be refactored to avoid run-time errors caused by a
+        misbehaving peer. */
+    nn_assert_unreachable ("Refactor to be a run-time protocol error.");
 }
 
 static void nn_xpub_out (struct nn_sockbase *self, struct nn_pipe *pipe)

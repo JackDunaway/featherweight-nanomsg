@@ -252,7 +252,7 @@ int nn_err_wsa_to_posix (int wsaerr)
     case ERROR_NO_DATA:
         return EPIPE;
     default:
-        nn_assert (0);
+        nn_assert_unreachable ("Unexpected WSA error.");
     }
 }
 

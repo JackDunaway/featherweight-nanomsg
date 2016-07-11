@@ -177,7 +177,7 @@ static void nn_dns_shutdown (struct nn_fsm *self, int src, int type,
                 dns->state = NN_DNS_STATE_STOPPING;
                 return;
             }
-            nn_assert (0);
+            nn_assert_unreachable ("Unexpected gai_cancel return code.");
         }
         nn_fsm_stopped (&dns->fsm, NN_DNS_STOPPED);
         dns->state = NN_DNS_STATE_IDLE;

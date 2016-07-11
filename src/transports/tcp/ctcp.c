@@ -590,7 +590,7 @@ static void nn_ctcp_start_connecting (struct nn_ctcp *self,
     else if (remote.ss_family == AF_INET6)
         ((struct sockaddr_in6*) &remote)->sin6_port = htons (port);
     else
-        nn_assert (0);
+        nn_assert_unreachable ("Unexpected ss_family.");
 
     /*  Try to start the underlying socket. */
     rc = nn_usock_start (&self->usock, remote.ss_family, SOCK_STREAM, 0);
