@@ -106,7 +106,7 @@ int getevents (int s, int events, int timeout)
     }
 #if defined NN_HAVE_WINDOWS
     rc = select (0, &pollset, NULL, NULL, timeout < 0 ? NULL : &tv);
-    wsa_assert (rc != SOCKET_ERROR);
+    nn_assert_win (rc != SOCKET_ERROR);
 #else
     rc = select (maxfd, &pollset, NULL, NULL, timeout < 0 ? NULL : &tv);
     errno_assert (rc >= 0);

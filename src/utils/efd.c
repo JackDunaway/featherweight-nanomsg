@@ -165,7 +165,7 @@ int nn_efd_wait (struct nn_efd *self, int timeout)
             continue;
 	}
 
-        wsa_assert (rc >= 0);
+        nn_assert_win (rc >= 0);
         return 0;
     }
 }

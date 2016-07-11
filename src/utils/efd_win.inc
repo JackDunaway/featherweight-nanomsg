@@ -50,16 +50,16 @@ int nn_efd_init (struct nn_efd *self)
     sa.nLength = sizeof (sa);
     sa.bInheritHandle = FALSE;
     brc = InitializeSecurityDescriptor (&sd, SECURITY_DESCRIPTOR_REVISION);
-    win_assert (brc);
+    nn_assert_win (brc);
     brc = SetSecurityDescriptorDacl(&sd, TRUE, (PACL) NULL, FALSE);
-    win_assert (brc);
+    nn_assert_win (brc);
     sa.lpSecurityDescriptor = &sd;
 
     /*  This function has to be enclosed in a system-wide critical section
         so that two instances of the library don't accidentally create an efd
         crossing the process boundary. */
     sync = CreateMutex (&sa, FALSE, "Global\\nanomsg-port-mutex");
-    win_assert (sync != NULL);
+    nn_assert_win (sync != NULL);
 
     /*  Enter the critical section.   If we cannot get the object in 10 seconds
         then something is seriously wrong.  Just bail. */
@@ -87,7 +87,7 @@ int nn_efd_init (struct nn_efd *self)
     if (nn_slow (listener == SOCKET_ERROR))
         goto wsafail;
     brc = SetHandleInformation ((HANDLE) listener, HANDLE_FLAG_INHERIT, 0);
-    win_assert (brc);
+    nn_assert_win (brc);
 
     /*  This prevents subsequent attempts to create a signaler to fail bacause
         of "TCP port in use" problem. */
@@ -123,7 +123,7 @@ int nn_efd_init (struct nn_efd *self)
         if (nn_slow (listener == SOCKET_ERROR))
             goto wsafail;
         brc = SetHandleInformation ((HANDLE) self->w, HANDLE_FLAG_INHERIT, 0);
-        win_assert (brc);
+        nn_assert_win (brc);
 
         /*  Set TCP_NODELAY on the writer socket to make efd as fast as possible.
             There's only one byte going to be written, so batching would not make
@@ -177,14 +177,14 @@ int nn_efd_init (struct nn_efd *self)
 
     /*  Leave the critical section. */
     brc = ReleaseMutex (sync);
-    win_assert (brc != 0);
+    nn_assert_win (brc != 0);
     brc = CloseHandle (sync);
-    win_assert (brc != 0);
+    nn_assert_win (brc != 0);
 
     /*  Make the receiving socket non-blocking. */
     nonblock = 1;
     rc = ioctlsocket (self->r, FIONBIO, &nonblock);
-    wsa_assert (rc != SOCKET_ERROR);
+    nn_assert_win (rc != SOCKET_ERROR);
 
     /* Initialise the pre-allocated pollset. */
     FD_ZERO (&self->fds);
@@ -195,10 +195,9 @@ wsafail:
     rc = nn_err_wsa_to_posix (WSAGetLastError ());
 wsafail2:
     brc = ReleaseMutex (sync);
-    win_assert (brc != 0);
+    nn_assert_win (brc != 0);
 wsafail3:
     brc = CloseHandle (sync);
-    win_assert (brc != 0);
     return -rc;
 }
 
@@ -210,7 +209,7 @@ void nn_efd_stop (struct nn_efd *self)
 
     if (s != INVALID_SOCKET) {
         rc = closesocket (s);
-        wsa_assert (rc != INVALID_SOCKET);
+        nn_assert_win (rc != INVALID_SOCKET);
     }
 }
 
@@ -223,13 +222,13 @@ void nn_efd_term (struct nn_efd *self)
     self->r = INVALID_SOCKET;
     if (s != INVALID_SOCKET) {
         rc = closesocket (s);
-        wsa_assert (rc != INVALID_SOCKET);
+        nn_assert_win (rc != INVALID_SOCKET);
     }
     s = self->w;
     self->w = INVALID_SOCKET;
     if (s != INVALID_SOCKET) {
        rc = closesocket (s);
-       wsa_assert (rc != INVALID_SOCKET);
+       nn_assert_win (rc != INVALID_SOCKET);
     }
 }
 
@@ -246,7 +245,7 @@ void nn_efd_signal (struct nn_efd *self)
 
     if (nn_fast (s != INVALID_SOCKET)) {
         rc = send (s, (char*) &c, 1, 0);
-        wsa_assert (rc != SOCKET_ERROR);
+        nn_assert_win (rc != SOCKET_ERROR);
         nn_assert (rc == 1);
     }
 }
@@ -263,8 +262,8 @@ void nn_efd_unsignal (struct nn_efd *self)
         rc = recv (s, (char*) buf, sizeof (buf), 0);
         if (rc == SOCKET_ERROR && WSAGetLastError () == WSAEWOULDBLOCK)
             rc = 0;
-        wsa_assert (rc != SOCKET_ERROR);
         if (nn_fast (rc < sizeof (buf)))
+        nn_assert_win (rc != SOCKET_ERROR);
             break;
     }
 }

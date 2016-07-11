@@ -80,7 +80,7 @@ int nn_worker_op_isidle (struct nn_worker_op *self)
 int nn_worker_init (struct nn_worker *self)
 {
     self->cp = CreateIoCompletionPort (INVALID_HANDLE_VALUE, NULL, 0, 0);
-    win_assert (self->cp);
+    nn_assert_win (self->cp);
     nn_timerset_init (&self->timerset);
     nn_thread_init (&self->thread, nn_worker_routine, self);
 
@@ -94,14 +94,14 @@ void nn_worker_term (struct nn_worker *self)
     /*  Ask worker thread to terminate. */
     brc = PostQueuedCompletionStatus (self->cp, 0,
         (ULONG_PTR) &nn_worker_stop, NULL);
-    win_assert (brc);
+    nn_assert_win (brc);
 
     /*  Wait till worker thread terminates. */
     nn_thread_term (&self->thread);
 
     nn_timerset_term (&self->timerset);
     brc = CloseHandle (self->cp);
-    win_assert (brc);
+    nn_assert_win (brc);
 }
 
 void nn_worker_execute (struct nn_worker *self, struct nn_worker_task *task)
@@ -109,7 +109,7 @@ void nn_worker_execute (struct nn_worker *self, struct nn_worker_task *task)
     BOOL brc;
 
     brc = PostQueuedCompletionStatus (self->cp, 0, (ULONG_PTR) task, NULL);
-    win_assert (brc);
+    nn_assert_win (brc);
 }
 
 void nn_worker_add_timer (struct nn_worker *self, int timeout,
@@ -168,7 +168,7 @@ static void nn_worker_routine (void *arg)
             FALSE);
         if (nn_slow (!brc && GetLastError () == WAIT_TIMEOUT))
             continue;
-        win_assert (brc);
+        nn_assert_win (brc);
 
         for (i = 0; i != count; ++i) {
 
