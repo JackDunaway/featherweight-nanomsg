@@ -28,9 +28,23 @@
 typedef void (nn_thread_routine) (void*);
 
 #if defined NN_HAVE_WINDOWS
-#include "thread_win.h"
+#include "win.h"
+
+struct nn_thread
+{
+    nn_thread_routine *routine;
+    void *arg;
+    HANDLE handle;
+};
 #else
-#include "thread_posix.h"
+#include <pthread.h>
+
+struct nn_thread
+{
+    nn_thread_routine *routine;
+    void *arg;
+    pthread_t handle;
+};
 #endif
 
 void nn_thread_init (struct nn_thread *self,
