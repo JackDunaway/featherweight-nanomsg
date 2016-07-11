@@ -22,7 +22,6 @@
 
 #include "excl.h"
 
-#include "../../utils/fast.h"
 #include "../../utils/err.h"
 #include "../../utils/attr.h"
 
@@ -78,7 +77,7 @@ int nn_excl_send (struct nn_excl *self, struct nn_msg *msg)
 {
     int rc;
 
-    if (nn_slow (!self->outpipe))
+    if (!self->outpipe)
         return -EAGAIN;
 
     rc = nn_pipe_send (self->outpipe, msg);
@@ -94,7 +93,7 @@ int nn_excl_recv (struct nn_excl *self, struct nn_msg *msg)
 {
     int rc;
 
-    if (nn_slow (!self->inpipe))
+    if (!self->inpipe)
         return -EAGAIN;
 
     rc = nn_pipe_recv (self->inpipe, msg);

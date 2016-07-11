@@ -31,8 +31,6 @@
 /*  Include nn.h header to define nanomsg-specific error codes. */
 #include "../nn.h"
 
-#include "fast.h"
-
 #if defined _MSC_VER
 #define NN_NORETURN __declspec(noreturn)
 #elif defined __GNUC__
@@ -45,7 +43,7 @@
     Thus this macro. */
 #define nn_assert(x) \
     do {\
-        if (nn_slow (!(x))) {\
+        if (!(x)) {\
             nn_backtrace_print (); \
             fprintf (stderr, "Assertion failed: %s (%s:%d)\n", #x, \
                 __FILE__, __LINE__);\
@@ -67,7 +65,7 @@
 
 #define nn_assert_state(obj, state_name) \
     do {\
-        if (nn_slow ((obj)->state != state_name)) {\
+        if ((obj)->state != state_name) {\
             nn_backtrace_print (); \
             fprintf (stderr, \
                 "Assertion failed: %d == %s (%s:%d)\n", \
@@ -81,7 +79,7 @@
 /*  Checks whether memory allocation was successful. */
 #define nn_assert_alloc(x) \
     do {\
-        if (nn_slow (!x)) {\
+        if (!(x)) {\
             nn_backtrace_print (); \
             fprintf (stderr, "Out of memory (%s:%d)\n",\
                 __FILE__, __LINE__);\
@@ -93,7 +91,7 @@
 /*  Check the condition. If false prints out the errno. */
 #define errno_assert(x) \
     do {\
-        if (nn_slow (!(x))) {\
+        if (!(x)) {\
             nn_backtrace_print (); \
             fprintf (stderr, "%s [%d] (%s:%d)\n", nn_err_strerror (errno),\
                 (int) errno, __FILE__, __LINE__);\
@@ -105,7 +103,7 @@
 /*  Checks whether supplied errno number is an error. */
 #define errnum_assert(cond, err) \
     do {\
-        if (nn_slow (!(cond))) {\
+        if (!(cond)) {\
             nn_backtrace_print (); \
             fprintf (stderr, "%s [%d] (%s:%d)\n", nn_err_strerror (err),\
                 (int) (err), __FILE__, __LINE__);\
@@ -117,7 +115,7 @@
 /*  Checks whether the condition is true and an error is indeed present. */
 #define nn_assert_is_error(cond, code) \
     do {\
-        if (nn_slow (!(cond) || nn_errno () != code)) {\
+        if (!(cond) || nn_errno () != code) {\
             nn_backtrace_print ();\
             fprintf (stderr,\
                 "Expected %s and errno [%s=%d], yet errno is [%d] (%s:%d)\n",\
@@ -132,7 +130,7 @@
     expected also from `GetLastError()` within this library. */
 #define nn_assert_win(x) \
     do {\
-        if (nn_slow (!(x))) {\
+        if (!(x)) {\
             char errstr [256];\
             DWORD errnum = WSAGetLastError ();\
             nn_backtrace_print (); \

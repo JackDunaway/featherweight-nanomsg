@@ -28,7 +28,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/alloc.h"
 #include "../../utils/random.h"
 #include "../../utils/wire.h"
@@ -203,7 +202,7 @@ int nn_xrespondent_recv (struct nn_sockbase *self, struct nn_msg *msg)
     xrespondent = nn_cont (self, struct nn_xrespondent, sockbase);
 
     rc = nn_fq_recv (&xrespondent->inpipes, msg, &pipe);
-    if (nn_slow (rc < 0))
+    if (rc < 0)
         return rc;
 
     /*  Split the header (including survey ID) from the body, if needed. */

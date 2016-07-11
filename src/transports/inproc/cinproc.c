@@ -124,7 +124,7 @@ static void nn_cinproc_shutdown (struct nn_fsm *self, int src, int type,
 
     cinproc = nn_cont (self, struct nn_cinproc, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
 
         /*  First, unregister the endpoint from the global repository of inproc
             endpoints. This way, new connections cannot be created anymore. */
@@ -134,7 +134,7 @@ static void nn_cinproc_shutdown (struct nn_fsm *self, int src, int type,
         nn_sinproc_stop (&cinproc->sinproc);
         cinproc->state = NN_CINPROC_STATE_STOPPING;
     }
-    if (nn_slow (cinproc->state == NN_CINPROC_STATE_STOPPING)) {
+    if (cinproc->state == NN_CINPROC_STATE_STOPPING) {
         if (!nn_sinproc_isidle (&cinproc->sinproc))
             return;
         cinproc->state = NN_CINPROC_STATE_IDLE;

@@ -24,7 +24,6 @@
 #include "chunk.h"
 #include "atomic.h"
 #include "alloc.h"
-#include "fast.h"
 #include "wire.h"
 #include "err.h"
 
@@ -65,7 +64,7 @@ int nn_chunk_alloc (size_t size, int type, void **result)
 
     /*  Compute total size to be allocated. Check for overflow. */
     sz = hdrsz + size;
-    if (nn_slow (sz < hdrsz))
+    if (sz < hdrsz)
         return -ENOMEM;
 
     /*  Allocate the actual memory depending on the type. */
@@ -76,7 +75,7 @@ int nn_chunk_alloc (size_t size, int type, void **result)
     default:
         return -EINVAL;
     }
-    if (nn_slow (!self))
+    if (!self)
         return -ENOMEM;
 
     /*  Fill in the chunk header. */
@@ -113,12 +112,12 @@ int nn_chunk_realloc (size_t size, void **chunk)
         /* Compute new size, check for overflow. */
         hdr_size = nn_chunk_hdrsize ();
         new_size = hdr_size + size;
-        if (nn_slow (new_size < hdr_size))
+        if (new_size < hdr_size)
             return -ENOMEM;
 
         /*  Reallocate memory chunk. */
         new_chunk = nn_realloc (self, new_size);
-        if (nn_slow (new_chunk == NULL))
+        if (new_chunk == NULL)
             return -ENOMEM;
 
         new_chunk->size = size;
@@ -131,7 +130,7 @@ int nn_chunk_realloc (size_t size, void **chunk)
         new_ptr = NULL;
         rc = nn_chunk_alloc (size, 0, &new_ptr);
 
-        if (nn_slow (rc != 0)) {
+        if (rc != 0) {
             return rc;
         }
 

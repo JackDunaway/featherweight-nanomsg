@@ -27,7 +27,6 @@
 #include "ep.h"
 
 #include "../utils/err.h"
-#include "../utils/fast.h"
 
 /*  Internal pipe states. */
 #define NN_PIPEBASE_STATE_IDLE 1
@@ -82,7 +81,7 @@ int nn_pipebase_start (struct nn_pipebase *self)
     self->instate = NN_PIPEBASE_INSTATE_ASYNC;
     self->outstate = NN_PIPEBASE_OUTSTATE_IDLE;
     rc = nn_sock_add (self->sock, (struct nn_pipe*) self);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         self->state = NN_PIPEBASE_STATE_FAILED;
         return rc;
     }
@@ -101,7 +100,7 @@ void nn_pipebase_stop (struct nn_pipebase *self)
 
 void nn_pipebase_received (struct nn_pipebase *self)
 {
-    if (nn_fast (self->instate == NN_PIPEBASE_INSTATE_RECEIVING)) {
+    if (self->instate == NN_PIPEBASE_INSTATE_RECEIVING) {
         self->instate = NN_PIPEBASE_INSTATE_RECEIVED;
         return;
     }
@@ -113,7 +112,7 @@ void nn_pipebase_received (struct nn_pipebase *self)
 
 void nn_pipebase_sent (struct nn_pipebase *self)
 {
-    if (nn_fast (self->outstate == NN_PIPEBASE_OUTSTATE_SENDING)) {
+    if (self->outstate == NN_PIPEBASE_OUTSTATE_SENDING) {
         self->outstate = NN_PIPEBASE_OUTSTATE_SENT;
         return;
     }
@@ -187,7 +186,7 @@ int nn_pipe_send (struct nn_pipe *self, struct nn_msg *msg)
     pipebase->outstate = NN_PIPEBASE_OUTSTATE_SENDING;
     rc = pipebase->vfptr->send (pipebase, msg);
     errnum_assert (rc >= 0, -rc);
-    if (nn_fast (pipebase->outstate == NN_PIPEBASE_OUTSTATE_SENT)) {
+    if (pipebase->outstate == NN_PIPEBASE_OUTSTATE_SENT) {
         pipebase->outstate = NN_PIPEBASE_OUTSTATE_IDLE;
         return rc;
     }
@@ -207,7 +206,7 @@ int nn_pipe_recv (struct nn_pipe *self, struct nn_msg *msg)
     rc = pipebase->vfptr->recv (pipebase, msg);
     errnum_assert (rc >= 0, -rc);
 
-    if (nn_fast (pipebase->instate == NN_PIPEBASE_INSTATE_RECEIVED)) {
+    if (pipebase->instate == NN_PIPEBASE_INSTATE_RECEIVED) {
         pipebase->instate = NN_PIPEBASE_INSTATE_IDLE;
         return rc;
     }

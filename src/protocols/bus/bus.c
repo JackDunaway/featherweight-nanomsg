@@ -106,7 +106,7 @@ static int nn_bus_recv (struct nn_sockbase *self, struct nn_msg *msg)
 
     /*  Get next message. */
     rc = nn_xbus_recv (&bus->xbus.sockbase, msg);
-    if (nn_slow (rc == -EAGAIN))
+    if (rc == -EAGAIN)
         return -EAGAIN;
     errnum_assert (rc == 0, -rc);
     nn_assert (nn_chunkref_size (&msg->sphdr) == sizeof (uint64_t));

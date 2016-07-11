@@ -27,7 +27,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
 #include "../../utils/attr.h"
@@ -168,7 +167,7 @@ int nn_xreq_send_to (struct nn_sockbase *self, struct nn_msg *msg,
 
     /*  If request cannot be sent due to the pushback, drop it silenly. */
     rc = nn_lb_send (&nn_cont (self, struct nn_xreq, sockbase)->lb, msg, to);
-    if (nn_slow (rc == -EAGAIN))
+    if (rc == -EAGAIN)
         return -EAGAIN;
     errnum_assert (rc >= 0, -rc);
 

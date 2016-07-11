@@ -28,7 +28,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/alloc.h"
 
 #define NN_BINPROC_STATE_IDLE 1
@@ -73,7 +72,7 @@ int nn_binproc_create (void *hint, struct nn_epbase **epbase)
 
     /*  Register the inproc endpoint into a global repository. */
     rc = nn_ins_bind (&self->item, nn_binproc_connect);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_list_term (&self->sinprocs);
 
         /*  TODO: Now, this is ugly! We are getting the state machine into
@@ -145,7 +144,7 @@ static void nn_binproc_shutdown (struct nn_fsm *self, int src, int type,
 
     binproc = nn_cont (self, struct nn_binproc, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
 
         /*  First, unregister the endpoint from the global repository of inproc
             endpoints. This way, new connections cannot be created anymore. */
@@ -162,7 +161,7 @@ static void nn_binproc_shutdown (struct nn_fsm *self, int src, int type,
         binproc->state = NN_BINPROC_STATE_STOPPING;
         goto finish;
     }
-    if (nn_slow (binproc->state == NN_BINPROC_STATE_STOPPING)) {
+    if (binproc->state == NN_BINPROC_STATE_STOPPING) {
         nn_assert (src == NN_BINPROC_SRC_SINPROC && type == NN_SINPROC_STOPPED);
         sinproc = (struct nn_sinproc*) srcptr;
         nn_list_erase (&binproc->sinprocs, &sinproc->item);

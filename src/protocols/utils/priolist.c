@@ -24,7 +24,6 @@
 #include "priolist.h"
 
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/err.h"
 #include "../../utils/attr.h"
 
@@ -141,7 +140,7 @@ int nn_priolist_is_active (struct nn_priolist *self)
 
 struct nn_pipe *nn_priolist_getpipe (struct nn_priolist *self)
 {
-    if (nn_slow (self->current == -1))
+    if (self->current == -1)
         return NULL;
     return self->slots [self->current - 1].current->pipe;
 }

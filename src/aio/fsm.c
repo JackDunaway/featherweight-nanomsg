@@ -68,7 +68,7 @@ void nn_fsm_event_process (struct nn_fsm_event *self)
 
 void nn_fsm_feed (struct nn_fsm *self, int src, int type, void *srcptr)
 {
-    if (nn_slow (self->state != NN_FSM_STATE_STOPPING)) {
+    if (self->state != NN_FSM_STATE_STOPPING) {
         self->fn (self, src, type, srcptr);
     } else {
         self->shutdown_fn (self, src, type, srcptr);

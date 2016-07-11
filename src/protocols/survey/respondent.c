@@ -29,7 +29,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/alloc.h"
 #include "../../utils/wire.h"
 #include "../../utils/list.h"
@@ -113,7 +112,7 @@ static int nn_respondent_send (struct nn_sockbase *self, struct nn_msg *msg)
     respondent = nn_cont (self, struct nn_respondent, xrespondent.sockbase);
 
     /*  If there's no survey going on, report EFSM error. */
-    if (nn_slow (!(respondent->flags & NN_RESPONDENT_INPROGRESS)))
+    if (!(respondent->flags & NN_RESPONDENT_INPROGRESS))
         return -EFSM;
 
     /*  Tag the message with survey ID. */
@@ -140,14 +139,14 @@ static int nn_respondent_recv (struct nn_sockbase *self, struct nn_msg *msg)
     respondent = nn_cont (self, struct nn_respondent, xrespondent.sockbase);
 
     /*  Cancel current survey and clean up backtrace, if it exists. */
-    if (nn_slow (respondent->flags & NN_RESPONDENT_INPROGRESS)) {
+    if (respondent->flags & NN_RESPONDENT_INPROGRESS) {
         nn_chunkref_term (&respondent->backtrace);
         respondent->flags &= ~NN_RESPONDENT_INPROGRESS;
     }
 
     /*  Get next survey. */
     rc = nn_xrespondent_recv (&respondent->xrespondent.sockbase, msg);
-    if (nn_slow (rc == -EAGAIN))
+    if (rc == -EAGAIN)
         return -EAGAIN;
     errnum_assert (rc == 0, -rc);
 

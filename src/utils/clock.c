@@ -32,7 +32,6 @@
 #endif
 
 #include "clock.h"
-#include "fast.h"
 #include "err.h"
 #include "attr.h"
 
@@ -55,7 +54,7 @@ uint64_t nn_clock_ms (void)
     uint64_t ticks;
 
     /*  If the global timebase info is not initialised yet, init it. */
-    if (nn_slow (!nn_clock_timebase_info.denom))
+    if (!nn_clock_timebase_info.denom)
         mach_timebase_info (&nn_clock_timebase_info);
 
     ticks = mach_absolute_time ();

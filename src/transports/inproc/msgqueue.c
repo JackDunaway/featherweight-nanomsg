@@ -23,7 +23,6 @@
 #include "msgqueue.h"
 
 #include "../../utils/alloc.h"
-#include "../../utils/fast.h"
 #include "../../utils/err.h"
 
 #include <string.h>
@@ -85,7 +84,7 @@ int nn_msgqueue_send (struct nn_msgqueue *self, struct nn_msg *msg)
         we allow even messages that exceed max buffer size to pass through.
         Beyond that we'll apply the buffer limit as specified by the user. */
     msgsz = nn_chunkref_size (&msg->sphdr) + nn_chunkref_size (&msg->body);
-    if (nn_slow (self->count > 0 && self->mem + msgsz >= self->maxmem))
+    if (self->count > 0 && self->mem + msgsz >= self->maxmem)
         return -EAGAIN;
 
     /*  Adjust the statistics. */
@@ -98,8 +97,8 @@ int nn_msgqueue_send (struct nn_msgqueue *self, struct nn_msg *msg)
 
     /*  If there's no space for a new message in the pipe, either re-use
         the cache chunk or allocate a new chunk if it does not exist. */
-    if (nn_slow (self->out.pos == NN_MSGQUEUE_GRANULARITY)) {
-        if (nn_slow (!self->cache)) {
+    if (self->out.pos == NN_MSGQUEUE_GRANULARITY) {
+        if (!self->cache) {
             self->cache = nn_alloc (sizeof (struct nn_msgqueue_chunk),
                 "msgqueue chunk");
             nn_assert_alloc (self->cache);
@@ -119,7 +118,7 @@ int nn_msgqueue_recv (struct nn_msgqueue *self, struct nn_msg *msg)
     struct nn_msgqueue_chunk *o;
 
     /*  If there is no message in the queue. */
-    if (nn_slow (!self->count))
+    if (!self->count)
         return -EAGAIN;
 
     /*  Move the message from the pipe to the user. */
@@ -127,11 +126,11 @@ int nn_msgqueue_recv (struct nn_msgqueue *self, struct nn_msg *msg)
 
     /*  Move to the next position. */
     ++self->in.pos;
-    if (nn_slow (self->in.pos == NN_MSGQUEUE_GRANULARITY)) {
+    if (self->in.pos == NN_MSGQUEUE_GRANULARITY) {
         o = self->in.chunk;
         self->in.chunk = self->in.chunk->next;
         self->in.pos = 0;
-        if (nn_fast (!self->cache))
+        if (!self->cache)
             self->cache = o;
         else
             nn_free (o);

@@ -25,7 +25,6 @@
 #if defined NN_HAVE_WINDOWS
 
 #include "../utils/win.h"
-#include "../utils/fast.h"
 #include "../utils/sleep.h"
 #include "../utils/err.h"
 
@@ -45,7 +44,7 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
         if (fds [i].events & NN_POLLIN) {
             sz = sizeof (fd);
             rc = nn_getsockopt (fds [i].fd, NN_SOL_SOCKET, NN_RCVFD, &fd, &sz);
-            if (nn_slow (rc < 0)) {
+            if (rc < 0) {
                 errno = -rc;
                 return -1;
             }
@@ -55,7 +54,7 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
         if (fds [i].events & NN_POLLOUT) {
             sz = sizeof (fd);
             rc = nn_getsockopt (fds [i].fd, NN_SOL_SOCKET, NN_SNDFD, &fd, &sz);
-            if (nn_slow (rc < 0)) {
+            if (rc < 0) {
                 errno = -rc;
                 return -1;
             }
@@ -67,11 +66,11 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
     /*  Do the polling itself. */
     tv.tv_sec = timeout / 1000;
     tv.tv_usec = timeout % 1000 * 1000;
-    if (nn_fast (nfds)) {
+    if (nfds) {
         rc = select (-1, &fdset, NULL, NULL, &tv);
-        if (nn_slow (rc == 0))
+        if (rc == 0)
             return 0;
-        if (nn_slow (rc == SOCKET_ERROR)) {
+        if (rc == SOCKET_ERROR) {
             errno = nn_err_wsa_to_posix (WSAGetLastError ());
             return -1;
         }
@@ -92,7 +91,7 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
         if (fds [i].events & NN_POLLIN) {
             sz = sizeof (fd);
             rc = nn_getsockopt (fds [i].fd, NN_SOL_SOCKET, NN_RCVFD, &fd, &sz);
-            if (nn_slow (rc < 0)) {
+            if (rc < 0) {
                 errno = -rc;
                 return -1;
             }
@@ -103,7 +102,7 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
         if (fds [i].events & NN_POLLOUT) {
             sz = sizeof (fd);
             rc = nn_getsockopt (fds [i].fd, NN_SOL_SOCKET, NN_SNDFD, &fd, &sz);
-            if (nn_slow (rc < 0)) {
+            if (rc < 0) {
                 errno = -rc;
                 return -1;
             }
@@ -121,7 +120,6 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
 #else
 
 #include "../utils/alloc.h"
-#include "../utils/fast.h"
 #include "../utils/err.h"
 
 #include <poll.h>
@@ -145,7 +143,7 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
         if (fds [i].events & NN_POLLIN) {
             sz = sizeof (fd);
             rc = nn_getsockopt (fds [i].fd, NN_SOL_SOCKET, NN_RCVFD, &fd, &sz);
-            if (nn_slow (rc < 0)) {
+            if (rc < 0) {
                 nn_free (pfd);
                 errno = -rc;
                 return -1;
@@ -158,7 +156,7 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
         if (fds [i].events & NN_POLLOUT) {
             sz = sizeof (fd);
             rc = nn_getsockopt (fds [i].fd, NN_SOL_SOCKET, NN_SNDFD, &fd, &sz);
-            if (nn_slow (rc < 0)) {
+            if (rc < 0) {
                 nn_free (pfd);
                 errno = -rc;
                 return -1;
@@ -172,7 +170,7 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
 
     /*  Do the polling itself. */
     rc = poll (pfd, pos, timeout);
-    if (nn_slow (rc <= 0)) {
+    if (rc <= 0) {
         res = errno;
         nn_free (pfd);
         errno = res;

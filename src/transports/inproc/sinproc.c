@@ -132,8 +132,6 @@ void nn_sinproc_stop (struct nn_sinproc *self)
     nn_fsm_stop (&self->fsm);
 }
 
-
-
 static int nn_sinproc_send (struct nn_pipebase *self, struct nn_msg *msg)
 {
     struct nn_sinproc *sinproc;
@@ -193,7 +191,7 @@ static int nn_sinproc_recv (struct nn_pipebase *self, struct nn_msg *msg)
     /*  If there was a message from peer lingering because of the exceeded
         buffer limit, try to enqueue it once again. */
     if (sinproc->state != NN_SINPROC_STATE_DISCONNECTED) {
-        if (nn_slow (sinproc->flags & NN_SINPROC_FLAG_RECEIVING)) {
+        if (sinproc->flags & NN_SINPROC_FLAG_RECEIVING) {
             rc = nn_msgqueue_send (&sinproc->msgqueue, &sinproc->peer->msg);
             nn_assert (rc == 0 || rc == -EAGAIN);
             if (rc == 0) {
@@ -283,14 +281,13 @@ static void nn_sinproc_shutdown (struct nn_fsm *self, int src, int type,
     /*  ***************  */
 
     /*  Have we got notification that peer is stopped  */
-    if (nn_slow (sinproc->state != NN_SINPROC_STATE_STOPPING)) {
+    if (sinproc->state != NN_SINPROC_STATE_STOPPING) {
         return;
     }
 
     /*  Are all events processed? We can't cancel them unfortunately  */
     if (nn_fsm_event_active (&sinproc->event_received)
-        || nn_fsm_event_active (&sinproc->event_disconnect))
-    {
+        || nn_fsm_event_active (&sinproc->event_disconnect)) {
         return;
     }
     /*  These events are deemed to be impossible here  */

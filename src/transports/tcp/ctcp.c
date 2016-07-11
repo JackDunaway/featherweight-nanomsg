@@ -37,7 +37,6 @@
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
 #include "../../utils/alloc.h"
-#include "../../utils/fast.h"
 #include "../../utils/attr.h"
 
 #include <string.h>
@@ -150,12 +149,12 @@ int nn_ctcp_create (void *hint, struct nn_epbase **epbase)
     end = addr + addrlen;
 
     /*  Parse the port. */
-    if (nn_slow (!colon)) {
+    if (!colon) {
         nn_epbase_term (&self->epbase);
         return -EINVAL;
     }
     rc = nn_port_resolve (colon + 1, end - colon - 1);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_epbase_term (&self->epbase);
         return -EINVAL;
     }
@@ -239,7 +238,7 @@ static void nn_ctcp_shutdown (struct nn_fsm *self, int src, int type,
 
     ctcp = nn_cont (self, struct nn_ctcp, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (!nn_stcp_isidle (&ctcp->stcp)) {
             nn_epbase_stat_increment (&ctcp->epbase,
                 NN_STAT_DROPPED_CONNECTIONS, 1);
@@ -247,7 +246,7 @@ static void nn_ctcp_shutdown (struct nn_fsm *self, int src, int type,
         }
         ctcp->state = NN_CTCP_STATE_STOPPING_STCP_FINAL;
     }
-    if (nn_slow (ctcp->state == NN_CTCP_STATE_STOPPING_STCP_FINAL)) {
+    if (ctcp->state == NN_CTCP_STATE_STOPPING_STCP_FINAL) {
         if (!nn_stcp_isidle (&ctcp->stcp))
             return;
         nn_backoff_stop (&ctcp->retry);
@@ -255,7 +254,7 @@ static void nn_ctcp_shutdown (struct nn_fsm *self, int src, int type,
         nn_dns_stop (&ctcp->dns);
         ctcp->state = NN_CTCP_STATE_STOPPING;
     }
-    if (nn_slow (ctcp->state == NN_CTCP_STATE_STOPPING)) {
+    if (ctcp->state == NN_CTCP_STATE_STOPPING) {
         if (!nn_backoff_isidle (&ctcp->retry) ||
               !nn_usock_isidle (&ctcp->usock) ||
               !nn_dns_isidle (&ctcp->dns))
@@ -577,7 +576,7 @@ static void nn_ctcp_start_connecting (struct nn_ctcp *self,
             &local, &locallen);
     else
         rc = nn_iface_resolve ("*", 1, ipv4only, &local, &locallen);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CTCP_STATE_WAITING;
         return;
@@ -595,7 +594,7 @@ static void nn_ctcp_start_connecting (struct nn_ctcp *self,
 
     /*  Try to start the underlying socket. */
     rc = nn_usock_start (&self->usock, remote.ss_family, SOCK_STREAM, 0);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CTCP_STATE_WAITING;
         return;
@@ -615,7 +614,7 @@ static void nn_ctcp_start_connecting (struct nn_ctcp *self,
 
     /*  Bind the socket to the local network interface. */
     rc = nn_usock_bind (&self->usock, (struct sockaddr*) &local, locallen);
-    if (nn_slow (rc != 0)) {
+    if (rc != 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CTCP_STATE_WAITING;
         return;

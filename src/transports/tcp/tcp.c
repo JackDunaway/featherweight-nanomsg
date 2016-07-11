@@ -32,7 +32,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/alloc.h"
-#include "../../utils/fast.h"
 #include "../../utils/list.h"
 #include "../../utils/cont.h"
 
@@ -127,7 +126,7 @@ static int nn_tcp_optset_setopt (struct nn_optset *self, int option,
 
     switch (option) {
     case NN_TCP_NODELAY:
-        if (nn_slow (val != 0 && val != 1))
+        if (val != 0 && val != 1)
             return -EINVAL;
         optset->nodelay = val;
         return 0;

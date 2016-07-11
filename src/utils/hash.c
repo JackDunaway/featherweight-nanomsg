@@ -21,7 +21,6 @@
 */
 
 #include "hash.h"
-#include "fast.h"
 #include "alloc.h"
 #include "cont.h"
 #include "err.h"
@@ -107,7 +106,7 @@ void nn_hash_insert (struct nn_hash *self, uint32_t key,
 
     /*  If the hash is getting full, double the amount of slots and
         re-hash all the items. */
-    if (nn_slow (self->items * 2 > self->slots && self->slots < 0x80000000))
+    if (self->items * 2 > self->slots && self->slots < 0x80000000)
     nn_hash_rehash(self);
 }
 

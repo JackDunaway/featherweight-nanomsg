@@ -131,7 +131,7 @@ static void nn_dns_shutdown (struct nn_fsm *self, int src, int type,
     struct nn_dns *dns;
 
     dns = nn_cont (self, struct nn_dns, fsm);
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_fsm_stopped (&dns->fsm, NN_DNS_STOPPED);
         dns->state = NN_DNS_STATE_IDLE;
         return;

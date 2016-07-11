@@ -35,7 +35,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/alloc.h"
-#include "../../utils/fast.h"
 #include "../../utils/list.h"
 #include "../../utils/cont.h"
 

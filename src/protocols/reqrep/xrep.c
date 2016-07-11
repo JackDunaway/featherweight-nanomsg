@@ -28,7 +28,6 @@
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
-#include "../../utils/fast.h"
 #include "../../utils/alloc.h"
 #include "../../utils/random.h"
 #include "../../utils/wire.h"
@@ -204,7 +203,7 @@ int nn_xrep_recv (struct nn_sockbase *self, struct nn_msg *msg)
     xrep = nn_cont (self, struct nn_xrep, sockbase);
 
     rc = nn_fq_recv (&xrep->inpipes, msg, &pipe);
-    if (nn_slow (rc < 0))
+    if (rc < 0)
         return rc;
 
     if (!(rc & NN_PIPE_PARSED)) {

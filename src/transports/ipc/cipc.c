@@ -31,7 +31,6 @@
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
 #include "../../utils/alloc.h"
-#include "../../utils/fast.h"
 #include "../../utils/attr.h"
 
 #include <string.h>
@@ -163,7 +162,7 @@ static void nn_cipc_shutdown (struct nn_fsm *self, int src, int type,
 
     cipc = nn_cont (self, struct nn_cipc, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (!nn_sipc_isidle (&cipc->sipc)) {
             nn_epbase_stat_increment (&cipc->epbase,
                 NN_STAT_DROPPED_CONNECTIONS, 1);
@@ -171,14 +170,14 @@ static void nn_cipc_shutdown (struct nn_fsm *self, int src, int type,
         }
         cipc->state = NN_CIPC_STATE_STOPPING_SIPC_FINAL;
     }
-    if (nn_slow (cipc->state == NN_CIPC_STATE_STOPPING_SIPC_FINAL)) {
+    if (cipc->state == NN_CIPC_STATE_STOPPING_SIPC_FINAL) {
         if (!nn_sipc_isidle (&cipc->sipc))
             return;
         nn_backoff_stop (&cipc->retry);
         nn_usock_stop (&cipc->usock);
         cipc->state = NN_CIPC_STATE_STOPPING;
     }
-    if (nn_slow (cipc->state == NN_CIPC_STATE_STOPPING)) {
+    if (cipc->state == NN_CIPC_STATE_STOPPING) {
         if (!nn_backoff_isidle (&cipc->retry) ||
               !nn_usock_isidle (&cipc->usock))
             return;
@@ -390,7 +389,7 @@ static void nn_cipc_start_connecting (struct nn_cipc *self)
 
     /*  Try to start the underlying socket. */
     rc = nn_usock_start (&self->usock, AF_UNIX, SOCK_STREAM, 0);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CIPC_STATE_WAITING;
         return;

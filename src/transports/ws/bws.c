@@ -35,7 +35,6 @@
 #include "../../utils/cont.h"
 #include "../../utils/alloc.h"
 #include "../../utils/list.h"
-#include "../../utils/fast.h"
 
 #include <string.h>
 
@@ -118,13 +117,13 @@ int nn_bws_create (void *hint, struct nn_epbase **epbase)
     /*  Parse the port. */
     end = addr + strlen (addr);
     pos = strrchr (addr, ':');
-    if (nn_slow (!pos)) {
+    if (!pos) {
         nn_epbase_term (&self->epbase);
         return -EINVAL;
     }
     ++pos;
     rc = nn_port_resolve (pos, end - pos);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_epbase_term (&self->epbase);
         return -EINVAL;
     }
@@ -137,7 +136,7 @@ int nn_bws_create (void *hint, struct nn_epbase **epbase)
 
     /*  Parse the address. */
     rc = nn_iface_resolve (addr, pos - addr - 1, ipv4only, &ss, &sslen);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         nn_epbase_term (&self->epbase);
         return -ENODEV;
     }
@@ -200,7 +199,7 @@ static void nn_bws_shutdown (struct nn_fsm *self, int src, int type,
 
     bws = nn_cont (self, struct nn_bws, fsm);
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (bws->aws) {
             nn_aws_stop (bws->aws);
             bws->state = NN_BWS_STATE_STOPPING_AWS;
@@ -209,7 +208,7 @@ static void nn_bws_shutdown (struct nn_fsm *self, int src, int type,
             bws->state = NN_BWS_STATE_STOPPING_USOCK;
         }
     }
-    if (nn_slow (bws->state == NN_BWS_STATE_STOPPING_AWS)) {
+    if (bws->state == NN_BWS_STATE_STOPPING_AWS) {
         if (!nn_aws_isidle (bws->aws))
             return;
         nn_aws_term (bws->aws);
@@ -218,7 +217,7 @@ static void nn_bws_shutdown (struct nn_fsm *self, int src, int type,
         nn_usock_stop (&bws->usock);
         bws->state = NN_BWS_STATE_STOPPING_USOCK;
     }
-    if (nn_slow (bws->state == NN_BWS_STATE_STOPPING_USOCK)) {
+    if (bws->state == NN_BWS_STATE_STOPPING_USOCK) {
        if (!nn_usock_isidle (&bws->usock))
             return;
         for (it = nn_list_begin (&bws->awss);
@@ -230,7 +229,7 @@ static void nn_bws_shutdown (struct nn_fsm *self, int src, int type,
         bws->state = NN_BWS_STATE_STOPPING_AWSS;
         goto awss_stopping;
     }
-    if (nn_slow (bws->state == NN_BWS_STATE_STOPPING_AWSS)) {
+    if (bws->state == NN_BWS_STATE_STOPPING_AWSS) {
         nn_assert (src == NN_BWS_SRC_AWS && type == NN_AWS_STOPPED);
         aws = (struct nn_aws *) srcptr;
         nn_list_erase (&bws->awss, &aws->item);

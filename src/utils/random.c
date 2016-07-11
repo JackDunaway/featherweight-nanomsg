@@ -22,7 +22,6 @@
 
 #include "random.h"
 #include "clock.h"
-#include "fast.h"
 
 #ifdef NN_HAVE_WINDOWS
 #include "win.h"
@@ -64,7 +63,7 @@ void nn_random_generate (void *buf, size_t len)
 
         /*  Move the bytes to the output buffer. */
         memcpy (pos, &nn_random_state, len > 8 ? 8 : len);
-        if (nn_fast (len <= 8))
+        if (len <= 8)
             return;
         len -= 8;
         pos += 8;
