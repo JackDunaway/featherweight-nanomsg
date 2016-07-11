@@ -166,7 +166,7 @@ static int nn_respondent_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_respondent *self;
 
     self = nn_alloc (sizeof (struct nn_respondent), "socket (respondent)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_respondent_init (self, &nn_respondent_sockbase_vfptr, hint);
     *sockbase = &self->xrespondent.sockbase;
 

@@ -79,7 +79,7 @@
     } while (0)
 
 /*  Checks whether memory allocation was successful. */
-#define alloc_assert(x) \
+#define nn_assert_alloc(x) \
     do {\
         if (nn_slow (!x)) {\
             nn_backtrace_print (); \

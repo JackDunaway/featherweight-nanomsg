@@ -52,7 +52,7 @@ int main (int argc, const char *argv[])
     test_connect (sc, SOCKET_ADDRESS);
 
     buf1 = nn_allocmsg (256, 0);
-    alloc_assert (buf1);
+    nn_assert_alloc (buf1);
     for (i = 0; i != 256; ++i)
         buf1 [i] = (unsigned char) i;
     rc = nn_send (sc, &buf1, NN_MSG, 0);
@@ -70,7 +70,7 @@ int main (int argc, const char *argv[])
     errno_assert (rc == 0);
 
     buf1 = nn_allocmsg (256, 0);
-    alloc_assert (buf1);
+    nn_assert_alloc (buf1);
     for (i = 0; i != 256; ++i)
         buf1 [i] = (unsigned char) i;
     iov.iov_base = &buf1;

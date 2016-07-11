@@ -101,7 +101,7 @@ int nn_cipc_create (void *hint, struct nn_epbase **epbase)
 
     /*  Allocate the new endpoint object. */
     self = nn_alloc (sizeof (struct nn_cipc), "cipc");
-    alloc_assert (self);
+    nn_assert_alloc (self);
 
     /*  Initialise the structure. */
     nn_epbase_init (&self->epbase, &nn_cipc_epbase_vfptr, hint);

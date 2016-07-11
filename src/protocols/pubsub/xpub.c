@@ -111,7 +111,7 @@ static int nn_xpub_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     xpub = nn_cont (self, struct nn_xpub, sockbase);
 
     data = nn_alloc (sizeof (struct nn_xpub_data), "pipe data (pub)");
-    alloc_assert (data);
+    nn_assert_alloc (data);
     nn_dist_add (&xpub->outpipes, &data->item, pipe);
     nn_pipe_setdata (pipe, data);
 
@@ -179,7 +179,7 @@ int nn_xpub_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xpub *self;
 
     self = nn_alloc (sizeof (struct nn_xpub), "socket (xpub)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xpub_init (self, &nn_xpub_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

@@ -286,7 +286,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *listener)
     /*  If the memory for accept information is not yet allocated, do so.  */
     if (!listener->ainfo) {
         listener->ainfo = nn_alloc (512, "accept info");
-        alloc_assert (listener->ainfo);
+        nn_assert_alloc (listener->ainfo);
     }
 
     /*  Wait for the incoming connection. */
@@ -410,7 +410,7 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
 
         nn_assert (!self->pipesendbuf);
         self->pipesendbuf = nn_alloc (len, "named pipe sendbuf");
-        alloc_assert (self->pipesendbuf);
+        nn_assert_alloc (self->pipesendbuf);
 
         idx = 0;
         for (i = 0; i != iovcnt; ++i) {
@@ -600,7 +600,7 @@ void nn_usock_accept_pipe (struct nn_usock *self, struct nn_usock *listener)
     /*  If the memory for accept information is not yet allocated, do so now. */
     if (!listener->ainfo) {
         listener->ainfo = nn_alloc (512, "accept info");
-        alloc_assert (listener->ainfo);
+        nn_assert_alloc (listener->ainfo);
     }
 
     /*  Wait for the incoming connection. */

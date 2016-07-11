@@ -59,7 +59,7 @@ void test_allocmsg_reqrep ()
     /*  Make send fail and check whether the buffer is left alone
         rather than deallocated. */
     p = nn_allocmsg (100, 0);
-    alloc_assert (p);
+    nn_assert_alloc (p);
     nn_clear_errno ();
     rc = nn_send (req, &p, NN_MSG, NN_DONTWAIT);
     nn_assert_is_error (rc < 0, EAGAIN);
@@ -69,7 +69,7 @@ void test_allocmsg_reqrep ()
 
     /*  Same thing with nn_sendmsg(). */
     p = nn_allocmsg (100, 0);
-    alloc_assert (p);
+    nn_assert_alloc (p);
     iov.iov_base = &p;
     iov.iov_len = NN_MSG;
     memset (&hdr, 0, sizeof (hdr));
@@ -102,7 +102,7 @@ void test_reallocmsg_reqrep ()
 
     /*  Create message, make sure we handle overflow. */
     p = nn_allocmsg (100, 0);
-    alloc_assert (p);
+    nn_assert_alloc (p);
     nn_clear_errno ();
     p2 = nn_reallocmsg (p, (size_t)-3);
     nn_assert_is_error (!p2, ENOMEM);
@@ -110,7 +110,7 @@ void test_reallocmsg_reqrep ()
     /*  Realloc to fit data size. */
     memcpy (p, NN_TEST_MSG1, NN_TEST_MSG_LEN1);
     p = nn_reallocmsg (p, NN_TEST_MSG_LEN1);
-    alloc_assert (p);
+    nn_assert_alloc (p);
     rc = nn_send (req, &p, NN_MSG, 0);
     errno_assert (rc == NN_TEST_MSG_LEN1);
 
@@ -155,7 +155,7 @@ void test_reallocmsg_pubsub ()
 
     /*  Publish message. */
     p = nn_allocmsg (12, 0);
-    alloc_assert (p);
+    nn_assert_alloc (p);
     memcpy (p, NN_TEST_MSG1, NN_TEST_MSG_LEN1);
     rc = nn_send (pub, &p, NN_MSG, 0);
     errno_assert (rc == NN_TEST_MSG_LEN1);

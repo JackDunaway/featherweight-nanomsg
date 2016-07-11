@@ -207,7 +207,7 @@ static void nn_global_init (void)
     /*  Allocate the global table of SP sockets. */
     self.socks = nn_alloc ((sizeof (struct nn_sock*) * NN_MAX_SOCKETS) +
         (sizeof (uint16_t) * NN_MAX_SOCKETS), "socket table");
-    alloc_assert (self.socks);
+    nn_assert_alloc (self.socks);
     for (i = 0; i != NN_MAX_SOCKETS; ++i)
         self.socks [i] = NULL;
     self.nsocks = 0;
@@ -220,7 +220,7 @@ static void nn_global_init (void)
 
     /*  Allocate the stack of unused file descriptors. */
     self.unused = (uint16_t*) (self.socks + NN_MAX_SOCKETS);
-    alloc_assert (self.unused);
+    nn_assert_alloc (self.unused);
     for (i = 0; i != NN_MAX_SOCKETS; ++i)
         self.unused [i] = NN_MAX_SOCKETS - i - 1;
 
@@ -446,7 +446,7 @@ int nn_global_create_socket (int domain, int protocol)
 
             /*  Instantiate the socket. */
             sock = nn_alloc (sizeof (struct nn_sock), "sock");
-            alloc_assert (sock);
+            nn_assert_alloc (sock);
             rc = nn_sock_init (sock, socktype, s);
             if (rc < 0)
                 return rc;

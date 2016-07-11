@@ -112,7 +112,7 @@ static int nn_xpush_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     nn_assert (sndprio >= 1 && sndprio <= 16);
 
     data = nn_alloc (sizeof (struct nn_xpush_data), "pipe data (push)");
-    alloc_assert (data);
+    nn_assert_alloc (data);
     nn_pipe_setdata (pipe, data);
     nn_lb_add (&xpush->lb, &data->lb, pipe, sndprio);
 
@@ -183,7 +183,7 @@ int nn_xpush_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xpush *self;
 
     self = nn_alloc (sizeof (struct nn_xpush), "socket (push)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xpush_init (self, &nn_xpush_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

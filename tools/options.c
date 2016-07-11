@@ -331,10 +331,10 @@ static void nn_append_string (struct nn_parse_context *ctx,
     if (lst->items) {
         lst->num += 1;
         lst->items = nn_realloc (lst->items, sizeof (char *) * lst->num);
-        alloc_assert (lst->items);
+        nn_assert_alloc (lst->items);
     } else {
         lst->items = nn_alloc (sizeof (char *), "lst->items");
-        alloc_assert (lst->items);
+        nn_assert_alloc (lst->items);
         lst->num = 1;
     }
 
@@ -353,10 +353,10 @@ static void nn_append_string_to_free (struct nn_parse_context *ctx,
         lst->to_free_num += 1;
         lst->to_free = nn_realloc (lst->to_free,
                                 sizeof (char *) * lst->to_free_num);
-        alloc_assert (lst->to_free);
+        nn_assert_alloc (lst->to_free);
     } else {
         lst->to_free = nn_alloc (sizeof (char *), "lst->to_free");
-        alloc_assert (lst->to_free);
+        nn_assert_alloc (lst->to_free);
         lst->to_free_num = 1;
     }
 
@@ -444,7 +444,7 @@ static void nn_process_option (struct nn_parse_context *ctx,
         case NN_OPT_LIST_APPEND_FMT:
             data_buf = strlen (argument) + strlen (opt->pointer);
             data = nn_alloc (data_buf, "NN_OPT_LIST_APPEND_FMT");
-            alloc_assert (data);
+            nn_assert_alloc (data);
 #if defined NN_HAVE_WINDOWS
             data_len = _snprintf_s (data, data_buf, _TRUNCATE, opt->pointer,
                 argument);
@@ -467,7 +467,7 @@ static void nn_process_option (struct nn_parse_context *ctx,
                 }
             }
             data = nn_alloc (4096, "NN_OPT_READ_FILE");
-            alloc_assert (data);
+            nn_assert_alloc (data);
             data_len = 0;
             data_buf = 4096;
             for (;;) {
@@ -483,12 +483,12 @@ static void nn_process_option (struct nn_parse_context *ctx,
                         data_buf += 1 << 20;  /* grow 1 Mb each time */
                     }
                     data = nn_realloc (data, data_buf);
-                    alloc_assert (data);
+                    nn_assert_alloc (data);
                 }
             }
             if (data_len != data_buf) {
                 data = nn_realloc (data, data_len);
-                alloc_assert (data);
+                nn_assert_alloc (data);
             }
             if (ferror (file)) {
 #if defined _MSC_VER
@@ -754,7 +754,7 @@ void nn_parse_options (struct nn_commandline *cline,
     }
     
     ctx.last_option_usage = nn_alloc (sz, "last_option_usage");
-    alloc_assert (ctx.last_option_usage);
+    nn_assert_alloc (ctx.last_option_usage);
     memset (ctx.last_option_usage, 0, sz);
 
     ctx.mask = 0;

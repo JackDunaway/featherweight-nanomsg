@@ -165,7 +165,7 @@ int nn_xpair_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xpair *self;
 
     self = nn_alloc (sizeof (struct nn_xpair), "socket (pair)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xpair_init (self, &nn_xpair_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

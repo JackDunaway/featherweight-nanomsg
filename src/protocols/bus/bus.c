@@ -123,7 +123,7 @@ static int nn_bus_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_bus *self;
 
     self = nn_alloc (sizeof (struct nn_bus), "socket (bus)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_bus_init (self, &nn_bus_sockbase_vfptr, hint);
     *sockbase = &self->xbus.sockbase;
 

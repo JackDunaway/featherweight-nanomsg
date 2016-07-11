@@ -505,7 +505,7 @@ static int nn_surveyor_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_surveyor *self;
 
     self = nn_alloc (sizeof (struct nn_surveyor), "socket (surveyor)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_surveyor_init (self, &nn_surveyor_sockbase_vfptr, hint);
     *sockbase = &self->xsurveyor.sockbase;
 

@@ -96,7 +96,7 @@ int nn_xrespondent_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     nn_assert (rcvprio >= 1 && rcvprio <= 16);
 
     data = nn_alloc (sizeof (*data), "pipe data (xrespondent)");
-    alloc_assert (data);
+    nn_assert_alloc (data);
 
     data->pipe = pipe;
     nn_hash_item_init (&data->outitem);
@@ -277,7 +277,7 @@ static int nn_xrespondent_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xrespondent *self;
 
     self = nn_alloc (sizeof (struct nn_xrespondent), "socket (xrespondent)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xrespondent_init (self, &nn_xrespondent_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

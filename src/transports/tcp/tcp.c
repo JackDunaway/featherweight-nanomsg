@@ -95,7 +95,7 @@ static struct nn_optset *nn_tcp_optset ()
     struct nn_tcp_optset *optset;
 
     optset = nn_alloc (sizeof (struct nn_tcp_optset), "optset (tcp)");
-    alloc_assert (optset);
+    nn_assert_alloc (optset);
     optset->base.vfptr = &nn_tcp_optset_vfptr;
 
     /*  Default values for TCP socket options. */

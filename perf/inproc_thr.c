@@ -49,7 +49,7 @@ void worker (NN_UNUSED void *arg)
     nn_assert (rc >= 0);
 
     buf = nn_alloc (message_size, "inproc_thr_msg_worker");
-    alloc_assert (buf);
+    nn_assert_alloc (buf);
     memset (buf, 111, message_size);
 
     /*  Notify main thread worker is ready. */
@@ -92,7 +92,7 @@ int main (int argc, char *argv [])
     nn_assert (rc >= 0);
 
     buf = nn_alloc (message_size, "inproc_thr_msg");
-    alloc_assert (buf);
+    nn_assert_alloc (buf);
 
     /*  Launch worker and wait for its ready notification. */
     nn_thread_init (&thread, worker, NULL);

@@ -97,7 +97,7 @@ static struct nn_optset *nn_ipc_optset ()
     struct nn_ipc_optset *optset;
 
     optset = nn_alloc (sizeof (struct nn_ipc_optset), "optset (ipc)");
-    alloc_assert (optset);
+    nn_assert_alloc (optset);
     optset->base.vfptr = &nn_ipc_optset_vfptr;
 
     /*  Default values for the IPC options */

@@ -145,7 +145,7 @@ static int nn_rep_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_rep *self;
 
     self = nn_alloc (sizeof (struct nn_rep), "socket (rep)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_rep_init (self, &nn_rep_sockbase_vfptr, hint);
     *sockbase = &self->xrep.sockbase;
 
