@@ -60,7 +60,7 @@ int nn_binproc_create (void *hint, struct nn_epbase **epbase)
     struct nn_binproc *self;
 
     self = nn_alloc (sizeof (struct nn_binproc), "binproc");
-    alloc_assert (self);
+    nn_assert_alloc (self);
 
     nn_ins_item_init (&self->item, &nn_binproc_vfptr, hint);
     nn_fsm_init_root (&self->fsm, nn_binproc_handler, nn_binproc_shutdown,
@@ -125,7 +125,7 @@ static void nn_binproc_connect (struct nn_ins_item *self,
     nn_assert_state (binproc, NN_BINPROC_STATE_ACTIVE);
 
     sinproc = nn_alloc (sizeof (struct nn_sinproc), "sinproc");
-    alloc_assert (sinproc);
+    nn_assert_alloc (sinproc);
     nn_sinproc_init (sinproc, NN_BINPROC_SRC_SINPROC,
         &binproc->item.epbase, &binproc->fsm);
     nn_list_insert (&binproc->sinprocs, &sinproc->item,
@@ -221,7 +221,7 @@ static void nn_binproc_handler (struct nn_fsm *self, int src, int type,
             case NN_SINPROC_CONNECT:
                 peer = (struct nn_sinproc*) srcptr;
                 sinproc = nn_alloc (sizeof (struct nn_sinproc), "sinproc");
-                alloc_assert (sinproc);
+                nn_assert_alloc (sinproc);
                 nn_sinproc_init (sinproc, NN_BINPROC_SRC_SINPROC,
                     &binproc->item.epbase, &binproc->fsm);
                 nn_list_insert (&binproc->sinprocs, &sinproc->item,

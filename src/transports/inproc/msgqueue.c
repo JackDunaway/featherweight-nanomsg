@@ -37,7 +37,7 @@ void nn_msgqueue_init (struct nn_msgqueue *self, size_t maxmem)
     self->maxmem = maxmem;
 
     chunk = nn_alloc (sizeof (struct nn_msgqueue_chunk), "msgqueue chunk");
-    alloc_assert (chunk);
+    nn_assert_alloc (chunk);
     chunk->next = NULL;
 
     self->out.chunk = chunk;
@@ -102,7 +102,7 @@ int nn_msgqueue_send (struct nn_msgqueue *self, struct nn_msg *msg)
         if (nn_slow (!self->cache)) {
             self->cache = nn_alloc (sizeof (struct nn_msgqueue_chunk),
                 "msgqueue chunk");
-            alloc_assert (self->cache);
+            nn_assert_alloc (self->cache);
             self->cache->next = NULL;
         }
         self->out.chunk->next = self->cache;

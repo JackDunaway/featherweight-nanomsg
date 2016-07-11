@@ -113,7 +113,7 @@ static int nn_xpull_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     nn_assert (rcvprio >= 1 && rcvprio <= 16);
 
     data = nn_alloc (sizeof (struct nn_xpull_data), "pipe data (pull)");
-    alloc_assert (data);
+    nn_assert_alloc (data);
     nn_pipe_setdata (pipe, data);
     nn_fq_add (&xpull->fq, &data->fq, pipe, rcvprio);
 
@@ -185,7 +185,7 @@ int nn_xpull_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xpull *self;
 
     self = nn_alloc (sizeof (struct nn_xpull), "socket (pull)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xpull_init (self, &nn_xpull_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

@@ -209,7 +209,7 @@ void *nn_msg_chunk_new (size_t size, struct nn_list *msg_array)
     struct msg_chunk *self;
 
     self = nn_alloc (sizeof (struct msg_chunk), "msg_chunk");
-    alloc_assert (self);
+    nn_assert_alloc (self);
 
     nn_chunkref_init (&self->chunk, size);
     nn_list_item_init (&self->item);

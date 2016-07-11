@@ -96,7 +96,7 @@ int nn_xbus_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     nn_assert (rcvprio >= 1 && rcvprio <= 16);
 
     data = nn_alloc (sizeof (struct nn_xbus_data), "pipe data (xbus)");
-    alloc_assert (data);
+    nn_assert_alloc (data);
     nn_fq_add (&xbus->inpipes, &data->initem, pipe, rcvprio);
     nn_dist_add (&xbus->outpipes, &data->outitem, pipe);
     nn_pipe_setdata (pipe, data);
@@ -215,7 +215,7 @@ static int nn_xbus_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xbus *self;
 
     self = nn_alloc (sizeof (struct nn_xbus), "socket (bus)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xbus_init (self, &nn_xbus_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

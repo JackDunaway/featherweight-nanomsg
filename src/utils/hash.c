@@ -38,7 +38,7 @@ void nn_hash_init (struct nn_hash *self)
     self->items = 0;
     self->array = nn_alloc (sizeof (struct nn_list) * NN_HASH_INITIAL_SLOTS,
         "hash map");
-    alloc_assert (self->array);
+    nn_assert_alloc (self->array);
     for (i = 0; i != NN_HASH_INITIAL_SLOTS; ++i)
         nn_list_init (&self->array [i]);
 }
@@ -64,7 +64,7 @@ static void nn_hash_rehash (struct nn_hash *self) {
     oldarray = self->array;
     self->slots *= 2;
     self->array = nn_alloc (sizeof (struct nn_list) * self->slots, "hash map");
-    alloc_assert (self->array);
+    nn_assert_alloc (self->array);
     for (i = 0; i != self->slots; ++i)
     nn_list_init (&self->array [i]);
 

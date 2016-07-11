@@ -139,7 +139,7 @@ int nn_poll (struct nn_pollfd *fds, int nfds, int timeout)
 
     /*  Construct a pollset to be used with OS-level 'poll' function. */
     pfd = nn_alloc (sizeof (struct pollfd) * nfds * 2, "pollset");
-    alloc_assert (pfd);
+    nn_assert_alloc (pfd);
     pos = 0;
     for (i = 0; i != nfds; ++i) {
         if (fds [i].events & NN_POLLIN) {

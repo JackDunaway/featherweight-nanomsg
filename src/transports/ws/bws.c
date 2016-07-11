@@ -109,7 +109,7 @@ int nn_bws_create (void *hint, struct nn_epbase **epbase)
 
     /*  Allocate the new endpoint object. */
     self = nn_alloc (sizeof (struct nn_bws), "bws");
-    alloc_assert (self);
+    nn_assert_alloc (self);
 
     /*  Initalise the epbase. */
     nn_epbase_init (&self->epbase, &nn_bws_epbase_vfptr, hint);
@@ -400,7 +400,7 @@ static void nn_bws_start_accepting (struct nn_bws *self)
 
     /*  Allocate new aws state machine. */
     self->aws = nn_alloc (sizeof (struct nn_aws), "aws");
-    alloc_assert (self->aws);
+    nn_assert_alloc (self->aws);
     nn_aws_init (self->aws, NN_BWS_SRC_AWS, &self->epbase, &self->fsm);
 
     /*  Start waiting for a new incoming connection. */

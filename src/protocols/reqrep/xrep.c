@@ -99,7 +99,7 @@ int nn_xrep_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     nn_assert (rcvprio >= 1 && rcvprio <= 16);
 
     data = nn_alloc (sizeof (struct nn_xrep_data), "pipe data (xrep)");
-    alloc_assert (data);
+    nn_assert_alloc (data);
     data->pipe = pipe;
     nn_hash_item_init (&data->outitem);
     data->flags = 0;
@@ -279,7 +279,7 @@ static int nn_xrep_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xrep *self;
 
     self = nn_alloc (sizeof (struct nn_xrep), "socket (xrep)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xrep_init (self, &nn_xrep_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

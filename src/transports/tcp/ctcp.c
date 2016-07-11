@@ -130,7 +130,7 @@ int nn_ctcp_create (void *hint, struct nn_epbase **epbase)
 
     /*  Allocate the new endpoint object. */
     self = nn_alloc (sizeof (struct nn_ctcp), "ctcp");
-    alloc_assert (self);
+    nn_assert_alloc (self);
 
     /*  Initalise the endpoint. */
     nn_epbase_init (&self->epbase, &nn_ctcp_epbase_vfptr, hint);

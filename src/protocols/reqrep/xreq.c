@@ -100,7 +100,7 @@ int nn_xreq_add (struct nn_sockbase *self, struct nn_pipe *pipe)
     nn_assert (rcvprio >= 1 && rcvprio <= 16);
 
     data = nn_alloc (sizeof (struct nn_xreq_data), "pipe data (req)");
-    alloc_assert (data);
+    nn_assert_alloc (data);
     nn_pipe_setdata (pipe, data);
     nn_lb_add (&xreq->lb, &data->lb, pipe, sndprio);
     nn_fq_add (&xreq->fq, &data->fq, pipe, rcvprio);
@@ -223,7 +223,7 @@ static int nn_xreq_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xreq *self;
 
     self = nn_alloc (sizeof (struct nn_xreq), "socket (xreq)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xreq_init (self, &nn_xreq_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

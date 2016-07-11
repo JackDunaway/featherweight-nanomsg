@@ -94,7 +94,7 @@ int nn_xsurveyor_add (struct nn_sockbase *self, struct nn_pipe *pipe)
 
     data = nn_alloc (sizeof (struct nn_xsurveyor_data),
         "pipe data (xsurveyor)");
-    alloc_assert (data);
+    nn_assert_alloc (data);
     data->pipe = pipe;
     nn_fq_add (&xsurveyor->inpipes, &data->initem, pipe, rcvprio);
     nn_dist_add (&xsurveyor->outpipes, &data->outitem, pipe);
@@ -205,7 +205,7 @@ static int nn_xsurveyor_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_xsurveyor *self;
 
     self = nn_alloc (sizeof (struct nn_xsurveyor), "socket (xsurveyor)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_xsurveyor_init (self, &nn_xsurveyor_sockbase_vfptr, hint);
     *sockbase = &self->sockbase;
 

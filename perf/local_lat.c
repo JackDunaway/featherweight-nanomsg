@@ -68,7 +68,7 @@ int main (int argc, char *argv [])
     nn_assert (rc >= 0);
 
     buf = nn_alloc (sz, "local_lat_msg");
-    alloc_assert (buf);
+    nn_assert_alloc (buf);
     memset (buf, 111, sz);
 
     for (i = 0; i != rts; i++) {

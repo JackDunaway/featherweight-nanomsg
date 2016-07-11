@@ -62,7 +62,7 @@ int nn_cinproc_create (void *hint, struct nn_epbase **epbase)
     struct nn_cinproc *self;
 
     self = nn_alloc (sizeof (struct nn_cinproc), "cinproc");
-    alloc_assert (self);
+    nn_assert_alloc (self);
 
     nn_ins_item_init (&self->item, &nn_cinproc_vfptr, hint);
     nn_fsm_init_root (&self->fsm, nn_cinproc_handler, nn_cinproc_shutdown,

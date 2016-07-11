@@ -97,7 +97,7 @@ static struct nn_optset *nn_ws_optset ()
     struct nn_ws_optset *optset;
 
     optset = nn_alloc (sizeof (struct nn_ws_optset), "optset (ws)");
-    alloc_assert (optset);
+    nn_assert_alloc (optset);
     optset->base.vfptr = &nn_ws_optset_vfptr;
 
     /*  Default values for WebSocket options. */

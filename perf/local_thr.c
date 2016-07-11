@@ -69,7 +69,7 @@ int main (int argc, char *argv [])
     nn_assert (rc == 0);
 
     buf = nn_alloc (sz, "local_thr_msg");
-    alloc_assert (buf);
+    nn_assert_alloc (buf);
 
     nbytes = nn_recv (s, buf, sz, 0);
     nn_assert (nbytes == 0);

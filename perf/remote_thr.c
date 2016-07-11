@@ -66,7 +66,7 @@ int main (int argc, char *argv [])
     nn_assert (rc == 0);
 
     buf = nn_alloc (sz, "remote_thr_msg");
-    alloc_assert (buf);
+    nn_assert_alloc (buf);
     memset (buf, 111, sz);
 
     nbytes = nn_send (s, buf, 0, 0);

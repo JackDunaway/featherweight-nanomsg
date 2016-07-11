@@ -97,7 +97,7 @@ int nn_bipc_create (void *hint, struct nn_epbase **epbase)
 
     /*  Allocate the new endpoint object. */
     self = nn_alloc (sizeof (struct nn_bipc), "bipc");
-    alloc_assert (self);
+    nn_assert_alloc (self);
 
 
     /*  Initialise the structure. */
@@ -356,7 +356,7 @@ static void nn_bipc_start_accepting (struct nn_bipc *self)
 
     /*  Allocate new aipc state machine. */
     self->aipc = nn_alloc (sizeof (struct nn_aipc), "aipc");
-    alloc_assert (self->aipc);
+    nn_assert_alloc (self->aipc);
     nn_aipc_init (self->aipc, NN_BIPC_SRC_AIPC, &self->epbase, &self->fsm);
 
     /*  Start waiting for a new incoming connection. */

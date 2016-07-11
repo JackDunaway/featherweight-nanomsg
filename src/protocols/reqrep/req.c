@@ -633,7 +633,7 @@ static int nn_req_create (void *hint, struct nn_sockbase **sockbase)
     struct nn_req *self;
 
     self = nn_alloc (sizeof (struct nn_req), "socket (req)");
-    alloc_assert (self);
+    nn_assert_alloc (self);
     nn_req_init (self, &nn_req_sockbase_vfptr, hint);
     *sockbase = &self->xreq.sockbase;
 

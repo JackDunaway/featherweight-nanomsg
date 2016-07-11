@@ -1279,7 +1279,7 @@ static void nn_ws_handshake_server_reply (struct nn_ws_handshake *self)
         nn_assert (strlen (accept_key) == NN_WS_HANDSHAKE_ACCEPT_KEY_LEN);
 
         protocol = nn_alloc (self->protocol_len + 1, "WebSocket protocol");
-        alloc_assert (protocol);
+        nn_assert_alloc (protocol);
         strncpy (protocol, self->protocol, self->protocol_len);
         protocol [self->protocol_len] = '\0';
 
@@ -1321,7 +1321,7 @@ static void nn_ws_handshake_server_reply (struct nn_ws_handshake *self)
         }
 
         version = nn_alloc (self->version_len + 1, "WebSocket version");
-        alloc_assert (version);
+        nn_assert_alloc (version);
         strncpy (version, self->version, self->version_len);
         version [self->version_len] = '\0';
 

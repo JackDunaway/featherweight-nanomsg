@@ -110,7 +110,7 @@ int nn_btcp_create (void *hint, struct nn_epbase **epbase)
 
     /*  Allocate the new endpoint object. */
     self = nn_alloc (sizeof (struct nn_btcp), "btcp");
-    alloc_assert (self);
+    nn_assert_alloc (self);
 
     /*  Initalise the epbase. */
     nn_epbase_init (&self->epbase, &nn_btcp_epbase_vfptr, hint);
@@ -399,7 +399,7 @@ static void nn_btcp_start_accepting (struct nn_btcp *self)
 
     /*  Allocate new atcp state machine. */
     self->atcp = nn_alloc (sizeof (struct nn_atcp), "atcp");
-    alloc_assert (self->atcp);
+    nn_assert_alloc (self->atcp);
     nn_atcp_init (self->atcp, NN_BTCP_SRC_ATCP, &self->epbase, &self->fsm);
 
     /*  Start waiting for a new incoming connection. */
