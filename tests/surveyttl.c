@@ -28,6 +28,7 @@
 #include "../src/tcp.h"
 
 #include "testutil.h"
+
 #include "../src/utils/attr.h"
 #include "../src/utils/thread.c"
 
@@ -44,10 +45,6 @@ void device (NN_UNUSED void *arg)
     nn_clear_errno ();
     rc = nn_device (dev0, dev1);
     nn_assert_is_error (rc == -1, EBADF);
-
-    /*  Clean up. */
-    test_close (dev0);
-    test_close (dev1);
 }
 
 int main (int argc, const char *argv[])
@@ -82,13 +79,10 @@ int main (int argc, const char *argv[])
     test_connect (end0, socket_address_a);
     test_connect (end1, socket_address_b);
 
-    /*  Wait for TCP to establish. */
-    nn_sleep (100);
-
     /*  Set up max receive timeout. */
-    timeo = 100;
+    timeo = 1000;
     test_setsockopt (end0, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
-    timeo = 100;
+    timeo = 1000;
     test_setsockopt (end1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
 
     /*  Test default TTL is 8. */
@@ -118,7 +112,7 @@ int main (int argc, const char *argv[])
     nn_assert_is_error (rc == -1, EINVAL);
     nn_assert (maxttl == 8);
 
-    /*  Pass a message between endpoints. */
+    /*  Pass a message end-to-end between endpoints. */
     test_send (end0, "SURVEY");
     test_recv (end1, "SURVEY");
 
@@ -126,26 +120,42 @@ int main (int argc, const char *argv[])
     test_send (end1, "REPLYXYZ");
     test_recv (end0, "REPLYXYZ");
 
-    /*  Now set the max TTL. */
+    /*  Reduce max TTL so that message is dropped on a hop (by the device). */
     maxttl = 1;
     test_setsockopt (end0, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
     test_setsockopt (end1, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
 
+    /*  Even though we cannot assert a timeout means "success", anything else
+        is an explicit failure. For this reason, we temporarily decrease the
+        timeout for the sake of reducing test time, knowing the full timeout
+        period is the expected time penalty. */
+    timeo = 100;
+    test_setsockopt (end1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
     test_send (end0, "DROPTHIS");
+    nn_clear_errno ();
     test_drop (end1, ETIMEDOUT);
 
+    /*  Now increase max TTL, reset the timeout, and expect success again. */
     maxttl = 2;
     test_setsockopt (end0, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
     test_setsockopt (end1, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
+    timeo = 1000;
+    test_setsockopt (end1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
+
+    /*  Final end-to-end test. */
     test_send (end0, "DONTDROP");
     test_recv (end1, "DONTDROP");
+    test_send (end1, "GOTIT");
+    test_recv (end0, "GOTIT");
 
     /*  Clean up. */
     test_close (end0);
     test_close (end1);
 
     /*  Shut down the devices. */
-    nn_term ();
+    test_close (dev0);
+    test_close (dev1);
+
     nn_thread_term (&thread1);
 
     return 0;
