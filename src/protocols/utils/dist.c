@@ -70,9 +70,6 @@ int nn_dist_send (struct nn_dist *self, struct nn_msg *msg,
     struct nn_dist_data *data;
     struct nn_msg copy;
 
-    /*  TODO: We can optimise for the case when there's only one outbound
-        pipe here. No message copying is needed in such case. */
-
     /*  In the specific case when there are no outbound pipes. There's nowhere
         to send the message to. Deallocate it. */
     if (self->count == 0) {
