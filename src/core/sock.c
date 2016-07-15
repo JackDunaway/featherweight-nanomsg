@@ -1091,16 +1091,31 @@ void nn_sock_stat_increment (struct nn_sock *self, int name, int64_t increment)
             nn_assert(increment < INT_MAX && increment > -INT_MAX);
             self->statistics.inprogress_connections += (int) increment;
             break;
-        case NN_STAT_CURRENT_SND_PRIORITY:
-            /*  This is an exception, we don't want to increment priority  */
-            nn_assert((increment > 0 && increment <= 16) || increment == -1);
-            self->statistics.current_snd_priority = (int) increment;
-            break;
         case NN_STAT_CURRENT_EP_ERRORS:
             nn_assert (increment > 0 ||
                 self->statistics.current_ep_errors >= -increment);
             nn_assert(increment < INT_MAX && increment > -INT_MAX);
             self->statistics.current_ep_errors += (int) increment;
+            break;
+        default:
+            nn_assert_unreachable ("Unexpected statistic name.");
+            break;
+    }
+}
+
+void nn_sock_statistic_set (struct nn_sock *self, int name, int value)
+{
+    switch (name) {
+        case NN_STAT_CURRENT_SND_PRIORITY:
+            nn_assert ((value > 0 && value <= 16) || value == -1);
+            self->statistics.current_snd_priority = value;
+            break;
+        case NN_STAT_CURRENT_RCV_PRIORITY:
+            nn_assert ((value > 0 && value <= 16) || value == -1);
+            self->statistics.current_rcv_priority = value;
+            break;
+        default:
+            nn_assert_unreachable ("Unexpected statistic name.");
             break;
     }
 }

@@ -191,8 +191,9 @@ int nn_sock_add (struct nn_sock *self, struct nn_pipe *pipe);
 void nn_sock_rm (struct nn_sock *self, struct nn_pipe *pipe);
 
 /*  Monitoring callbacks  */
-void nn_sock_report_error(struct nn_sock *self, struct nn_ep *ep,  int errnum);
-void nn_sock_stat_increment(struct nn_sock *self, int name, int64_t increment);
+void nn_sock_report_error (struct nn_sock *self, struct nn_ep *ep, int errnum);
+void nn_sock_stat_increment (struct nn_sock *self, int name, int64_t increment);
+void nn_sock_statistic_set (struct nn_sock *self, int name, int value);
 
 /*  Holds and releases. */
 int nn_sock_hold (struct nn_sock *self);
