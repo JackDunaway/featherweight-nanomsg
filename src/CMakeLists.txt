@@ -80,7 +80,6 @@ set (NN_SOURCES
     utils/efd.c
     utils/err.h
     utils/err.c
-    utils/fd.h
     utils/hash.h
     utils/hash.c
     utils/list.h
@@ -261,28 +260,12 @@ endif ()
 
 if (NN_HAVE_EVENTFD)
     add_definitions (-DNN_USE_EVENTFD)
-    list (APPEND NN_SOURCES
-        utils/efd_eventfd.h
-        utils/efd_eventfd.inc
-    )
 elseif (NN_HAVE_PIPE)
     add_definitions (-DNN_USE_PIPE)
-    list (APPEND NN_SOURCES
-        utils/efd_pipe.h
-        utils/efd_pipe.inc
-    )
 elseif (NN_HAVE_SOCKETPAIR)
     add_definitions (-DNN_USE_SOCKETPAIR)
-    list (APPEND NN_SOURCES
-        utils/efd_socketpair.h
-        utils/efd_socketpair.inc
-    )
 elseif (NN_HAVE_WINSOCK)
     add_definitions (-DNN_USE_WINSOCK)
-    list (APPEND NN_SOURCES
-        utils/efd_win.h
-        utils/efd_win.inc
-    )
 else ()
     message (SEND_ERROR "ERROR: could not determine socket signaling method.")
     message (SEND_ERROR "${ISSUE_REPORT_MSG}" )
