@@ -152,8 +152,7 @@ int nn_sockbase_getopt (struct nn_sockbase *self, int option,
     void *optval, size_t *optvallen);
 
 /*  Add some statistics for socket  */
-void nn_sockbase_stat_increment (struct nn_sockbase *self, int name,
-    int increment);
+void nn_sockbase_statistic_set (struct nn_sockbase *self, int name, int value);
 
 /******************************************************************************/
 /*  The socktype class.                                                       */
