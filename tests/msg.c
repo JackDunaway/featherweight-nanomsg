@@ -21,18 +21,14 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-
 #include "testutil.h"
 
-#include <string.h>
+/*  Test parameters. */
+#define addr_inproc "inproc://a"
+static char addr_tcp [128];
+char longdata [1 << 20];
 
-#define SOCKET_ADDRESS "inproc://a"
-
-char longdata[1 << 20];
-
-int main (int argc, const char *argv[])
+int main (int argc, char *argv [])
 {
     int rc;
     int sb;
@@ -41,15 +37,13 @@ int main (int argc, const char *argv[])
     int i;
     struct nn_iovec iov;
     struct nn_msghdr hdr;
-    char socket_address_tcp[128];
 
-    test_addr_from(socket_address_tcp, "tcp", "127.0.0.1",
-            get_test_port(argc, argv));
+    test_build_addr (addr_tcp, "tcp", "127.0.0.1", get_test_port (argc, argv));
 
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr_inproc);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr_inproc);
 
     buf1 = nn_allocmsg (256, 0);
     nn_assert_alloc (buf1);
@@ -103,9 +97,9 @@ int main (int argc, const char *argv[])
     /*  Test receiving of large message  */
 
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, socket_address_tcp);
+    test_bind (sb, addr_tcp);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, socket_address_tcp);
+    test_connect (sc, addr_tcp);
 
     for (i = 0; i < (int) sizeof (longdata); ++i)
         longdata[i] = '0' + (i % 10);

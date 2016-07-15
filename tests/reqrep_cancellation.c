@@ -20,30 +20,30 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/reqrep.h"
-
 #include "testutil.h"
 
-#define TIMEOUT 100
+/*  Test parameters. */
+#define TIMEOUT 1000
 #define MESSAGE "ABC"
 #define ITERATIONS 100
+char addr_tcp [128];
+char addr_ws [128];
 
-int main (int argc, const char *argv[])
+int main (int argc, char *argv [])
 {
-    char tcp_addr [128];
-    char ws_addr [128];
     char *addr;
     size_t sz;
-    int initial_sleep;
     int transport;
     int timeo;
+    int time;
     int rep;
     int req;
     int i;
 
-    test_addr_from (tcp_addr, "tcp", "127.0.0.1", get_test_port (argc, argv));
-    test_addr_from (ws_addr, "ws", "127.0.0.1", get_test_port (argc, argv) + 1);
+    int port = get_test_port (argc, argv);
+
+    test_build_addr (addr_tcp, "tcp", "127.0.0.1", port);
+    test_build_addr (addr_ws, "ws", "127.0.0.1", port + 1);
     sz = sizeof (timeo);
 
     /*  Iterate this test over all transports. */
@@ -51,20 +51,16 @@ int main (int argc, const char *argv[])
 
         switch (transport) {
         case 0:
-            addr = tcp_addr;
-            initial_sleep = 0;
+            addr = addr_tcp;
             break;
         case 1:
-            addr = ws_addr;
-            initial_sleep = 0;
+            addr = addr_ws;
             break;
         case 2:
             addr = "inproc://nn_test_reqrep_cancellation";
-            initial_sleep = 0;
             break;
         case 3:
             addr = "ipc://nn_test_reqrep_cancellation";
-            initial_sleep = 0;
             break;
         }
 
@@ -76,8 +72,6 @@ int main (int argc, const char *argv[])
         test_setsockopt (rep, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sz);
         nn_assert (timeo == TIMEOUT);
 
-        nn_sleep (initial_sleep);
-
         for (i = 0; i != ITERATIONS; i++) {
             req = test_socket (AF_SP, NN_REQ);
             test_connect (req, addr);
@@ -86,6 +80,8 @@ int main (int argc, const char *argv[])
             nn_assert (timeo == TIMEOUT);
             test_setsockopt (req, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sz);
             nn_assert (timeo == TIMEOUT);
+            time = test_wait_for_stat (req, NN_STAT_CURRENT_CONNECTIONS, 1, 2000);
+            nn_assert (time >= 0);
 
             /*  Send two requests in rapid succession, effectively cancelling
                 the first request. For any given transport, it's a race

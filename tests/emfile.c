@@ -20,34 +20,97 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-#include "../src/tcp.h"
-
 #include "testutil.h"
+#include "../src/utils/atomic.c"
 
-#define MAX_SOCKETS 1000
+/*  Test parameters. */
+#define MAX_SOCKETS 2048
+#define COMPETITORS 10
+struct nn_atomic parallel_socks;
+struct nn_atomic serial_socks;
 
-int main ()
+void competitor (NN_UNUSED void *arg)
 {
+    int mysocks [MAX_SOCKETS];
+    int i;
+
+    /*  Basic synchronization before beginning the socket-creation race.  */
+    nn_sleep (10);
+
+    /*  Compete against other workers to create as many sockets as possible. */
+    for (i = 0; i != MAX_SOCKETS; i++) {
+        nn_clear_errno ();
+        mysocks [i] = nn_socket (AF_SP, NN_PAIR);
+        if (mysocks [i] < 0) {
+            nn_assert_is_error (mysocks [i] == -1, EMFILE);
+            i--;
+            break;
+        }
+        nn_atomic_inc (&parallel_socks, 1);
+
+        /*  Yielding here tends to create the most concurrent contention by
+            intersticing all threads. */
+        nn_yield ();
+    }
+
+    /*  It should be impossible for any one parallel competitor to have created
+        more sockets than what was created in a single-threaded serial
+        procedure. */
+    nn_assert (i <= (int) serial_socks.n);
+
+    /*  Ensure clean shutdown of all sockets created by this competitor. */
+    for (i; i >=0; --i) {
+        test_close (mysocks [i]);
+    }
+
+}
+
+int main (int argc, char *argv [])
+{
+    struct nn_thread thread [COMPETITORS];
     int socks [MAX_SOCKETS];
     int i;
 
-    /*  First, just create as much SP sockets as possible. */
+    /*  First, just create as many sockets as possible serially. */
+    nn_atomic_init (&serial_socks, 0);
     for (i = 0; i != MAX_SOCKETS; ++i) {
         nn_clear_errno ();
         socks [i] = nn_socket (AF_SP, NN_PAIR);
         if (socks [i] < 0) {
             nn_assert_is_error (socks [i] == -1, EMFILE);
+            i--;
             break;
         }
+        nn_atomic_inc (&serial_socks, 1);
     }
-    while (1) {
-        --i;
-        if (i == -1)
-            break;
+
+    /*  Next, ensure a clean shutdown of all sockets. */
+    for (i; i >=0; --i) {
         test_close (socks [i]);
     }
+
+    /*  Launch many competitors in parallel that are all trying to create
+        as many sockets as possible. */
+    nn_atomic_init (&parallel_socks, 0);
+    for (i = 0; i != COMPETITORS; ++i) {
+        nn_thread_init (&thread [i], competitor, NULL);
+    }
+    for (i = 0; i != COMPETITORS; ++i) {
+        nn_thread_term (&thread [i]);
+    }
+
+    /*  At a minimum, all threads would start concurrently and contend for
+        new socket slots before any of the others began shutting down its
+        own sockets.... */
+    nn_assert (parallel_socks.n >= serial_socks.n);
+
+    /*  ... and at maximum, each thread would create all its sockets and
+        even have time to destroy them all prior to the next competitor
+        beginning to create sockets. */
+    nn_assert (parallel_socks.n <= serial_socks.n * COMPETITORS);
+
+    nn_atomic_term (&parallel_socks);
+    nn_atomic_term (&serial_socks);
 
     return 0;
 }

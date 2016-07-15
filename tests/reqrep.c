@@ -20,14 +20,12 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/reqrep.h"
-
 #include "testutil.h"
 
+/*  Test parameters. */
 #define SOCKET_ADDRESS "inproc://test"
 
-int main ()
+int main (int argc, char *argv [])
 {
     int rc;
     int rep1;
@@ -117,7 +115,7 @@ int main ()
 
     rep1 = test_socket (AF_SP, NN_REP);
     test_bind (rep1, SOCKET_ADDRESS);
-    timeo = 200;
+    timeo = 1000;
     test_setsockopt (rep1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
     test_recv (rep1, "ABC");
 
@@ -134,7 +132,7 @@ int main ()
     rep2 = test_socket (AF_SP, NN_REP);
     test_connect (rep2, SOCKET_ADDRESS);
 
-    timeo = 200;
+    timeo = 1000;
     test_setsockopt (rep1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
     test_setsockopt (rep2, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
 
@@ -161,7 +159,7 @@ int main ()
 
     rep1 = test_socket (AF_SP, NN_REP);
     test_bind (rep1, SOCKET_ADDRESS);
-    timeo = 100;
+    timeo = 1000;
     test_setsockopt (rep1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
     test_recv (rep1, "DEF");
 
@@ -170,4 +168,3 @@ int main ()
 
     return 0;
 }
-

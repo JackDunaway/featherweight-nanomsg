@@ -21,76 +21,78 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/reqrep.h"
-
 #include "testutil.h"
 
-int main (int argc, const char *argv[])
+/*  Test parameters. */
+static char addr [128];
+
+int main (int argc, char *argv [])
 {
+    int time;
     int rep1;
     int req1;
-    char socket_address[128];
 
-    test_addr_from(socket_address, "tcp", "127.0.0.1",
-            get_test_port(argc, argv));
+    test_build_addr (addr, "tcp", "127.0.0.1", get_test_port (argc, argv));
 
     /*  Test req/rep with full socket types. */
     rep1 = test_socket (AF_SP, NN_REP);
-    test_bind (rep1, socket_address);
-    nn_sleep (100);
+    test_bind (rep1, addr);
 
     req1 = test_socket (AF_SP, NN_REQ);
-    test_connect (req1, socket_address);
-    nn_sleep (200);
+    test_connect (req1, addr);
+    time = test_wait_for_stat (rep1, NN_STAT_ACCEPTED_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+    time = test_wait_for_stat (req1, NN_STAT_ESTABLISHED_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+    time = test_wait_for_stat (req1, NN_STAT_CURRENT_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+    time = test_wait_for_stat (req1, NN_STAT_CURRENT_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
 
-    nn_assert (nn_get_statistic(rep1, NN_STAT_ACCEPTED_CONNECTIONS) == 1);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_ESTABLISHED_CONNECTIONS) == 0);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_CURRENT_CONNECTIONS) == 1);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_MESSAGES_SENT) == 0);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_MESSAGES_RECEIVED) == 0);
+    nn_assert_stat_value (rep1, NN_STAT_ESTABLISHED_CONNECTIONS, 0);
+    nn_assert_stat_value (rep1, NN_STAT_MESSAGES_SENT, 0);
+    nn_assert_stat_value (rep1, NN_STAT_MESSAGES_RECEIVED, 0);
 
-    nn_assert (nn_get_statistic(req1, NN_STAT_ACCEPTED_CONNECTIONS) == 0);
-    nn_assert (nn_get_statistic(req1, NN_STAT_ESTABLISHED_CONNECTIONS) == 1);
-    nn_assert (nn_get_statistic(req1, NN_STAT_CURRENT_CONNECTIONS) == 1);
-    nn_assert (nn_get_statistic(req1, NN_STAT_MESSAGES_SENT) == 0);
-    nn_assert (nn_get_statistic(req1, NN_STAT_MESSAGES_RECEIVED) == 0);
+    nn_assert_stat_value (req1, NN_STAT_ACCEPTED_CONNECTIONS, 0);
+    nn_assert_stat_value (req1, NN_STAT_MESSAGES_SENT, 0);
+    nn_assert_stat_value (req1, NN_STAT_MESSAGES_RECEIVED, 0);
 
     test_send (req1, "ABC");
-    nn_sleep (100);
+    time = test_wait_for_stat (req1, NN_STAT_MESSAGES_SENT, 1, 1000);
+    nn_assert (time >= 0);
 
-    nn_assert (nn_get_statistic(req1, NN_STAT_MESSAGES_SENT) == 1);
-    nn_assert (nn_get_statistic(req1, NN_STAT_BYTES_SENT) == 3);
-    nn_assert (nn_get_statistic(req1, NN_STAT_MESSAGES_RECEIVED) == 0);
-    nn_assert (nn_get_statistic(req1, NN_STAT_BYTES_RECEIVED) == 0);
+    nn_assert_stat_value (req1, NN_STAT_MESSAGES_SENT, 1);
+    nn_assert_stat_value (req1, NN_STAT_BYTES_SENT, 3);
+    nn_assert_stat_value (req1, NN_STAT_MESSAGES_RECEIVED, 0);
+    nn_assert_stat_value (req1, NN_STAT_BYTES_RECEIVED, 0);
 
     test_recv(rep1, "ABC");
 
-    nn_assert (nn_get_statistic(rep1, NN_STAT_MESSAGES_SENT) == 0);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_BYTES_SENT) == 0);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_MESSAGES_RECEIVED) == 1);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_BYTES_RECEIVED) == 3);
+    nn_assert_stat_value (rep1, NN_STAT_MESSAGES_SENT, 0);
+    nn_assert_stat_value (rep1, NN_STAT_BYTES_SENT, 0);
+    nn_assert_stat_value (rep1, NN_STAT_MESSAGES_RECEIVED, 1);
+    nn_assert_stat_value (rep1, NN_STAT_BYTES_RECEIVED, 3);
 
     test_send (rep1, "OK");
     test_recv (req1, "OK");
 
-    nn_assert (nn_get_statistic(req1, NN_STAT_MESSAGES_SENT) == 1);
-    nn_assert (nn_get_statistic(req1, NN_STAT_BYTES_SENT) == 3);
-    nn_assert (nn_get_statistic(req1, NN_STAT_MESSAGES_RECEIVED) == 1);
-    nn_assert (nn_get_statistic(req1, NN_STAT_BYTES_RECEIVED) == 2);
+    nn_assert_stat_value (req1, NN_STAT_MESSAGES_SENT, 1);
+    nn_assert_stat_value (req1, NN_STAT_BYTES_SENT, 3);
+    nn_assert_stat_value (req1, NN_STAT_MESSAGES_RECEIVED, 1);
+    nn_assert_stat_value (req1, NN_STAT_BYTES_RECEIVED, 2);
 
-    nn_assert (nn_get_statistic(rep1, NN_STAT_MESSAGES_SENT) == 1);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_BYTES_SENT) == 2);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_MESSAGES_RECEIVED) == 1);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_BYTES_RECEIVED) == 3);
+    nn_assert_stat_value (rep1, NN_STAT_MESSAGES_SENT, 1);
+    nn_assert_stat_value (rep1, NN_STAT_BYTES_SENT, 2);
+    nn_assert_stat_value (rep1, NN_STAT_MESSAGES_RECEIVED, 1);
+    nn_assert_stat_value (rep1, NN_STAT_BYTES_RECEIVED, 3);
 
     test_close (req1);
 
-    nn_sleep (100);
+    time = test_wait_for_stat (rep1, NN_STAT_BROKEN_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
 
-    nn_assert (nn_get_statistic(rep1, NN_STAT_ACCEPTED_CONNECTIONS) == 1);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_ESTABLISHED_CONNECTIONS) == 0);
-    nn_assert (nn_get_statistic(rep1, NN_STAT_CURRENT_CONNECTIONS) == 0);
+    nn_assert_stat_value (rep1, NN_STAT_ESTABLISHED_CONNECTIONS, 0);
+    nn_assert_stat_value (rep1, NN_STAT_CURRENT_CONNECTIONS, 0);
 
     test_close (rep1);
 

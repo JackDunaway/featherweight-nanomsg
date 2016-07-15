@@ -20,22 +20,20 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-
 #include "testutil.h"
 
-#define SOCKET_ADDRESS "inproc://a"
+/*  Test parameters. */
+#define addr_a "inproc://a"
 
-int main ()
+int main (int argc, char *argv [])
 {
     int sb;
     int sc;
 
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr_a);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr_a);
 
     test_send (sc, "ABC");
     test_recv (sb, "ABC");
@@ -47,4 +45,3 @@ int main ()
 
     return 0;
 }
-

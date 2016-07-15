@@ -21,21 +21,14 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/bus.h"
-#include "../src/pair.h"
-#include "../src/pipeline.h"
-#include "../src/inproc.h"
-
 #include "testutil.h"
-#include "../src/utils/attr.h"
-#include "../src/utils/thread.c"
 
-#define SOCKET_ADDRESS_A "inproc://a"
-#define SOCKET_ADDRESS_B "inproc://b"
-#define SOCKET_ADDRESS_C "inproc://c"
-#define SOCKET_ADDRESS_D "inproc://d"
-#define SOCKET_ADDRESS_E "inproc://e"
+/*  Test parameters. */
+#define addr_a "inproc://a"
+#define addr_b "inproc://b"
+#define addr_c "inproc://c"
+#define addr_d "inproc://d"
+#define addr_e "inproc://e"
 
 void device1 (NN_UNUSED void *arg)
 {
@@ -45,9 +38,9 @@ void device1 (NN_UNUSED void *arg)
 
     /*  Intialise the device sockets. */
     deva = test_socket (AF_SP_RAW, NN_PAIR);
-    test_bind (deva, SOCKET_ADDRESS_A);
+    test_bind (deva, addr_a);
     devb = test_socket (AF_SP_RAW, NN_PAIR);
-    test_bind (devb, SOCKET_ADDRESS_B);
+    test_bind (devb, addr_b);
 
     /*  Run the device. */
     nn_clear_errno ();
@@ -67,9 +60,9 @@ void device2 (NN_UNUSED void *arg)
 
     /*  Intialise the device sockets. */
     devc = test_socket (AF_SP_RAW, NN_PULL);
-    test_bind (devc, SOCKET_ADDRESS_C);
+    test_bind (devc, addr_c);
     devd = test_socket (AF_SP_RAW, NN_PUSH);
-    test_bind (devd, SOCKET_ADDRESS_D);
+    test_bind (devd, addr_d);
 
     /*  Run the device. */
     nn_clear_errno ();
@@ -88,7 +81,7 @@ void device3 (NN_UNUSED void *arg)
 
     /*  Intialise the device socket. */
     deve = test_socket (AF_SP_RAW, NN_BUS);
-    test_bind (deve, SOCKET_ADDRESS_E);
+    test_bind (deve, addr_e);
 
     /*  Run the device. */
     nn_clear_errno ();
@@ -99,8 +92,9 @@ void device3 (NN_UNUSED void *arg)
     test_close (deve);
 }
 
-int main ()
+int main (int argc, char *argv [])
 {
+    int time;
     int enda;
     int endb;
     int endc;
@@ -110,7 +104,6 @@ int main ()
     struct nn_thread thread1;
     struct nn_thread thread2;
     struct nn_thread thread3;
-    int timeo;
 
     /*  Test the bi-directional device. */
 
@@ -119,9 +112,9 @@ int main ()
 
     /*  Create two sockets to connect to the device. */
     enda = test_socket (AF_SP, NN_PAIR);
-    test_connect (enda, SOCKET_ADDRESS_A);
+    test_connect (enda, addr_a);
     endb = test_socket (AF_SP, NN_PAIR);
-    test_connect (endb, SOCKET_ADDRESS_B);
+    test_connect (endb, addr_b);
 
     /*  Pass a pair of messages between endpoints. */
     test_send (enda, "ABC");
@@ -140,9 +133,9 @@ int main ()
 
     /*  Create two sockets to connect to the device. */
     endc = test_socket (AF_SP, NN_PUSH);
-    test_connect (endc, SOCKET_ADDRESS_C);
+    test_connect (endc, addr_c);
     endd = test_socket (AF_SP, NN_PULL);
-    test_connect (endd, SOCKET_ADDRESS_D);
+    test_connect (endd, addr_d);
 
     /*  Pass a message between endpoints. */
     test_send (endc, "XYZ");
@@ -159,12 +152,15 @@ int main ()
 
     /*  Create two sockets to connect to the device. */
     ende1 = test_socket (AF_SP, NN_BUS);
-    test_connect (ende1, SOCKET_ADDRESS_E);
+    test_connect (ende1, addr_e);
     ende2 = test_socket (AF_SP, NN_BUS);
-    test_connect (ende2, SOCKET_ADDRESS_E);
+    test_connect (ende2, addr_e);
 
-    /*  BUS is unreliable so wait a bit for connections to be established. */
-    nn_sleep (100);
+    /*  BUS is unreliable by design, so wait for endpoints to first join. */
+    time = test_wait_for_stat (ende1, NN_STAT_CURRENT_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+    time = test_wait_for_stat (ende2, NN_STAT_CURRENT_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
 
     /*  Pass a message to the bus. */
     test_send (ende1, "KLM");
@@ -172,10 +168,7 @@ int main ()
 
     /*  Make sure that the message doesn't arrive at the socket it was
         originally sent to. */
-    timeo = 100;
-    test_setsockopt (ende1, NN_SOL_SOCKET, NN_RCVTIMEO,
-       &timeo, sizeof (timeo));
-    test_drop (ende1, ETIMEDOUT);
+    test_recv_expect_timeo (ende1, 10);
 
     /*  Clean up. */
     test_close (ende2);

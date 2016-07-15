@@ -20,49 +20,43 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-
 #include "testutil.h"
-#include "../src/utils/attr.h"
-#include "../src/utils/thread.c"
 
-/*  This test checks whether blocking on send/recv works as expected. */
-
-#define SOCKET_ADDRESS "inproc://a"
-
+/*  Test parameters. */
+#define addr "inproc://a"
 int sc;
 int sb;
 
-void worker (NN_UNUSED void *arg)
+void worker (void *arg)
 {
-    /*  Wait 0.1 sec for the main thread to block. */
-    nn_sleep (100);
+    struct nn_sem *ready;
 
+    ready = arg;
+    nn_sem_post (ready);
     test_send (sc, "ABC");
-
-    /*  Wait 0.1 sec for the main thread to process the previous message
-        and block once again. */
-    nn_sleep (100);
-
+    nn_sem_post (ready);
     test_send (sc, "ABC");
 }
 
-int main ()
+int main (int argc, char *argv [])
 {
     struct nn_thread thread;
+    struct nn_sem ready;
 
+    /*  Check whether blocking on send/recv works as expected. */
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr);
 
-    nn_thread_init (&thread, worker, NULL);
-
+    nn_sem_init (&ready);
+    nn_thread_init (&thread, worker, &ready);
+    nn_sem_wait (&ready);
     test_recv (sb, "ABC");
+    nn_sem_wait (&ready);
     test_recv (sb, "ABC");
-
     nn_thread_term (&thread);
+    nn_sem_term (&ready);
 
     test_close (sc);
     test_close (sb);

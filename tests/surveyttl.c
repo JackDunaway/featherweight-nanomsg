@@ -23,17 +23,11 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/survey.h"
-#include "../src/tcp.h"
-
 #include "testutil.h"
 
-#include "../src/utils/attr.h"
-#include "../src/utils/thread.c"
-
-static char socket_address_a[128];
-static char socket_address_b[128];
+/*  Test parameters. */
+static char addr_a [128];
+static char addr_b [128];
 int dev0;
 int dev1;
 
@@ -47,11 +41,12 @@ void device (NN_UNUSED void *arg)
     nn_assert_is_error (rc == -1, EBADF);
 }
 
-int main (int argc, const char *argv[])
+int main (int argc, char *argv [])
 {
+    struct nn_thread thread1;
     int end0;
     int end1;
-    struct nn_thread thread1;
+    int time;
     int timeo;
     int maxttl;
     size_t sz;
@@ -59,15 +54,15 @@ int main (int argc, const char *argv[])
 
     int port = get_test_port(argc, argv);
 
-    test_addr_from(socket_address_a, "tcp", "127.0.0.1", port);
-    test_addr_from(socket_address_b, "tcp", "127.0.0.1", port + 1);
+    test_build_addr (addr_a, "tcp", "127.0.0.1", port);
+    test_build_addr (addr_b, "tcp", "127.0.0.1", port + 1);
 
     /*  Intialise the device sockets. */
     dev0 = test_socket (AF_SP_RAW, NN_RESPONDENT);
     dev1 = test_socket (AF_SP_RAW, NN_SURVEYOR);
 
-    test_bind (dev0, socket_address_a);
-    test_bind (dev1, socket_address_b);
+    test_bind (dev0, addr_a);
+    test_bind (dev1, addr_b);
 
     /*  Start the device. */
     nn_thread_init (&thread1, device, NULL);
@@ -76,8 +71,8 @@ int main (int argc, const char *argv[])
     end1 = test_socket (AF_SP, NN_RESPONDENT);
 
     /*  Test the bi-directional device TTL */ 
-    test_connect (end0, socket_address_a);
-    test_connect (end1, socket_address_b);
+    test_connect (end0, addr_a);
+    test_connect (end1, addr_b);
 
     /*  Set up max receive timeout. */
     timeo = 1000;
@@ -112,6 +107,13 @@ int main (int argc, const char *argv[])
     nn_assert_is_error (rc == -1, EINVAL);
     nn_assert (maxttl == 8);
 
+    /*  In preparation for I/O, wait until both previous calls to connect
+        have established connections at least once. */
+    time = test_wait_for_stat (end1, NN_STAT_CURRENT_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+    time = test_wait_for_stat (end0, NN_STAT_CURRENT_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+
     /*  Pass a message end-to-end between endpoints. */
     test_send (end0, "SURVEY");
     test_recv (end1, "SURVEY");
@@ -124,23 +126,13 @@ int main (int argc, const char *argv[])
     maxttl = 1;
     test_setsockopt (end0, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
     test_setsockopt (end1, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
-
-    /*  Even though we cannot assert a timeout means "success", anything else
-        is an explicit failure. For this reason, we temporarily decrease the
-        timeout for the sake of reducing test time, knowing the full timeout
-        period is the expected time penalty. */
-    timeo = 100;
-    test_setsockopt (end1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
     test_send (end0, "DROPTHIS");
-    nn_clear_errno ();
-    test_drop (end1, ETIMEDOUT);
+    test_recv_expect_timeo (end1, 50);
 
     /*  Now increase max TTL, reset the timeout, and expect success again. */
     maxttl = 2;
     test_setsockopt (end0, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
     test_setsockopt (end1, NN_SOL_SOCKET, NN_MAXTTL, &maxttl, sizeof (maxttl));
-    timeo = 1000;
-    test_setsockopt (end1, NN_SOL_SOCKET, NN_RCVTIMEO, &timeo, sizeof (timeo));
 
     /*  Final end-to-end test. */
     test_send (end0, "DONTDROP");

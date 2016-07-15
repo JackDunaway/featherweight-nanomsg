@@ -20,14 +20,13 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/bus.h"
 #include "testutil.h"
 
-#define SOCKET_ADDRESS_A "inproc://a"
-#define SOCKET_ADDRESS_B "inproc://b"
+/*  Test parameters. */
+#define addr_a "inproc://a"
+#define addr_b "inproc://b"
 
-int main ()
+int main (int argc, char *argv [])
 {
     int rc;
     int bus1;
@@ -37,13 +36,13 @@ int main ()
 
     /*  Create a simple bus topology consisting of 3 nodes. */
     bus1 = test_socket (AF_SP, NN_BUS);
-    test_bind (bus1, SOCKET_ADDRESS_A);
+    test_bind (bus1, addr_a);
     bus2 = test_socket (AF_SP, NN_BUS);
-    test_bind (bus2, SOCKET_ADDRESS_B);
-    test_connect (bus2, SOCKET_ADDRESS_A);
+    test_bind (bus2, addr_b);
+    test_connect (bus2, addr_a);
     bus3 = test_socket (AF_SP, NN_BUS);
-    test_connect (bus3, SOCKET_ADDRESS_A);
-    test_connect (bus3, SOCKET_ADDRESS_B);
+    test_connect (bus3, addr_a);
+    test_connect (bus3, addr_b);
 
     /*  Send a message from each node. */
     test_send (bus1, "A");
@@ -70,13 +69,16 @@ int main ()
     errno_assert (rc >= 0);
     nn_assert (rc == 1 || rc == 2);
 
-    /*  Wait till both connections are established. */
-    nn_sleep (10);
+    /*  Check that a node did not receive its own message and ensure no
+        anomalous messages continue to linger on the bus. */
+    test_recv_expect_timeo (bus1, 10);
+    test_recv_expect_timeo (bus2, 10);
+    test_recv_expect_timeo (bus3, 10);
 
+    /*  Clean up. */
     test_close (bus3);
     test_close (bus2);
     test_close (bus1);
 
     return 0;
 }
-

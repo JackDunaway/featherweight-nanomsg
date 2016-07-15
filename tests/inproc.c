@@ -19,49 +19,44 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/bus.h"
-#include "../src/pair.h"
-#include "../src/pubsub.h"
-#include "../src/reqrep.h"
-#include "../src/inproc.h"
-
 #include "testutil.h"
 
-/*  Tests inproc transport. */
+/*  Test parameters. */
+#define addr "inproc://test"
 
-#define SOCKET_ADDRESS "inproc://test"
-
-int main ()
+int main (int argc, char *argv [])
 {
-    int rc;
-    int sb;
-    int sc;
-    int s1, s2;
-    int i;
-    char buf [256];
-    int bufsz;
-    int timeo;
+    struct nn_cmsghdr *cmsg;
     struct nn_msghdr hdr;
     struct nn_iovec iovec;
     unsigned char body [3];
-    void *control;
-    struct nn_cmsghdr *cmsg;
     unsigned char *data;
+    char buf [256];
+    void *control;
+    uint64_t stat;
+    int bufsz;
+    int timeo;
+    int time;
+    int rc;
+    int sb;
+    int sc;
+    int s1;
+    int s2;
+    int i;
 
     /*  Create a simple topology. */
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr);
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr);
 
     /*  Try a duplicate bind. It should fail. */
-    rc = nn_bind (sc, SOCKET_ADDRESS);
-    nn_assert (rc < 0 && errno == EADDRINUSE);
+    nn_clear_errno ();
+    rc = nn_bind (sc, addr);
+    nn_assert_is_error (rc == -1, EADDRINUSE);
 
     /*  Ping-pong test. */
     for (i = 0; i != 100; ++i) {
-
         test_send (sc, "ABC");
         test_recv (sb, "ABC");
         test_send (sb, "DEFG");
@@ -83,9 +78,9 @@ int main ()
     sb = test_socket (AF_SP, NN_PAIR);
     bufsz = 200;
     test_setsockopt (sb, NN_SOL_SOCKET, NN_RCVBUF, &bufsz, sizeof (bufsz));
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr);
 
     timeo = 200;
     test_setsockopt (sc, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sizeof (timeo));
@@ -128,12 +123,19 @@ int main ()
 #if 0
     /*  Test whether connection rejection is handled decently. */
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr);
     s1 = test_socket (AF_SP, NN_PAIR);
-    test_connect (s1, SOCKET_ADDRESS);
+    stat = nn_get_statistic (s1, NN_STAT_BROKEN_CONNECTIONS);
+    nn_assert (stat == 0);
+    test_connect (s1, addr);
+    time = test_wait_for_stat (s1, NN_STAT_CURRENT_CONNECTIONS, 1, 2000);
+    nn_assert (time >= 0);
     s2 = test_socket (AF_SP, NN_PAIR);
-    test_connect (s2, SOCKET_ADDRESS);
-    nn_sleep (100);
+    stat = nn_get_statistic (s2, NN_STAT_BROKEN_CONNECTIONS);
+    nn_assert (stat == 0);
+    test_connect (s2, addr);
+    time = test_wait_for_stat (s2, NN_STAT_BROKEN_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
     test_close (s2);
     test_close (s1);
     test_close (sb);
@@ -141,9 +143,9 @@ int main ()
 
     /* Check whether SP message header is transferred correctly. */
     sb = test_socket (AF_SP_RAW, NN_REP);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr);
     sc = test_socket (AF_SP, NN_REQ);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr);
 
     test_send (sc, "ABC");
 
@@ -175,22 +177,20 @@ int main ()
 
     /* Test binding a new socket after originally bound socket shuts down. */
     sb = test_socket (AF_SP, NN_BUS);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr);
 
     sc = test_socket (AF_SP, NN_BUS);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr);
 
     s1 = test_socket (AF_SP, NN_BUS);
-    test_connect (s1, SOCKET_ADDRESS);
+    test_connect (s1, addr);
 
     /* Close bound socket, leaving connected sockets connect. */
     test_close (sb);
 
-    nn_sleep (100);
-
     /* Rebind a new socket to the address to which our connected sockets are listening. */
     s2 = test_socket (AF_SP, NN_BUS);
-    test_bind (s2, SOCKET_ADDRESS);
+    test_bind (s2, addr);
 
     /*  Ping-pong test. */
     for (i = 0; i != 100; ++i) {
@@ -221,6 +221,24 @@ int main ()
     test_close (s1);
     test_close (sc);
     test_close (s2);
+
+    /*  Test closing a socket waiting to connect to a non-existent peer. */
+    sc = test_socket (AF_SP, NN_PAIR);
+    stat = nn_get_statistic (sc, NN_STAT_CONNECT_ERRORS);
+    nn_assert (stat == 0);
+    stat = nn_get_statistic (sc, NN_STAT_INPROGRESS_CONNECTIONS);
+    nn_assert (stat == 0);
+    test_connect (sc, addr);
+
+    /*  inproc does not need to retry its underlying connection state machine
+        unlike other lossier transports. For this reason, it does not report
+        a connection error, but instead has entered a persistent "Connection
+        In Progress" state. */
+    time = test_wait_for_stat (sc, NN_STAT_CONNECT_ERRORS, 1, 100);
+    nn_assert_is_error (time == -1, ETIMEDOUT);
+    stat = nn_get_statistic (sc, NN_STAT_INPROGRESS_CONNECTIONS);
+    nn_assert (stat == 1);
+    test_close (sc);
 
     return 0;
 }

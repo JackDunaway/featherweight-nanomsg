@@ -21,7 +21,7 @@
 */
 
 #include "../src/utils/cont.h"
-
+#include "../src/utils/alloc.c"
 #include "../src/utils/err.c"
 #include "../src/utils/list.c"
 
@@ -37,7 +37,7 @@ struct item {
 static struct item that = {1, NN_LIST_ITEM_INITIALIZER};
 static struct item other = {2, NN_LIST_ITEM_INITIALIZER};
 
-int main ()
+int main (int argc, char *argv [])
 {
     int rc;
     struct nn_list list;
@@ -74,13 +74,13 @@ int main ()
     nn_assert (list.last == NULL);
 
     nn_list_term (&list);
-    
+
     /*  Empty list. */
-    
+
     nn_list_init (&list);
 
     rc = nn_list_empty (&list);
-    nn_assert (rc == 1); 
+    nn_assert (rc == 1);
 
     list_item = nn_list_begin (&list);
     nn_assert (list_item == NULL);
@@ -95,7 +95,7 @@ int main ()
     nn_list_init (&list);
     nn_list_item_init (&that.item);
 
-    /*  Item doesn'tt belong to list yet. */
+    /*  Item doesn't belong to list yet. */
     nn_assert (!nn_list_item_isinlist (&that.item));
 
     nn_list_insert (&list, &that.item, nn_list_end (&list));
@@ -122,12 +122,12 @@ int main ()
     nn_list_term (&list);
 
     /*  Iterating items. */
-    
+
     nn_list_init (&list);
     nn_list_item_init (&that.item);
 
     nn_list_insert (&list, &that.item, nn_list_end (&list));
-    
+
     list_item = nn_list_begin (&list);
     nn_assert (list_item == &that.item);
 
@@ -194,4 +194,3 @@ int main ()
 
     return 0;
 }
-
