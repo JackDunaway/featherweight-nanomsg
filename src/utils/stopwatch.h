@@ -35,8 +35,23 @@
     is pretty low.  The consequence of this is that programs which  specify
     a timeout should be a little more pessimistic (at least 10ms) then they
     might otherwise think they need to be. */
-#define time_assert(actual,expected) \
-    nn_assert (actual > ((expected) - 10000) && actual < ((expected) + 50000)); 
+#define nn_assert_elapsed_time(actual, expected)\
+    do {\
+        uint64_t expected_max = (expected) + 50000;\
+        uint64_t expected_min = ((expected) > 10000 ? (expected) - 10000 : 0);\
+        if ((actual) < expected_min) {\
+            fprintf (stderr,\
+                "Elapsed time %d is too far below expected %d. (%s:%d)\n",\
+                (int) (actual), (int) (expected), __FILE__, __LINE__);\
+            nn_err_abort ();\
+        }\
+        if ((actual) > expected_max) {\
+            fprintf (stderr,\
+                "Elapsed time %d is too far above expected %d. (%s:%d)\n",\
+                (int) (actual), (int) (expected), __FILE__, __LINE__);\
+            nn_err_abort ();\
+        }\
+    } while (0); 
 
 /*  Measures time interval in microseconds. */
 
