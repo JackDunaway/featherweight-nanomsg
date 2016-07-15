@@ -29,11 +29,88 @@
 #define NN_POLLER_ERR 3
 
 #if defined NN_USE_EPOLL
-    #include "poller_epoll.h"
+
+#include <stdint.h>
+#include <sys/types.h>
+#include <sys/epoll.h>
+
+#define NN_POLLER_HAVE_ASYNC_ADD 1
+
+#define NN_POLLER_MAX_EVENTS 32
+
+struct nn_poller_hndl {
+    int fd;
+    uint32_t events;
+};
+
+struct nn_poller {
+
+    /*  Current pollset. */
+    int ep;
+
+    /*  Number of events being processed at the moment. */
+    int nevents;
+
+    /*  Index of the event being processed at the moment. */
+    int index;
+
+    /*  Events being processed at the moment. */
+    struct epoll_event events [NN_POLLER_MAX_EVENTS];
+};
+
 #elif defined NN_USE_KQUEUE
-    #include "poller_kqueue.h"
+
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/event.h>
+
+#define NN_POLLER_MAX_EVENTS 32
+
+#define NN_POLLER_EVENT_IN 1
+#define NN_POLLER_EVENT_OUT 2
+
+struct nn_poller_hndl {
+    int fd;
+    int events;
+};
+
 #elif defined NN_USE_POLL
-    #include "poller_poll.h"
+
+#include <poll.h>
+
+#define NN_POLLER_HAVE_ASYNC_ADD 0
+
+struct nn_poller_hndl {
+    int index;
+};
+
+struct nn_poller {
+
+    /*  Actual number of elements in the pollset. */
+    int size;
+
+    /*  Index of the event being processed at the moment. */
+    int index;
+
+    /*  Number of allocated elements in the pollset. */
+    int capacity;
+
+    /*  The pollset. */
+    struct pollfd *pollset;
+
+    /*  List of handles associated with elements in the pollset. Either points
+    to the handle associated with the file descriptor (hndl) or is part
+    of the list of removed pollitems (removed). */
+    struct nn_hndls_item {
+        struct nn_poller_hndl *hndl;
+        int prev;
+        int next;
+    } *hndls;
+
+    /*  List of removed pollitems, linked by indices. -1 means empty list. */
+    int removed;
+};
+
 #else
     #error
 #endif
