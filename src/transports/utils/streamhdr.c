@@ -43,6 +43,11 @@
 #define NN_STREAMHDR_SRC_USOCK 1
 #define NN_STREAMHDR_SRC_TIMER 2
 
+/*  Time allowed to complete opening handshake. */
+#ifndef NN_STREAMHDR_TIMEOUT
+#define NN_STREAMHDR_TIMEOUT 1000
+#endif
+
 /*  Private functions. */
 static void nn_streamhdr_handler (struct nn_fsm *self, int src, int type,
     void *srcptr);
@@ -153,7 +158,7 @@ static void nn_streamhdr_handler (struct nn_fsm *self, int src, int type,
         case NN_FSM_ACTION:
             switch (type) {
             case NN_FSM_START:
-                nn_timer_start (&streamhdr->timer, 1000);
+                nn_timer_start (&streamhdr->timer, NN_STREAMHDR_TIMEOUT);
                 iovec.iov_base = streamhdr->protohdr;
                 iovec.iov_len = sizeof (streamhdr->protohdr);
                 nn_usock_send (streamhdr->usock, &iovec, 1);
