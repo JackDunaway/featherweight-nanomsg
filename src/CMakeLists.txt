@@ -306,21 +306,15 @@ else ()
     message (SEND_ERROR "${ISSUE_REPORT_MSG}" )
 endif ()
 
-# Provide same folder structure in IDE as on disk
+# Provide the same virtual folder hierarchy within project IDE as the source layout on disk
 foreach (f ${NN_SOURCES})
-    # Get the path of the file relative to source directory
-    if (IS_ABSOLUTE "${f}")
-        file (RELATIVE_PATH f ${CMAKE_CURRENT_SOURCE_DIR} ${f})
-    endif ()
-    set (SRC_GROUP "${f}")
-    set (f "${CMAKE_CURRENT_SOURCE_DIR}/${f}")
-
-    # Remove the filename part
-    string (REGEX REPLACE "(.*)(/[^/]*)$" "\\1" SRC_GROUP ${SRC_GROUP})
-
-    # CMake source_group expects \\, not /
-    string (REPLACE / \\ SRC_GROUP ${SRC_GROUP})
-    source_group ("${SRC_GROUP}" FILES ${f})
+    # Prepend a dummy root to the relative filepath to work around lack of non-greedy match (.*?)
+    set (SRC_GROUP "root/${f}")
+    # Keep the part of the match after "root" but before the last "/".
+    string (REGEX REPLACE "^root(.*)(/[^/]*)$" "\\1" SRC_GROUP "${SRC_GROUP}")
+    # CMake source_group expects "\" and not "/"
+    string (REPLACE / \\ SRC_GROUP "${SRC_GROUP}")
+    source_group ("${SRC_GROUP}" FILES "${CMAKE_CURRENT_SOURCE_DIR}/${f}")
 endforeach ()
 
 if (NN_STATIC_LIB)
