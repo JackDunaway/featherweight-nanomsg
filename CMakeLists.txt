@@ -95,6 +95,7 @@ option (NN_ENABLE_GETADDRINFO_A "Enable/disable use of getaddrinfo_a in place of
 option (NN_TESTS "Build and run nanomsg tests" ON)
 option (NN_TOOLS "Build nanomsg tools" ON)
 option (NN_ENABLE_NANOCAT "Enable building nanocat utility." ${NN_TOOLS})
+set (NN_TEST_PORT 12100 CACHE INTEGER "Defines beginning of port range used for testing. The range spans 10 * NumTests.")
 
 #  Platform checks.
 
@@ -340,14 +341,25 @@ if (NN_TESTS)
     enable_testing ()
     set (all_tests "")
 
-    set (TEST_PORT 12100)
+    # The add_libnanomsg_test() macro registers a test within the ctest test suite
+    # which may be invoked by building the target RUN_TESTS. The calling convention is:
+    # add_libnanomsg_test (NAME TIMEOUT [option1 [option2 [...]]])
+    # NAME (required) - the C source filename which doubles as the name of the test
+    # TIMEOUT (required) - maximum amount of time CTest allows before killing the test process and failing the test.
+    # ISOLATE (optional) - ensure the test is not run in the parallel pool with the RUN_SERIAL CTest specification.
     macro (add_libnanomsg_test NAME TIMEOUT)
         list (APPEND all_tests ${NAME})
         add_executable (${NAME} tests/${NAME}.c)
         target_link_libraries (${NAME} ${PROJECT_NAME})
-        add_test (NAME ${NAME} COMMAND ${NAME} ${TEST_PORT})
+        add_test (NAME ${NAME} COMMAND ${NAME} ${NN_TEST_PORT})
+        math (EXPR NN_TEST_PORT "${NN_TEST_PORT}+10")
         set_tests_properties (${NAME} PROPERTIES TIMEOUT ${TIMEOUT})
-        math (EXPR TEST_PORT "${TEST_PORT}+10")
+        set (NN_TEST_OPTIONS ${ARGN})
+        foreach (NN_TEST_OPT ${NN_TEST_OPTIONS})
+            if (${NN_TEST_OPT} STREQUAL "ISOLATE")
+                set_tests_properties (${NAME} PROPERTIES RUN_SERIAL TRUE)
+            endif ()
+        endforeach ()
     endmacro (add_libnanomsg_test)
 
     #  Transport tests.
