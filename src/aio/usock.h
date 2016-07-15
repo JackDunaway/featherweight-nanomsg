@@ -111,7 +111,9 @@ struct nn_usock {
     /*  Errno remembered in NN_USOCK_ERROR state  */
     int errnum;
 };
+
 #else
+
 #include "fsm.h"
 #include "worker.h"
 
