@@ -248,28 +248,10 @@ endif ()
 
 if (NN_HAVE_EPOLL)
     add_definitions (-DNN_USE_EPOLL)
-    list (APPEND NN_SOURCES
-        aio/poller.h
-        aio/poller.c
-        aio/poller_epoll.h
-        aio/poller_epoll.inc
-    )
 elseif (NN_HAVE_KQUEUE)
     add_definitions (-DNN_USE_KQUEUE)
-    list (APPEND NN_SOURCES
-        aio/poller.h
-        aio/poller.c
-        aio/poller_kqueue.h
-        aio/poller_kqueue.inc
-    )
 elseif (NN_HAVE_POLL)
     add_definitions (-DNN_USE_POLL)
-    list (APPEND NN_SOURCES
-        aio/poller.h
-        aio/poller.c
-        aio/poller_poll.h
-        aio/poller_poll.inc
-    )
 elseif (NN_HAVE_WINSOCK)
     # No operation
 else ()
