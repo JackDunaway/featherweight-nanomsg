@@ -29,18 +29,48 @@
     is that nn_efd_getfd() returns an actual OS-level file descriptor that
     you can poll on to wait for the event. */
 
-#include "fd.h"
-
 #if defined NN_USE_EVENTFD
-    #include "efd_eventfd.h"
+
+    typedef int nn_fd;
+
+    struct nn_efd {
+        int efd;
+    };
+
 #elif defined NN_USE_PIPE
-    #include "efd_pipe.h"
+
+    typedef int nn_fd;
+
+    struct nn_efd {
+        int r;
+        int w;
+    };
+
 #elif defined NN_USE_SOCKETPAIR
-    #include "efd_socketpair.h"
+
+    typedef int nn_fd;
+
+    struct nn_efd {
+        int r;
+        int w;
+    };
+
 #elif defined NN_USE_WINSOCK
-    #include "efd_win.h"
+
+    #include "win.h"
+
+    typedef SOCKET nn_fd;
+
+    struct nn_efd {
+        SOCKET r;
+        SOCKET w;
+        fd_set fds;
+    };
+
 #else
+
     #error
+
 #endif
 
 /*  Initialise the efd object. */

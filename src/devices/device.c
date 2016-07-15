@@ -24,7 +24,7 @@
 #include "../nn.h"
 
 #include "../utils/err.h"
-#include "../utils/fd.h"
+#include "../utils/efd.h"
 #include "../utils/attr.h"
 #include "../utils/thread.h"
 #include "device.h"
