@@ -140,15 +140,10 @@ void nn_err_abort (void)
     abort ();
 }
 
-int nn_err_errno (void)
-{
-    return errno;
-}
-
 void nn_clear_errno (void)
 {
     errno = 0;
-    nn_assert (nn_err_errno() == 0);
+    nn_assert (nn_errno () == 0);
 }
 
 const char *nn_err_strerror (int errnum)
