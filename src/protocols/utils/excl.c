@@ -51,9 +51,10 @@ int nn_excl_add (struct nn_excl *self, struct nn_pipe *pipe)
     return 0;
 }
 
-void nn_excl_rm (struct nn_excl *self, NN_UNUSED struct nn_pipe *pipe)
+void nn_excl_rm (struct nn_excl *self, struct nn_pipe *pipe)
 {
    nn_assert (self->pipe);
+   nn_assert (self->pipe == pipe);
    self->pipe = NULL;
    self->inpipe = NULL;
    self->outpipe = NULL;
