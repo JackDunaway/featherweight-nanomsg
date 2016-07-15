@@ -386,6 +386,10 @@ static void nn_sinproc_handler (struct nn_fsm *self, int src, int type,
                 return;
             case NN_SINPROC_ACCEPTED:
                 rc = nn_pipebase_start (&sinproc->pipebase);
+
+                /*  TODO: this assertion needs to be replaced with a run-time
+                    failure. It can be triggered with code disabled within the
+                    inproc test. */
                 errnum_assert (rc == 0, -rc);
                 sinproc->state = NN_SINPROC_STATE_ACTIVE;
                 return;
