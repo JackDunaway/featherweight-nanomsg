@@ -91,8 +91,10 @@ const size_t NN_WS_HANDSHAKE_SP_MAP_LEN = sizeof (NN_WS_HANDSHAKE_SP_MAP) /
 #define NN_WS_HANDSHAKE_SRC_USOCK 1
 #define NN_WS_HANDSHAKE_SRC_TIMER 2
 
-/*  Time allowed to complete handshake. */
+/*  Time allowed to complete opening handshake. */
+#ifndef NN_WS_HANDSHAKE_TIMEOUT
 #define NN_WS_HANDSHAKE_TIMEOUT 5000
+#endif
 
 /*  Possible return codes internal to the parsing operations. */
 #define NN_WS_HANDSHAKE_NOMATCH 0
