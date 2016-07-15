@@ -168,7 +168,7 @@ static void nn_global_rele_socket(struct nn_sock *);
 
 int nn_errno (void)
 {
-    return nn_err_errno ();
+    return errno;
 }
 
 const char *nn_strerror (int errnum)
