@@ -403,7 +403,7 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
     memset (&self->out.olpd, 0, sizeof (self->out.olpd));
     if (self->domain == AF_UNIX)
     {
-        /* TODO: Do not copy the buffer, find an efficent way to Write 
+        /* TODO: Do not copy the buffer, find an efficent way to Write
         multiple buffers that doesn't affect the state machine. */
 
         /*  Ensure the total buffer size does not exceed size limitation

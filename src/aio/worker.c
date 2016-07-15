@@ -39,7 +39,7 @@
 #define NN_WORKER_OP_STATE_ACTIVE_ZEROISERROR 3
 
 /*  The value of this variable is irrelevant. It's used only as a placeholder
-for the address that is used as the 'stop' event ID. */
+    for the address that is used as the 'stop' event ID. */
 const int nn_worker_stop = 0;
 
 /*  Private functions. */
@@ -182,8 +182,8 @@ static void nn_worker_routine (void *arg)
                     struct nn_worker_op, olpd);
 
                 /*  The 'Internal' field is actually an NTSTATUS. Report
-                success and error. Ignore warnings and informational
-                messages.*/
+                    success and error. Ignore warnings and informational
+                    messages.*/
                 rc = entries [i].Internal & 0xc0000000;
                 switch (rc) {
                 case 0x00000000:
@@ -367,7 +367,7 @@ static void nn_worker_routine (void *arg)
     self = (struct nn_worker*) arg;
 
     /*  Infinite loop. It will be interrupted only when the object is
-    shut down. */
+        shut down. */
     while (1) {
 
         /*  Wait for new events and/or timeouts. */
@@ -400,9 +400,9 @@ static void nn_worker_routine (void *arg)
                 nn_assert (pevent == NN_POLLER_IN);
 
                 /*  Make a local copy of the task queue. This way
-                the application threads are not blocked and can post new
-                tasks while the existing tasks are being processed. Also,
-                new tasks can be posted from within task handlers. */
+                    the application threads are not blocked and can post new
+                    tasks while the existing tasks are being processed. Also,
+                    new tasks can be posted from within task handlers. */
                 nn_mutex_lock (&self->sync);
                 nn_efd_unsignal (&self->efd);
                 memcpy (&tasks, &self->tasks, sizeof (tasks));
@@ -419,8 +419,8 @@ static void nn_worker_routine (void *arg)
                     /*  If the worker thread is asked to stop, do so. */
                     if (nn_slow (item == &self->stop)) {
                         /*  Make sure we remove all the other workers from
-                        the queue, because we're not doing anything with
-                        them. */
+                            the queue, because we're not doing anything with
+                            them. */
                         while (nn_queue_pop (&tasks) != NULL) {
                             continue;
                         }
@@ -429,7 +429,7 @@ static void nn_worker_routine (void *arg)
                     }
 
                     /*  It's a user-defined task. Notify the user that it has
-                    arrived in the worker thread. */
+                        arrived in the worker thread. */
                     task = nn_cont (item, struct nn_worker_task, item);
                     nn_ctx_enter (task->owner->ctx);
                     nn_fsm_feed (task->owner, task->src,
