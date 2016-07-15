@@ -20,14 +20,12 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pubsub.h"
-
 #include "testutil.h"
 
+/*  Test parameters. */
 #define SOCKET_ADDRESS "inproc://a"
 
-int main ()
+int main (int argc, char *argv [])
 {
     int rc;
     int pub1;
@@ -52,9 +50,6 @@ int main ()
     errno_assert (rc == 0);
     test_connect (sub2, SOCKET_ADDRESS);
 
-    /*  Wait till connections are established to prevent message loss. */
-    nn_sleep (10);
-
     test_send (pub1, "0123456789012345678901234567890123456789");
     test_recv (sub1, "0123456789012345678901234567890123456789");
     test_recv (sub2, "0123456789012345678901234567890123456789");
@@ -73,7 +68,6 @@ int main ()
     test_connect (pub1, SOCKET_ADDRESS);
     pub2 = test_socket (AF_SP, NN_PUB);
     test_connect (pub2, SOCKET_ADDRESS);
-    nn_sleep (100);
 
     test_send (pub1, "0123456789012345678901234567890123456789");
     test_send (pub2, "0123456789012345678901234567890123456789");
@@ -86,4 +80,3 @@ int main ()
 
     return 0;
 }
-

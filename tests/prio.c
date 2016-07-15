@@ -21,15 +21,13 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pipeline.h"
-
 #include "testutil.h"
 
-#define SOCKET_ADDRESS_A "inproc://a"
-#define SOCKET_ADDRESS_B "inproc://b"
+/*  Test parameters. */
+#define addr_a "inproc://a"
+#define addr_b "inproc://b"
 
-int main ()
+int main (int argc, char *argv [])
 {
     int rc;
     int push1;
@@ -42,20 +40,20 @@ int main ()
     /*  Test send priorities. */
 
     pull1 = test_socket (AF_SP, NN_PULL);
-    test_bind (pull1, SOCKET_ADDRESS_A);
+    test_bind (pull1, addr_a);
     pull2 = test_socket (AF_SP, NN_PULL);
-    test_bind (pull2, SOCKET_ADDRESS_B);
+    test_bind (pull2, addr_b);
     push1 = test_socket (AF_SP, NN_PUSH);
     sndprio = 1;
     rc = nn_setsockopt (push1, NN_SOL_SOCKET, NN_SNDPRIO,
         &sndprio, sizeof (sndprio));
     errno_assert (rc == 0);
-    test_connect (push1, SOCKET_ADDRESS_A);
+    test_connect (push1, addr_a);
     sndprio = 2;
     rc = nn_setsockopt (push1, NN_SOL_SOCKET, NN_SNDPRIO,
         &sndprio, sizeof (sndprio));
     errno_assert (rc == 0);
-    test_connect (push1, SOCKET_ADDRESS_B);
+    test_connect (push1, addr_b);
 
     test_send (push1, "ABC");
     test_send (push1, "DEF");
@@ -69,24 +67,23 @@ int main ()
     /*  Test receive priorities. */
 
     push1 = test_socket (AF_SP, NN_PUSH);
-    test_bind (push1, SOCKET_ADDRESS_A);
+    test_bind (push1, addr_a);
     push2 = test_socket (AF_SP, NN_PUSH);
-    test_bind (push2, SOCKET_ADDRESS_B);
+    test_bind (push2, addr_b);
     pull1 = test_socket (AF_SP, NN_PULL);
     rcvprio = 2;
     rc = nn_setsockopt (pull1, NN_SOL_SOCKET, NN_RCVPRIO,
         &rcvprio, sizeof (rcvprio));
     errno_assert (rc == 0);
-    test_connect (pull1, SOCKET_ADDRESS_A);
+    test_connect (pull1, addr_a);
     rcvprio = 1;
     rc = nn_setsockopt (pull1, NN_SOL_SOCKET, NN_RCVPRIO,
         &rcvprio, sizeof (rcvprio));
     errno_assert (rc == 0);
-    test_connect (pull1, SOCKET_ADDRESS_B);
+    test_connect (pull1, addr_b);
 
     test_send (push1, "ABC");
     test_send (push2, "DEF");
-    nn_sleep (100);
     test_recv (pull1, "DEF");
     test_recv (pull1, "ABC");
 
@@ -97,9 +94,9 @@ int main ()
     /*  Test removing a pipe from the list. */
 
     push1 = test_socket (AF_SP, NN_PUSH);
-    test_bind (push1, SOCKET_ADDRESS_A);
+    test_bind (push1, addr_a);
     pull1 = test_socket (AF_SP, NN_PULL);
-    test_connect (pull1, SOCKET_ADDRESS_A);
+    test_connect (pull1, addr_a);
 
     test_send (push1, "ABC");
     test_recv (pull1, "ABC");
@@ -110,7 +107,7 @@ int main ()
     nn_assert_is_error (rc == -1, EAGAIN);
 
     pull1 = test_socket (AF_SP, NN_PULL);
-    test_connect (pull1, SOCKET_ADDRESS_A);
+    test_connect (pull1, addr_a);
 
     test_send (push1, "ABC");
     test_recv (pull1, "ABC");
@@ -119,4 +116,3 @@ int main ()
 
     return 0;
 }
-

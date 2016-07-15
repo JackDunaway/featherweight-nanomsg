@@ -20,16 +20,12 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-
 #include "testutil.h"
 
-#include <string.h>
+/*  Test parameters. */
+#define addr_a "inproc://a"
 
-#define SOCKET_ADDRESS "inproc://a"
-
-int main ()
+int main (int argc, char *argv [])
 {
     int rc;
     int sb;
@@ -39,9 +35,9 @@ int main ()
     char buf [6];
 
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr_a);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr_a);
 
     iov [0].iov_base = "AB";
     iov [0].iov_len = 2;
@@ -71,4 +67,3 @@ int main ()
 
     return 0;
 }
-

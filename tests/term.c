@@ -20,20 +20,20 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-
-#include "../src/utils/thread.c"
 #include "testutil.h"
 
-static void worker (NN_UNUSED void *arg)
+static void worker (void *arg)
 {
+    struct nn_sem *ready;
+    char buf [3];
     int rc;
     int s;
-    char buf [3];
 
     /*  Test socket. */
     s = test_socket (AF_SP, NN_PAIR);
+
+    ready = arg;
+    nn_sem_post (ready);
 
     /*  Launch blocking function to check that it will be unblocked once
         nn_term() is called from the main thread. */
@@ -48,19 +48,22 @@ static void worker (NN_UNUSED void *arg)
     test_close (s);
 }
 
-int main ()
+int main (int argc, char *argv [])
 {
+    struct nn_thread thread;
+    struct nn_sem ready;
     int rc;
     int s;
-    struct nn_thread thread;
 
     /*  Close the socket with no associated endpoints. */
     s = test_socket (AF_SP, NN_PAIR);
     test_close (s);
 
     /*  Test nn_term() before nn_close(). */
-    nn_thread_init (&thread, worker, NULL);
-    nn_sleep (100);
+    nn_sem_init (&ready);
+    nn_thread_init (&thread, worker, &ready);
+    nn_sem_wait (&ready);
+    nn_sem_term (&ready);
     nn_term ();
 
     /*  Check that it's not possible to create new sockets after nn_term(). */

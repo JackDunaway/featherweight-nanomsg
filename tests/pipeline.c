@@ -21,13 +21,12 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pipeline.h"
 #include "testutil.h"
 
-#define SOCKET_ADDRESS "inproc://a"
+/*  Test parameters. */
+#define addr_a "inproc://a"
 
-int main ()
+int main (int argc, char *argv [])
 {
     int push1;
     int push2;
@@ -37,15 +36,11 @@ int main ()
     /*  Test fan-out. */
 
     push1 = test_socket (AF_SP, NN_PUSH);
-    test_bind (push1, SOCKET_ADDRESS);
+    test_bind (push1, addr_a);
     pull1 = test_socket (AF_SP, NN_PULL);
-    test_connect (pull1, SOCKET_ADDRESS);
+    test_connect (pull1, addr_a);
     pull2 = test_socket (AF_SP, NN_PULL);
-    test_connect (pull2, SOCKET_ADDRESS);
-
-    /*  Wait till both connections are established to get messages spread
-        evenly between the two pull sockets. */
-    nn_sleep (10);
+    test_connect (pull2, addr_a);
 
     test_send (push1, "ABC");
     test_send (push1, "DEF");
@@ -60,11 +55,11 @@ int main ()
     /*  Test fan-in. */
 
     pull1 = test_socket (AF_SP, NN_PULL);
-    test_bind (pull1, SOCKET_ADDRESS);
+    test_bind (pull1, addr_a);
     push1 = test_socket (AF_SP, NN_PUSH);
-    test_connect (push1, SOCKET_ADDRESS);
+    test_connect (push1, addr_a);
     push2 = test_socket (AF_SP, NN_PUSH);
-    test_connect (push2, SOCKET_ADDRESS);
+    test_connect (push2, addr_a);
 
     test_send (push1, "ABC");
     test_send (push2, "DEF");
@@ -78,4 +73,3 @@ int main ()
 
     return 0;
 }
-

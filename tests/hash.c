@@ -25,7 +25,7 @@
 #include "../src/utils/hash.c"
 #include "../src/utils/alloc.c"
 
-int main ()
+int main (int argc, char *argv [])
 {
     struct nn_hash hash;
     uint32_t k;

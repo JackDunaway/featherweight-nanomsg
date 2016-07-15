@@ -20,34 +20,50 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
 #include "testutil.h"
 
-/*  Test the NN_DOMAIN and NN_PROTOCOL socket options. */
+/*  Test parameters. */
+const int ALL_DOMAIN [] = {AF_SP, AF_SP_RAW};
+#define ALL_DOMAIN_LEN (sizeof (ALL_DOMAIN) / sizeof (ALL_DOMAIN [0]))
 
-int main ()
+int main (int argc, char *argv [])
 {
+    int current_protocol;
+    int current_domain;
+    size_t optsz;
+    int opt;
     int rc;
     int s;
-    int op;
-    size_t opsz;
+    int i;
+    int j;
 
-    s = test_socket (AF_SP, NN_PAIR);
+    /*  Test the NN_DOMAIN and NN_PROTOCOL socket options over every possible
+        domain and protocol. */
+    for (j = 0; j < ALL_DOMAIN_LEN; j++) {
 
-    opsz = sizeof (op);
-    rc = nn_getsockopt (s, NN_SOL_SOCKET, NN_DOMAIN, &op, &opsz);
-    errno_assert (rc == 0);
-    nn_assert (opsz == sizeof (op));
-    nn_assert (op == AF_SP);
+        current_domain = ALL_DOMAIN [j];
 
-    opsz = sizeof (op);
-    rc = nn_getsockopt (s, NN_SOL_SOCKET, NN_PROTOCOL, &op, &opsz);
-    errno_assert (rc == 0);
-    nn_assert (opsz == sizeof (op));
-    nn_assert (op == NN_PAIR);
+        for (i = 0; i < NN_TEST_ALL_SP_LEN; i++) {
 
-    test_close (s);
+            current_protocol = NN_TEST_ALL_SP [j];
+
+            s = test_socket (current_domain, current_protocol);
+
+            optsz = sizeof (opt);
+            rc = nn_getsockopt (s, NN_SOL_SOCKET, NN_DOMAIN, &opt, &optsz);
+            errno_assert (rc == 0);
+            nn_assert (optsz == sizeof (opt));
+            nn_assert (opt == current_domain);
+
+            optsz = sizeof (opt);
+            rc = nn_getsockopt (s, NN_SOL_SOCKET, NN_PROTOCOL, &opt, &optsz);
+            errno_assert (rc == 0);
+            nn_assert (optsz == sizeof (opt));
+            nn_assert (opt == current_protocol);
+
+            test_close (s);
+        }
+    }
 
     return 0;
 }

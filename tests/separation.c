@@ -22,36 +22,30 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-#include "../src/pipeline.h"
-#include "../src/inproc.h"
-#include "../src/ipc.h"
-#include "../src/tcp.h"
 #include "testutil.h"
 
-#define SOCKET_ADDRESS_INPROC "inproc://a"
-#define SOCKET_ADDRESS_IPC "ipc://test-separation.ipc"
+/*  Test parameters. */
+#define addr_inproc "inproc://a"
+#define addr_ipc "ipc://test-separation.ipc"
+static char addr_tcp [128];
 
 /*  This test checks whether the library prevents interconnecting sockets
     between different non-compatible protocols. */
 
-int main (int argc, const char *argv[])
+int main (int argc, char *argv [])
 {
-    int rc;
+    int timeo;
     int pair;
     int pull;
-    int timeo;
-    char socket_address_tcp[128];
+    int rc;
 
-    test_addr_from(socket_address_tcp, "tcp", "127.0.0.1",
-            get_test_port(argc, argv));
+    test_build_addr (addr_tcp, "tcp", "127.0.0.1", get_test_port (argc, argv));
 
     /*  Inproc: Bind first, connect second. */
     pair = test_socket (AF_SP, NN_PAIR);
-    test_bind (pair, SOCKET_ADDRESS_INPROC);
+    test_bind (pair, addr_inproc);
     pull = test_socket (AF_SP, NN_PULL);
-    test_connect (pull, SOCKET_ADDRESS_INPROC);
+    test_connect (pull, addr_inproc);
     timeo = 100;
     test_setsockopt (pair, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sizeof (timeo));
     nn_clear_errno ();
@@ -62,9 +56,9 @@ int main (int argc, const char *argv[])
 
     /*  Inproc: Connect first, bind second. */
     pull = test_socket (AF_SP, NN_PULL);
-    test_connect (pull, SOCKET_ADDRESS_INPROC);
+    test_connect (pull, addr_inproc);
     pair = test_socket (AF_SP, NN_PAIR);
-    test_bind (pair, SOCKET_ADDRESS_INPROC);
+    test_bind (pair, addr_inproc);
     timeo = 100;
     test_setsockopt (pair, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sizeof (timeo));
     nn_clear_errno ();
@@ -77,9 +71,9 @@ int main (int argc, const char *argv[])
 
     /*  IPC */
     pair = test_socket (AF_SP, NN_PAIR);
-    test_bind (pair, SOCKET_ADDRESS_IPC);
+    test_bind (pair, addr_ipc);
     pull = test_socket (AF_SP, NN_PULL);
-    test_connect (pull, SOCKET_ADDRESS_IPC);
+    test_connect (pull, addr_ipc);
     timeo = 100;
     test_setsockopt (pair, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sizeof (timeo));
     nn_clear_errno ();
@@ -92,9 +86,9 @@ int main (int argc, const char *argv[])
 
     /*  TCP */
     pair = test_socket (AF_SP, NN_PAIR);
-    test_bind (pair, socket_address_tcp);
+    test_bind (pair, addr_tcp);
     pull = test_socket (AF_SP, NN_PULL);
-    test_connect (pull, socket_address_tcp);
+    test_connect (pull, addr_tcp);
     timeo = 100;
     test_setsockopt (pair, NN_SOL_SOCKET, NN_SNDTIMEO, &timeo, sizeof (timeo));
     nn_clear_errno ();

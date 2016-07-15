@@ -23,15 +23,11 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/reqrep.h"
-#include "../src/tcp.h"
-
 #include "testutil.h"
-#include "../src/utils/attr.h"
-#include "../src/utils/thread.c"
 
-static char socket_address_f[128], socket_address_g[128];
+/*  Test parameters. */
+static char addr_a [128];
+static char addr_b [128];
 
 void device4 (NN_UNUSED void *arg)
 {
@@ -41,9 +37,9 @@ void device4 (NN_UNUSED void *arg)
 
     /*  Intialise the device sockets. */
     devf = test_socket (AF_SP_RAW, NN_REP);
-    test_bind (devf, socket_address_f);
+    test_bind (devf, addr_a);
     devg = test_socket (AF_SP_RAW, NN_REQ);
-    test_bind (devg, socket_address_g);
+    test_bind (devg, addr_b);
 
     /*  Run the device. */
     nn_clear_errno ();
@@ -55,16 +51,16 @@ void device4 (NN_UNUSED void *arg)
     test_close (devf);
 }
 
-int main (int argc, const char *argv[])
+int main (int argc, char *argv [])
 {
     int endf;
     int endg;
     struct nn_thread thread4;
 
-    int port = get_test_port(argc, argv);
+    int port = get_test_port (argc, argv);
 
-    test_addr_from(socket_address_f, "tcp", "127.0.0.1", port);
-    test_addr_from(socket_address_g, "tcp", "127.0.0.1", port + 1);
+    test_build_addr (addr_a, "tcp", "127.0.0.1", port);
+    test_build_addr (addr_b, "tcp", "127.0.0.1", port + 1);
 
     /*  Test the bi-directional device with REQ/REP (headers). */
 
@@ -73,14 +69,13 @@ int main (int argc, const char *argv[])
 
     /*  Create two sockets to connect to the device. */
     endf = test_socket (AF_SP, NN_REQ);
-    test_connect (endf, socket_address_f);
+    test_connect (endf, addr_a);
     endg = test_socket (AF_SP, NN_REP);
-    test_connect (endg, socket_address_g);
+    test_connect (endg, addr_b);
 
-    /*  Wait for TCP to establish. */
-    nn_sleep (100);
-
-    /*  Pass a message between endpoints. */
+    /*  Pass a message between endpoints. Note that because REP/REQ provides
+        best-effort reliability to send and resend as connections are
+        established, no wait is required after `nn_connect ()`. */
     test_send (endf, "XYZ");
     test_recv (endg, "XYZ");
 
@@ -98,4 +93,3 @@ int main (int argc, const char *argv[])
 
     return 0;
 }
-

@@ -22,7 +22,7 @@
 
 #include "testutil.h"
 
-int main ()
+int main (int argc, char *argv [])
 {
     struct nn_symbol_properties sym;
     const char *name;
@@ -77,7 +77,7 @@ int main ()
         else {
             /*  Ensure errno contains expected value specified by function.  */
             nn_assert_is_error (name == NULL, EINVAL);
-            
+
             /*  This function is expected to fail also, but does not specify
                 a postcondition on errno. */
             nn_assert (nn_symbol_info (i, &sym, sz) == 0);
@@ -92,7 +92,7 @@ int main ()
         SYM_VALUE_NAMES_LEN. This brittleness is meant to alert developers
         during infrequent changes to exported symbols to come back to this
         test and evaluate the other heuristics. */
-    nn_assert (i == 121);
+    nn_assert (i == 122);
 
     return 0;
 }

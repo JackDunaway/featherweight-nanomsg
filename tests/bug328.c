@@ -22,32 +22,35 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-
 #include "testutil.h"
 
-int main (int argc, const char *argv[])
+/*  Test parameters. */
+char addr [128];
+
+int main (int argc, char *argv [])
 {
+    uint64_t stat;
+    int time;
     int sb;
     int sc;
-    char socket_address[128];
 
-    test_addr_from(socket_address, "tcp", "127.0.0.1",
-            get_test_port(argc, argv));
+    test_build_addr (addr, "tcp", "127.0.0.1", get_test_port (argc, argv));
 
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, socket_address);
+    test_bind (sb, addr);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, socket_address);
-
-    nn_sleep(100);
+    test_connect (sc, addr);
     test_send (sc, "ABC");
     test_recv (sb, "ABC");
-    nn_assert (nn_get_statistic (sc, NN_STAT_CURRENT_CONNECTIONS) == 1);
+    time = test_wait_for_stat (sc, NN_STAT_CURRENT_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+    stat = nn_get_statistic (sc, NN_STAT_CURRENT_CONNECTIONS);
+    nn_assert (stat == 1);
     test_close (sb);
-    nn_sleep(300);
-    nn_assert (nn_get_statistic (sc, NN_STAT_CURRENT_CONNECTIONS) == 0);
+    time = test_wait_for_stat (sc, NN_STAT_BROKEN_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+    stat = nn_get_statistic (sc, NN_STAT_CURRENT_CONNECTIONS);
+    nn_assert (stat == 0);
     test_close (sc);
 
     return 0;

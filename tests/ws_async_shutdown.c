@@ -21,88 +21,87 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pubsub.h"
-
 #include "testutil.h"
-#include "../src/utils/thread.c"
 
-static char socket_address [128];
-
-/*  Test condition of closing sockets that are blocking in another thread. */
-
-#define TEST_LOOPS 10
-#define TEST_THREADS 10
+/*  Test parameters. */
+#define TEST_REPETITIONS 10
+#define WORKERS 10
+#define MSG_COUNT 10
 #define MSG "ws"
-#define MSG_LEN sizeof (MSG) - 1
+#define MSGSZ (sizeof (MSG) - 1)
+static char addr [128];
+struct nn_sem ready;
 
-static void routine (NN_UNUSED void *arg)
+static void subscriber_worker (void *arg)
 {
-    int s;
+    char msg [MSGSZ];
+    int count = 0;
     int rc;
-    char msg [MSG_LEN];
+    int s;
 
-    nn_assert (arg);
-
-    s = *(int *)arg;
+    s = *(int *) arg;
+    nn_sem_post (&ready);
 
     while (1) {
         rc = nn_recv (s, &msg, sizeof (msg), 0);
-        if (rc == MSG_LEN) {
-            continue;
+        if (rc != MSGSZ) {
+            break;
         }
-
-        nn_assert (rc == -1);
-
-        /*  A timeout is OK since PUB/SUB is lossy. */
-        if (nn_errno () == ETIMEDOUT) {
-            continue;
-        }
-        break;
+        count++;
+        nn_yield ();
     }
     /*  Socket is expected to be closed by caller.  */
-    errno_assert (nn_errno () == EBADF);
+    nn_assert_is_error (rc == -1, EBADF);
+
+    /*  Ensure at least one message was received, but no more than expected. */
+    nn_assert (0 < count && count <= MSG_COUNT);
 }
 
-int main (int argc, const char *argv[])
+int main (int argc, char *argv [])
 {
+    struct nn_thread pool [WORKERS];
+    int sockets [WORKERS];
+    int sndtimeo = 0;
+    uint64_t time;
+    int sb;
+    int s;
     int i;
     int j;
-    int s;
-    int sb;
-    int rcvtimeo = 10;
-    int sndtimeo = 0;
-    int sockets [TEST_THREADS];
-    struct nn_thread threads [TEST_THREADS];
 
-    test_addr_from (socket_address, "ws", "127.0.0.1",
-        get_test_port (argc, argv));
+    test_addr_from (addr, "ws", "127.0.0.1", get_test_port (argc, argv));
 
-    for (i = 0; i != TEST_LOOPS; ++i) {
+    /*  Test condition of closing sockets that are blocking in another thread. */
+    for (i = 0; i != TEST_REPETITIONS; ++i) {
 
+        /*  Initialize local socket. */
         sb = test_socket (AF_SP, NN_PUB);
-        test_bind (sb, socket_address);
+        test_bind (sb, addr);
         test_setsockopt (sb, NN_SOL_SOCKET, NN_SNDTIMEO,
             &sndtimeo, sizeof (sndtimeo));
 
-        for (j = 0; j < TEST_THREADS; j++){
+        /*  Launch worker pool. */
+        nn_sem_init (&ready);
+        for (j = 0; j < WORKERS; j++){
             s = test_socket (AF_SP, NN_SUB);
-            test_setsockopt (s, NN_SOL_SOCKET, NN_RCVTIMEO,
-                &rcvtimeo, sizeof (rcvtimeo));
             test_setsockopt (s, NN_SUB, NN_SUB_SUBSCRIBE, "", 0);
-            test_connect (s, socket_address);
+            test_connect (s, addr);
+            time = test_wait_for_stat (s, NN_STAT_CURRENT_CONNECTIONS, 1, 2000);
+            nn_assert (time >= 0);
             sockets [j] = s;
-            nn_thread_init (&threads [j], routine, &sockets [j]);
+            nn_thread_init (&pool [j], subscriber_worker, &s);
+            nn_sem_wait (&ready);
         }
 
-        /*  Allow all threads a bit of time to connect. */
-        nn_sleep (100);
+        /*  Send a few messages to ensure worker pool is active. */
+        for (j = 0; j < MSG_COUNT; ++j) {
+            test_send (sb, MSG);
+            nn_yield ();
+        }
 
-        test_send (sb, MSG);
-
-        for (j = 0; j < TEST_THREADS; j++) {
+        /*  Wait for clean shutdown of worker pool. */
+        for (j = 0; j < WORKERS; j++) {
             test_close (sockets [j]);
-            nn_thread_term (&threads [j]);
+            nn_thread_term (&pool [j]);
         }
 
         test_close (sb);

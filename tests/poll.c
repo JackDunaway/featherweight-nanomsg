@@ -20,13 +20,7 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-#include "../src/inproc.h"
-
 #include "testutil.h"
-#include "../src/utils/attr.h"
-#include "../src/utils/thread.c"
 
 #if defined NN_HAVE_WINDOWS
 #include "../src/utils/win.h"
@@ -36,7 +30,8 @@
 
 /*  Test of polling via NN_SNDFD/NN_RCVFD mechanism. */
 
-#define SOCKET_ADDRESS "inproc://a"
+/*  Test parameters. */
+#define addr_a "inproc://a"
 
 int sc;
 
@@ -119,38 +114,61 @@ int getevents (int s, int events, int timeout)
     return revents;
 }
 
-int main ()
+int main (int argc, char *argv [])
 {
-    int rc;
-    int sb;
-    char buf [3];
     struct nn_thread thread;
     struct nn_pollfd pfd [2];
+    char buf [3];
+    int retries;
+    int rc;
+    int sb;
 
     /* Test nn_poll() function. */
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr_a);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr_a);
     test_send (sc, "ABC");
-    nn_sleep (100);
+
     pfd [0].fd = sb;
     pfd [0].events = NN_POLLIN | NN_POLLOUT;
     pfd [1].fd = sc;
     pfd [1].events = NN_POLLIN | NN_POLLOUT;
-    rc = nn_poll (pfd, 2, -1);
-    errno_assert (rc >= 0);
-    nn_assert (rc == 2);
-    nn_assert (pfd [0].revents == (NN_POLLIN | NN_POLLOUT));
-    nn_assert (pfd [1].revents == NN_POLLOUT);
+
+    /*  It's an inherent race how long it will take for both sockets to receive
+        event signals, so retry a few times. */
+    retries = 10;
+    while (1) {
+
+        rc = nn_poll (pfd, 2, -1);
+
+        /*  Test condition satisfied: both send and recv are complete. */
+        if (rc == 2) {
+            nn_assert (pfd [0].revents == (NN_POLLIN | NN_POLLOUT));
+            nn_assert (pfd [0].fd == sb);
+            nn_assert (pfd [1].revents == NN_POLLOUT);
+            nn_assert (pfd [1].fd == sc);
+            break;
+        }
+
+        /*  Test condition partially satisfied: continue waiting for next event signal. */
+        if (rc == 1) {
+            nn_assert (retries > 0);
+            nn_sleep (5);
+            retries--;
+            continue;
+        }
+
+        nn_assert_unreachable ("Unexpected rc.");
+    }
     test_close (sc);
     test_close (sb);
 
     /*  Create a simple topology. */
     sb = test_socket (AF_SP, NN_PAIR);
-    test_bind (sb, SOCKET_ADDRESS);
+    test_bind (sb, addr_a);
     sc = test_socket (AF_SP, NN_PAIR);
-    test_connect (sc, SOCKET_ADDRESS);
+    test_connect (sc, addr_a);
 
     /*  Check the initial state of the socket. */
     rc = getevents (sb, NN_IN | NN_OUT, 1000);
@@ -192,4 +210,3 @@ int main ()
 
     return 0;
 }
-

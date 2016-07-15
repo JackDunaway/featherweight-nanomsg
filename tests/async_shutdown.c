@@ -1,6 +1,6 @@
 /*
     Copyright (c) 2012 Martin Sustrik  All rights reserved.
-    Copyright (c) 2015 Jack R. Dunaway.  All rights reserved.
+    Copyright (c) 2015-2016 Jack R. Dunaway.  All rights reserved.
     Copyright 2016 Franklin "Snaipe" Mathieu <franklinmathieu@gmail.com>
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,58 +22,166 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-#include "../src/pubsub.h"
-#include "../src/pipeline.h"
-#include "../src/tcp.h"
-
 #include "testutil.h"
-#include "../src/utils/attr.h"
-#include "../src/utils/thread.c"
-#include "../src/utils/atomic.c"
 
-/*  Test condition of closing sockets that are blocking in another thread. */
+/*  Test parameters. */
+#define WORKERS 10
+struct nn_sem ready;
 
-#define TEST_LOOPS 10
-
-struct nn_atomic active;
-
-static void routine (NN_UNUSED void *arg)
+static void blocking_io_worker (void *arg)
 {
-    int s;
-    int rc;
+    int type;
     int msg;
-
-    nn_assert (arg);
+    int rc;
+    int s;
 
     s = *((int *) arg);
 
-    /*  We don't expect to actually receive a message here;
-        therefore, the datatype of 'msg' is irrelevant. */
-    nn_clear_errno ();
-    rc = nn_recv (s, &msg, sizeof(msg), 0);
-    nn_assert_is_error (rc == -1, EBADF);
+    /*  This socket type will determine the method chosen to begin a blocking
+        I/O call. */
+    type = test_get_socket_sp (s);
+
+    /*  Start a blocking I/O operation which we expect to fail. For this
+        reason, the datatype and contents of 'msg' is irrelevant. */
+    switch (type) {
+
+    case NN_PAIR:
+    case NN_REP:
+    case NN_SUB:
+    case NN_RESPONDENT:
+    case NN_PULL:
+    case NN_BUS:
+        /*  All socket topologies that can immediately block with a recv. */
+        nn_sem_post (&ready);
+        nn_clear_errno ();
+        msg = -42;
+        rc = nn_recv (s, &msg, sizeof (msg), 0);
+        nn_assert_is_error (rc == -1 && msg == -42, EBADF);
+        break;
+
+    case NN_PUSH:
+        /*  All socket topologies that can immediately block with a send. */
+        nn_sem_post (&ready);
+        nn_clear_errno ();
+        msg = -42;
+        rc = nn_send (s, &msg, sizeof (msg), 0);
+        nn_assert_is_error (rc == -1 && msg == -42, EBADF);
+        break;
+
+    case NN_REQ:
+    case NN_SURVEYOR:
+        /*  Abiding by protocol, send first then wait in a blocking recv. */
+        msg = -42;
+        rc = nn_send (s, &msg, sizeof (msg), 0);
+        nn_assert (rc == sizeof (msg));
+        nn_sem_post (&ready);
+        nn_clear_errno ();
+        rc = nn_recv (s, &msg, sizeof (msg), 0);
+        nn_assert_is_error (rc == -1 && msg == -42, EBADF);
+        break;
+
+    case NN_PUB:
+        nn_assert_unreachable ("NN_PUB doesn't block.");
+        break;
+
+    default:
+        nn_assert_unreachable ("Unexpected socket type.");
+        break;
+    }
 }
 
-int main (int argc, const char *argv[])
+/*  Test condition of closing a socket while it currently has many blocking
+    (or just preparing to block) I/O callsites in another thread. */
+void many_callsites_blocking_test (int transport, int port)
 {
-    int sb;
+    struct nn_thread pool [WORKERS];
+    char addr [128];
+    int j;
+    int s;
+
+    /*  Initialize local socket. */
+    test_get_transport_addr (addr, transport, port);
+    s = test_socket (AF_SP, transport);
+    test_bind (s, addr);
+    nn_sem_init (&ready);
+    for (j = 0; j != WORKERS; ++j) {
+        nn_thread_init (&pool [j], blocking_io_worker, &s);
+        nn_sem_wait (&ready);
+    }
+
+    /*  With all callsites now blocking, close. */
+    test_close (s);
+
+    /*  Expect a clean shutdown from all workers. */
+    for (j = 0; j != WORKERS; ++j) {
+        nn_thread_term (&pool [j]);
+    }
+
+    /*  Clean up. */
+    nn_sem_term (&ready);
+}
+
+/*  Test condition of closing a socket while it is currently blocking
+    (or just preparing to block) in another thread. */
+void one_callsite_blocking_test (int protocol, int transport, int port)
+{
+    struct nn_thread blocker;
+    char addr [128];
+    int j;
+    int s;
+
+    nn_sem_init (&ready);
+    for (j = 0; j != WORKERS; ++j) {
+
+        /*  Initialize local socket. */
+        test_get_transport_addr (addr, transport, port);
+        s = test_socket (AF_SP, protocol);
+        test_bind (s, addr);
+
+        /*  Share socket with an async thread. */
+        nn_thread_init (&blocker, blocking_io_worker, &s);
+        
+        /*  Wait for it to block, then close. */
+        nn_sem_wait (&ready);
+        nn_sleep (5);
+        test_close (s);
+        nn_thread_term (&blocker);
+    }
+    nn_sem_term (&ready);
+}
+
+int main (int argc, char *argv [])
+{
+    int transport;
     int i;
-    struct nn_thread thread;
-    char socket_address[128];
 
-    test_addr_from(socket_address, "tcp", "127.0.0.1",
-            get_test_port(argc, argv));
+    int port = get_test_port (argc, argv);
 
-    for (i = 0; i != TEST_LOOPS; ++i) {
-        sb = test_socket (AF_SP, NN_PULL);
-        test_bind (sb, socket_address);
-        nn_sleep (100);
-        nn_thread_init (&thread, routine, &sb);
-        nn_sleep (100);
-        test_close (sb);
-        nn_thread_term (&thread);
+    /*  Test shutdown behavior for all SP topologies (except for NN_PUB, which
+        by design effectively does not block). */
+    for (i = 0; i != NN_TEST_ALL_TRANSPORTS_LEN; ++i) {
+
+        transport = NN_TEST_ALL_TRANSPORTS [i];
+
+        one_callsite_blocking_test (NN_PAIR, transport, port);
+        one_callsite_blocking_test (NN_REQ, transport, port);
+        one_callsite_blocking_test (NN_REP, transport, port);
+        one_callsite_blocking_test (NN_SUB, transport, port);
+        one_callsite_blocking_test (NN_SURVEYOR, transport, port);
+        one_callsite_blocking_test (NN_RESPONDENT, transport, port);
+        one_callsite_blocking_test (NN_PUSH, transport, port);
+        one_callsite_blocking_test (NN_PULL, transport, port);
+        one_callsite_blocking_test (NN_BUS, transport, port);
+
+        one_callsite_blocking_test (NN_PAIR, transport, port);
+        one_callsite_blocking_test (NN_REQ, transport, port);
+        one_callsite_blocking_test (NN_REP, transport, port);
+        one_callsite_blocking_test (NN_SUB, transport, port);
+        one_callsite_blocking_test (NN_SURVEYOR, transport, port);
+        one_callsite_blocking_test (NN_RESPONDENT, transport, port);
+        one_callsite_blocking_test (NN_PUSH, transport, port);
+        one_callsite_blocking_test (NN_PULL, transport, port);
+        one_callsite_blocking_test (NN_BUS, transport, port);
     }
 
     return 0;

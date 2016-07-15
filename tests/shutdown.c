@@ -21,25 +21,22 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/tcp.h"
-#include "../src/reqrep.h"
-
 #include "testutil.h"
 
-int main (int argc, const char *argv[])
+/*  Test parameters. */
+static char addr [128];
+
+int main (int argc, char *argv [])
 {
     int s;
     int rc;
     int eid;
-    char socket_address[128];
 
-    test_addr_from(socket_address, "tcp", "127.0.0.1",
-            get_test_port(argc, argv));
+    test_build_addr (addr, "tcp", "127.0.0.1", get_test_port (argc, argv));
 
     /*  Run endpoint shutdown and socket shutdown in parallel. */
     s = test_socket (AF_SP, NN_REQ);
-    eid = test_connect (s, socket_address);
+    eid = test_connect (s, addr);
     rc = nn_shutdown (s, eid);
     errno_assert (rc == 0);
     test_close (s);

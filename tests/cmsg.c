@@ -22,17 +22,13 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/tcp.h"
-#include "../src/reqrep.h"
-
 #include "testutil.h"
 
-int main (int argc, const char *argv[])
+/*  Test parameters. */
+char addr [128];
+
+int main (int argc, char *argv [])
 {
-    int rc;
-    int rep;
-    int req;
     struct nn_msghdr hdr;
     struct nn_iovec iovec;
     unsigned char body [3];
@@ -40,15 +36,16 @@ int main (int argc, const char *argv[])
     struct nn_cmsghdr *cmsg;
     unsigned char *data;
     void *buf;
-    char socket_address[128];
+    int rc;
+    int rep;
+    int req;
 
-    test_addr_from(socket_address, "tcp", "127.0.0.1",
-            get_test_port(argc, argv));
+    test_build_addr (addr, "tcp", "127.0.0.1", get_test_port (argc, argv));
     
     rep = test_socket (AF_SP_RAW, NN_REP);
-    test_bind (rep, socket_address);
+    test_bind (rep, addr);
     req = test_socket (AF_SP, NN_REQ);
-    test_connect (req, socket_address);
+    test_connect (req, addr);
 
     /* Test ancillary data in static buffer. */
 

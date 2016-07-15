@@ -21,14 +21,12 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/survey.h"
-
 #include "testutil.h"
 
+/*  Test parameters. */
 #define SOCKET_ADDRESS "inproc://test"
 
-int main ()
+int main (int argc, char *argv [])
 {
     int rc;
     int surveyor;
@@ -101,4 +99,3 @@ int main ()
 
     return 0;
 }
-

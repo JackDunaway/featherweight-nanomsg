@@ -18,27 +18,17 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
     FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
     IN THE SOFTWARE.
-
-
 */
 
-#include "../src/nn.h"
-#include "../src/pair.h"
-#include "../src/pubsub.h"
-#include "../src/ipc.h"
-
 #include "testutil.h"
-
-#include <AccCtrl.h>
-#include <Sddl.h>
-#include <Aclapi.h>
+#include <AclAPI.h>
 
 /*  Windows only. Custom SECURITY_ATTRIBUTES on a socket. */
 
 #define PIPE_NAME "win_sec_attr.ipc"
 #define SOCKET_ADDRESS "ipc://" PIPE_NAME
 
-int main ()
+int main (int argc, char *argv [])
 {
     int sb;
     int sc;
@@ -108,7 +98,7 @@ int main ()
 
     /*  Verify that the pipe has the same security descriptor that we set by
         comparing the ace of the kernel object to the one we created it with. */
-    pipeHandle = CreateFileA ("\\\\.\\\\pipe\\" PIPE_NAME, READ_CONTROL, 0, NULL, 
+    pipeHandle = CreateFileA ("\\\\.\\\\pipe\\" PIPE_NAME, READ_CONTROL, 0, NULL,
         OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
 
     nn_assert (pipeHandle != INVALID_HANDLE_VALUE);

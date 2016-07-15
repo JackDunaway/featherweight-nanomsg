@@ -23,15 +23,12 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/nn.h"
-#include "../src/reqrep.h"
-#include "../src/tcp.h"
-
 #include "testutil.h"
-#include "../src/utils/attr.h"
-#include "../src/utils/thread.c"
 
-static char socket_address_h[128], socket_address_i[128], socket_address_j[128];
+/*  Test parameters. */
+static char addr_h [128];
+static char addr_i [128];
+static char addr_j [128];
 
 void device5 (NN_UNUSED void *arg)
 {
@@ -41,9 +38,9 @@ void device5 (NN_UNUSED void *arg)
 
     /*  Intialise the device sockets. */
     dev0 = test_socket (AF_SP_RAW, NN_REP);
-    test_bind (dev0, socket_address_h);
+    test_bind (dev0, addr_h);
     dev1 = test_socket (AF_SP_RAW, NN_REQ);
-    test_bind (dev1, socket_address_i);
+    test_bind (dev1, addr_i);
 
     /*  Run the device. */
     nn_clear_errno ();
@@ -62,9 +59,9 @@ void device6 (NN_UNUSED void *arg)
     int dev3;
 
     dev2 = test_socket (AF_SP_RAW, NN_REP);
-    test_connect (dev2, socket_address_i);
+    test_connect (dev2, addr_i);
     dev3 = test_socket (AF_SP_RAW, NN_REQ);
-    test_bind (dev3, socket_address_j);
+    test_bind (dev3, addr_j);
 
     /*  Run the device. */
     nn_clear_errno ();
@@ -76,7 +73,7 @@ void device6 (NN_UNUSED void *arg)
     test_close (dev3);
 }
 
-int main (int argc, const char *argv[])
+int main (int argc, char *argv [])
 {
     int end0;
     int end1;
@@ -85,9 +82,9 @@ int main (int argc, const char *argv[])
 
     int port = get_test_port(argc, argv);
 
-    test_addr_from(socket_address_h, "tcp", "127.0.0.1", port);
-    test_addr_from(socket_address_i, "tcp", "127.0.0.1", port + 1);
-    test_addr_from(socket_address_j, "tcp", "127.0.0.1", port + 2);
+    test_build_addr (addr_h, "tcp", "127.0.0.1", port);
+    test_build_addr (addr_i, "tcp", "127.0.0.1", port + 1);
+    test_build_addr (addr_j, "tcp", "127.0.0.1", port + 2);
 
     /*  Test the bi-directional device with REQ/REP (headers). */
 
@@ -97,14 +94,13 @@ int main (int argc, const char *argv[])
 
     /*  Create two sockets to connect to the device. */
     end0 = test_socket (AF_SP, NN_REQ);
-    test_connect (end0, socket_address_h);
+    test_connect (end0, addr_h);
     end1 = test_socket (AF_SP, NN_REP);
-    test_connect (end1, socket_address_j);
+    test_connect (end1, addr_j);
 
-    /*  Wait for TCP to establish. */
-    nn_sleep (100);
-
-    /*  Pass a message between endpoints. */
+    /*  Pass a message between endpoints. Note that because REP/REQ provides
+        best-effort reliability to send and resend as connections are
+        established, no wait is required after `nn_connect ()`. */
     test_send (end0, "XYZ");
     test_recv (end1, "XYZ");
 

@@ -20,13 +20,11 @@
     IN THE SOFTWARE.
 */
 
-#include "../src/protocols/pubsub/trie.c"
 #include "../src/utils/alloc.c"
 #include "../src/utils/err.c"
+#include "../src/protocols/pubsub/trie.c"
 
-#include <stdio.h>
-
-int main ()
+int main (int argc, char *argv [])
 {
     int rc;
     struct nn_trie trie;
