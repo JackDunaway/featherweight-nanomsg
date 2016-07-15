@@ -53,6 +53,7 @@ void nn_backtrace_print (void)
     char buf [sizeof (*info) + sizeof (CHAR) * (NN_BACKTRACE_MAX_SYMBOL_LEN + 1)];
     IMAGEHLP_LINE64 line;
     DWORD disp;
+    DWORD rc;
     BOOL brc;
     int i;
 
@@ -66,19 +67,49 @@ void nn_backtrace_print (void)
     if (num_captured == 0)
         return;
 
+    fprintf (stderr, "\n---Begin Stack Trace---\n");
+
     info = (SYMBOL_INFO *) buf;
     for (i = 0; i < num_captured - 1; i++) {
         memset (info, 0, sizeof (buf) / sizeof (buf [0]));
         /*  Leave room for NULL terminator. */
         info->MaxNameLen = NN_BACKTRACE_MAX_SYMBOL_LEN;
         info->SizeOfStruct = sizeof (*info);
-        SymFromAddr (proc, (DWORD64) frames [i], NULL, info);
+        brc = SymFromAddr (proc, (DWORD64) frames [i], NULL, info);
+        if (brc != TRUE) {
+            rc = GetLastError ();
+            switch (rc) {
+            case ERROR_INVALID_ADDRESS:
+                /*  No symbol available; continue printing backtrace. */
+                fprintf (stderr, "%02d: 0x%p\n", num_captured - i - 1,
+                    frames [i]);
+                continue;
+            default:
+                /*  Unknown error; stop printing backtrace. */
+                return;
+            }
+        }
         memset (&line, 0, sizeof (line));
         line.SizeOfStruct = sizeof (line);
-        SymGetLineFromAddr64 (proc, (DWORD64) frames [i], &disp, &line);
-        fprintf (stderr, "%02d: %s (line %d) %s\n", num_captured - i - 1,
-            info->Name, line.LineNumber, line.FileName);
+        brc = SymGetLineFromAddr64 (proc, (DWORD64) frames [i], &disp, &line);
+        if (brc != TRUE) {
+            rc = GetLastError ();
+            switch (rc) {
+            case ERROR_INVALID_ADDRESS:
+                /*  No source file available; continue printing backtrace. */
+                fprintf (stderr, "%02d: %s\n", num_captured - i - 1,
+                    info->Name);
+                continue;
+            default:
+                /*  Unknown error; stop printing backtrace. */
+                return;
+            }
+        }
+        /*  Successfully retrieved backtrace symbol and source. */
+        fprintf (stderr, "%02d: %s\n(%s:%d)\n", num_captured - i - 1,
+            info->Name, line.FileName, line.LineNumber);
     }
+    fprintf (stderr, "---End Stack Trace---\n");
 }
 
 #elif defined NN_HAVE_BACKTRACE
@@ -89,10 +120,13 @@ void nn_backtrace_print (void)
     void *frames [NN_BACKTRACE_DEPTH];
     int size;
     size = backtrace (frames, NN_BACKTRACE_DEPTH);
+
+    fprintf (stderr, "\n---Begin Stack Trace---\n");
     if (size > 1) {
         /*  Don't include the frame nn_backtrace_print itself. */
         backtrace_symbols_fd (&frames[1], size-1, fileno (stderr));
     }
+    fprintf (stderr, "---End Stack Trace---\n");
 }
 
 #else
