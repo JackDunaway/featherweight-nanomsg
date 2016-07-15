@@ -173,10 +173,6 @@ set (NN_SOURCES
     transports/utils/backoff.c
     transports/utils/dns.h
     transports/utils/dns.c
-    transports/utils/dns_getaddrinfo.h
-    transports/utils/dns_getaddrinfo.inc
-    transports/utils/dns_getaddrinfo_a.h
-    transports/utils/dns_getaddrinfo_a.inc
     transports/utils/iface.h
     transports/utils/iface.c
     transports/utils/literal.h
