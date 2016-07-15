@@ -137,6 +137,8 @@ void nn_backtrace_print (void)
 
 void nn_err_abort (void)
 {
+    nn_backtrace_print ();
+    fflush (stderr);
     abort ();
 }
 
@@ -283,15 +285,6 @@ int nn_err_wsa_to_posix (int wsaerr)
     default:
         nn_assert_unreachable ("Unexpected WSA error.");
     }
-}
-
-void nn_win_error (int err, char *buf, size_t bufsize)
-{
-    DWORD rc = FormatMessageA (
-        FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-        NULL, (DWORD) err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-        buf, (DWORD) bufsize, NULL );
-    nn_assert (rc);
 }
 
 #endif
