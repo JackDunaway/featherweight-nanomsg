@@ -44,10 +44,8 @@
 #define nn_assert(x) \
     do {\
         if (!(x)) {\
-            nn_backtrace_print (); \
-            fprintf (stderr, "Assertion failed: %s (%s:%d)\n", #x, \
+            fprintf (stderr, "Assertion failed: %s\n(%s:%d)\n", #x, \
                 __FILE__, __LINE__);\
-            fflush (stderr);\
             nn_err_abort ();\
         }\
     } while (0)
@@ -59,22 +57,18 @@
     runtime. */
 #define nn_assert_unreachable(reason) \
     do {\
-        nn_backtrace_print (); \
-        fprintf (stderr, "Assertion failed: %s (%s:%d)\n", #reason, \
+        fprintf (stderr, "Assertion failed: %s\n(%s:%d)\n", #reason, \
             __FILE__, __LINE__);\
-        fflush (stderr);\
         nn_err_abort ();\
     } while (0)
 
 #define nn_assert_state(obj, state_name) \
     do {\
         if ((obj)->state != state_name) {\
-            nn_backtrace_print (); \
             fprintf (stderr, \
-                "Assertion failed: %d == %s (%s:%d)\n", \
+                "Assertion failed: %d == %s\n(%s:%d)\n", \
                 (obj)->state, #state_name, \
                 __FILE__, __LINE__);\
-            fflush (stderr);\
             nn_err_abort ();\
         }\
     } while (0)
@@ -83,10 +77,8 @@
 #define nn_assert_alloc(x) \
     do {\
         if (!(x)) {\
-            nn_backtrace_print (); \
-            fprintf (stderr, "Out of memory (%s:%d)\n",\
+            fprintf (stderr, "Out of memory\n(%s:%d)\n",\
                 __FILE__, __LINE__);\
-            fflush (stderr);\
             nn_err_abort ();\
         }\
     } while (0)
@@ -95,10 +87,8 @@
 #define errno_assert(x) \
     do {\
         if (!(x)) {\
-            nn_backtrace_print (); \
-            fprintf (stderr, "%s [%d] (%s:%d)\n", nn_err_strerror (errno),\
+            fprintf (stderr, "%s [%d]\n(%s:%d)\n", nn_err_strerror (errno),\
                 (int) errno, __FILE__, __LINE__);\
-            fflush (stderr);\
             nn_err_abort ();\
         }\
     } while (0)
@@ -107,10 +97,8 @@
 #define errnum_assert(cond, err) \
     do {\
         if (!(cond)) {\
-            nn_backtrace_print (); \
-            fprintf (stderr, "%s [%d] (%s:%d)\n", nn_err_strerror (err),\
+            fprintf (stderr, "%s [%d]\n(%s:%d)\n", nn_err_strerror (err),\
                 (int) (err), __FILE__, __LINE__);\
-            fflush (stderr);\
             nn_err_abort ();\
         }\
     } while (0)
@@ -118,12 +106,10 @@
 /*  Checks whether the condition is true and an error is indeed present. */
 #define nn_assert_is_error(cond, code) \
     do {\
-        if (!(cond) || nn_errno () != code) {\
-            nn_backtrace_print ();\
+        if (!(cond) || errno != code) {\
             fprintf (stderr,\
-                "Expected %s and errno [%s=%d], yet errno is [%d] (%s:%d)\n",\
-                #cond, #code, (int) (code), nn_errno (), __FILE__, __LINE__);\
-            fflush (stderr);\
+                "Expected %s and errno [%s=%d], yet errno is [%d]\n(%s:%d)\n",\
+                #cond, #code, (int) (code), errno, __FILE__, __LINE__);\
             nn_err_abort ();\
         }\
     } while (0)
@@ -134,13 +120,17 @@
 #define nn_assert_win(x) \
     do {\
         if (!(x)) {\
+            int rc;\
             char errstr [256];\
             DWORD errnum = WSAGetLastError ();\
-            nn_backtrace_print (); \
-            nn_win_error ((int) errnum, errstr, 256);\
-            fprintf (stderr, "%s [%d] (%s:%d)\n",\
+            rc = FormatMessageA (\
+                FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,\
+                NULL, (DWORD) errnum,\
+                MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),\
+                errstr, (DWORD) sizeof (errstr), NULL );\
+            nn_assert (rc);\
+            fprintf (stderr, "%s [%d]\n(%s:%d)\n",\
                 errstr, (int) errnum, __FILE__, __LINE__);\
-            fflush (stderr);\
             nn_err_abort ();\
         }\
     } while (0)
@@ -148,17 +138,17 @@
 /*  Assertion-like macros for easier fsm debugging. */
 #define nn_fsm_error(message, state, src, type) \
     do {\
-        nn_backtrace_print(); \
-        fprintf (stderr, "%s: state=%d source=%d action=%d (%s:%d)\n", \
+        fprintf (stderr, "%s: state=%d source=%d action=%d\n(%s:%d)\n",\
             message, state, src, type, __FILE__, __LINE__);\
-        fflush (stderr);\
         nn_err_abort ();\
     } while (0)
 
 #define nn_fsm_bad_action(state, src, type) nn_fsm_error(\
     "Unexpected action", state, src, type)
+
 #define nn_fsm_bad_state(state, src, type) nn_fsm_error(\
     "Unexpected state", state, src, type)
+
 #define nn_fsm_bad_source(state, src, type) nn_fsm_error(\
     "Unexpected source", state, src, type)
 
@@ -190,9 +180,6 @@ void nn_backtrace_print (void);
 #ifdef NN_HAVE_WINDOWS
 /*  Convert Windows WSA return code to a POSIX error code. */
 int nn_err_wsa_to_posix (int wsaerr);
-
-/*  Prints a human-readable message (Windows only). */
-void nn_win_error (int err, char *buf, size_t bufsize);
 #endif
 
 #endif
