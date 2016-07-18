@@ -37,7 +37,7 @@
 #define NN_SINPROC_ACCEPTED 3
 #define NN_SINPROC_SENT 4
 #define NN_SINPROC_RECEIVED 5
-#define NN_SINPROC_DISCONNECT 6
+#define NN_SINPROC_DISCONNECT 66
 #define NN_SINPROC_STOPPED 7
 
 /*  We use a random value here to prevent accidental clashes with the peer's

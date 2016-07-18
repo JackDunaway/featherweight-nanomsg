@@ -52,8 +52,6 @@ static const struct nn_epbase_vfptr nn_cinproc_vfptr = {
 /*  Private functions. */
 static void nn_cinproc_handler (struct nn_fsm *self, int src, int type,
     void *srcptr);
-static void nn_cinproc_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr);
 static void nn_cinproc_connect (struct nn_ins_item *self,
     struct nn_ins_item *peer);
 
@@ -65,7 +63,7 @@ int nn_cinproc_create (void *hint, struct nn_epbase **epbase)
     nn_assert_alloc (self);
 
     nn_ins_item_init (&self->item, &nn_cinproc_vfptr, hint);
-    nn_fsm_init_root (&self->fsm, nn_cinproc_handler, nn_cinproc_shutdown,
+    nn_fsm_init_root (&self->fsm, nn_cinproc_handler, nn_cinproc_handler,
         nn_epbase_getctx (&self->item.epbase));
     self->state = NN_CINPROC_STATE_IDLE;
     nn_sinproc_init (&self->sinproc, NN_CINPROC_SRC_SINPROC,
@@ -124,24 +122,6 @@ static void nn_cinproc_shutdown (struct nn_fsm *self, int src, int type,
 
     cinproc = nn_cont (self, struct nn_cinproc, fsm);
 
-    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
-
-        /*  First, unregister the endpoint from the global repository of inproc
-            endpoints. This way, new connections cannot be created anymore. */
-        nn_ins_disconnect (&cinproc->item);
-
-        /*  Stop the existing connection. */
-        nn_sinproc_stop (&cinproc->sinproc);
-        cinproc->state = NN_CINPROC_STATE_STOPPING;
-    }
-    if (cinproc->state == NN_CINPROC_STATE_STOPPING) {
-        if (!nn_sinproc_isidle (&cinproc->sinproc))
-            return;
-        cinproc->state = NN_CINPROC_STATE_IDLE;
-        nn_fsm_stopped_noevent (&cinproc->fsm);
-        nn_epbase_stopped (&cinproc->item.epbase);
-        return;
-    }
 
     nn_fsm_bad_state(cinproc->state, src, type);
 }
@@ -158,12 +138,62 @@ static void nn_cinproc_handler (struct nn_fsm *myfsm, int src, int type,
         return;
     }
 
+    NN_FSM_JOB (NN_CINPROC_STATE_DISCONNECTED, NN_FSM_ACTION, NN_FSM_STOP) {
+
+        /*  First, unregister the endpoint from the global repository of inproc
+            endpoints. This way, new connections cannot be created anymore. */
+        nn_ins_disconnect (&self->item);
+
+        nn_assert (nn_sinproc_isidle (&self->sinproc));
+        self->state = NN_CINPROC_STATE_IDLE;
+        nn_fsm_stopped_noevent (&self->fsm);
+        nn_epbase_stopped (&self->item.epbase);
+        return;
+    }
+
+    NN_FSM_JOB (NN_CINPROC_STATE_IDLE, NN_FSM_ACTION, NN_FSM_STOP) {
+
+        /*  First, unregister the endpoint from the global repository of inproc
+            endpoints. This way, new connections cannot be created anymore. */
+        nn_ins_disconnect (&self->item);
+
+        /*  Stop the existing session. */
+        nn_assert (!nn_sinproc_isidle (&self->sinproc));
+        nn_sinproc_stop (&self->sinproc);
+
+        self->state = NN_CINPROC_STATE_STOPPING;
+        return;
+    }
+
+    NN_FSM_JOB (NN_CINPROC_STATE_ACTIVE, NN_FSM_ACTION, NN_FSM_STOP) {
+
+        /*  First, unregister the endpoint from the global repository of inproc
+            endpoints. This way, new connections cannot be created anymore. */
+        nn_ins_disconnect (&self->item);
+
+        /*  Stop the existing session. */
+        nn_assert (!nn_sinproc_isidle (&self->sinproc));
+        nn_sinproc_stop (&self->sinproc);
+
+        self->state = NN_CINPROC_STATE_STOPPING;
+        return;
+    }
+
+    NN_FSM_JOB (NN_CINPROC_STATE_STOPPING, NN_CINPROC_SRC_SINPROC, NN_SINPROC_STOPPED) {
+
+        self->state = NN_CINPROC_STATE_IDLE;
+        nn_fsm_stopped_noevent (&self->fsm);
+        nn_epbase_stopped (&self->item.epbase);
+        return;
+    }
+
     NN_FSM_JOB (NN_CINPROC_STATE_DISCONNECTED, NN_FSM_ACTION, NN_CINPROC_ACTION_CONNECT) {
         self->state = NN_CINPROC_STATE_ACTIVE;
         nn_epbase_stat_increment (epb, NN_STAT_INPROGRESS_CONNECTIONS, -1);
         nn_epbase_stat_increment (epb, NN_STAT_ESTABLISHED_CONNECTIONS, 1);
         return;
     }
+
     NN_FSM_JOB (NN_CINPROC_STATE_DISCONNECTED, NN_SINPROC_SRC_PEER, NN_SINPROC_CONNECT) {
         struct nn_sinproc *sinproc = (struct nn_sinproc*) srcptr;
         nn_sinproc_accept (&self->sinproc, sinproc);
@@ -182,4 +212,3 @@ static void nn_cinproc_handler (struct nn_fsm *myfsm, int src, int type,
 
     nn_fsm_bad_state (self->state, src, type);
 }
-
