@@ -56,14 +56,16 @@ void nn_ctx_leave (struct nn_ctx *self)
     while (1) {
         item = nn_queue_pop (&self->events);
         event = nn_cont (item, struct nn_fsm_event, item);
-        if (!event)
+        if (!event) {
             break;
+        }
         nn_fsm_event_process (event);
     }
 
     /*  Notify the owner that we are leaving the context. */
-    if (self->onleave != NULL)
+    if (self->onleave != NULL) {
         self->onleave (self);
+    }
 
     /*  Shortcut in the case there are no external events. */
     if (nn_queue_empty (&self->eventsto)) {
