@@ -510,30 +510,22 @@ static void nn_usock_create_io_completion (struct nn_usock *self)
 
     /*  Associate the socket with a worker thread/completion port. */
     worker = nn_fsm_choose_worker (&self->fsm);
-    cp = CreateIoCompletionPort (
-        self->p,
-        nn_worker_getcp(worker),
-        (ULONG_PTR) NULL,
-        0);
-    nn_assert(cp);
+    cp = CreateIoCompletionPort (self->p, nn_worker_getcp (worker), NULL, 0);
+    nn_assert (cp);
 }
 
 static void nn_usock_create_pipe (struct nn_usock *self, const char *name)
 {
-    char fullname [256];
-    /*  First, create a fully qualified name for the named pipe. */
-    _snprintf(fullname, sizeof (fullname), "\\\\.\\pipe\\%s", name);
+    char fullname [256] = {0};
 
-    self->p = CreateNamedPipeA (
-        (char*) fullname,
+    /*  First, create a fully qualified name for the named pipe. */
+    _snprintf (fullname, sizeof (fullname) - 1, "\\\\.\\pipe\\%s", name);
+
+    self->p = CreateNamedPipeA ((LPCSTR) fullname,
         PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE |
-        PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
-        PIPE_UNLIMITED_INSTANCES,
-        self->outbuffersz,
-        self->inbuffersz,
-        0,
-        self->sec_attr);
+        PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS, PIPE_UNLIMITED_INSTANCES,
+        self->outbuffersz, self->inbuffersz, 0, self->sec_attr);
 
     /* TODO: How to properly handle self->p == INVALID_HANDLE_VALUE? */
     nn_assert_win (self->p != INVALID_HANDLE_VALUE);
@@ -544,43 +536,38 @@ static void nn_usock_create_pipe (struct nn_usock *self, const char *name)
 
 DWORD nn_usock_open_pipe (struct nn_usock *self, const char *name)
 {
-    char fullname [256];
+    char fullname [256] = {0};
     DWORD winerror;
     DWORD mode;
+    DWORD rc;
     BOOL brc;
 
     /*  First, create a fully qualified name for the named pipe. */
-    _snprintf(fullname, sizeof (fullname), "\\\\.\\pipe\\%s", name);
+    _snprintf (fullname, sizeof (fullname) - 1, "\\\\.\\pipe\\%s", name);
 
-    self->p = CreateFileA (
-        fullname,
-        GENERIC_READ | GENERIC_WRITE,
-        0,
-        self->sec_attr,
-        OPEN_ALWAYS,
-        FILE_FLAG_OVERLAPPED,
-        NULL);
+    self->p = CreateFileA (fullname, GENERIC_READ | GENERIC_WRITE, 0,
+        self->sec_attr, OPEN_ALWAYS, FILE_FLAG_OVERLAPPED, NULL);
 
-    if (self->p == INVALID_HANDLE_VALUE)
-        return GetLastError ();
+    if (self->p == INVALID_HANDLE_VALUE) {
+        rc = GetLastError ();
+        return rc;
+    }
 
     mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT;
-    brc = SetNamedPipeHandleState (
-        self->p,
-        &mode,
-        NULL,
-        NULL);
+    brc = SetNamedPipeHandleState (self->p, &mode, NULL, NULL);
     if (!brc) {
+        rc = GetLastError ();
         CloseHandle (self->p);
         self->p = INVALID_HANDLE_VALUE;
-        return GetLastError ();
+        return rc;
     }
     self->isaccepted = 0;
     nn_usock_create_io_completion (self);
 
     winerror = GetLastError ();
-    if (winerror != ERROR_SUCCESS && winerror != ERROR_ALREADY_EXISTS)
+    if (winerror != ERROR_SUCCESS && winerror != ERROR_ALREADY_EXISTS) {
         return winerror;
+    }
 
     return ERROR_SUCCESS;
 }
@@ -594,7 +581,7 @@ void nn_usock_accept_pipe (struct nn_usock *self, struct nn_usock *listener)
     /*  TODO: EMFILE can be returned here. */
     rc = nn_usock_start (self, listener->domain, listener->type,
         listener->protocol);
-    errnum_assert(rc == 0, -rc);
+    errnum_assert (rc == 0, -rc);
 
     nn_fsm_action(&listener->fsm, NN_USOCK_ACTION_ACCEPT);
     nn_fsm_action(&self->fsm, NN_USOCK_ACTION_BEING_ACCEPTED);
@@ -640,16 +627,17 @@ static void nn_usock_close (struct nn_usock *self)
     BOOL brc;
 
     if (self->domain == AF_UNIX) {
-        if (self->p == INVALID_HANDLE_VALUE)
+        if (self->p == INVALID_HANDLE_VALUE) {
             return;
-        if (self->isaccepted)
+        }
+        if (self->isaccepted) {
             DisconnectNamedPipe(self->p);
+        }
         brc = CloseHandle (self->p);
         self->p = INVALID_HANDLE_VALUE;
         nn_assert_win (brc);
     }
-    else
-    {
+    else {
         rc = closesocket (self->s);
         self->s = INVALID_SOCKET;
         nn_assert_win (rc == 0);
