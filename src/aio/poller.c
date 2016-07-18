@@ -95,7 +95,7 @@ void nn_poller_set_in (struct nn_poller *self, struct nn_poller_hndl *hndl)
     struct epoll_event ev;
 
     /*  If already polling for IN, do nothing. */
-    if (nn_slow (hndl->events & EPOLLIN))
+    if (hndl->events & EPOLLIN)
         return;
 
     /*  Start polling for IN. */
@@ -112,7 +112,7 @@ void nn_poller_reset_in (struct nn_poller *self, struct nn_poller_hndl *hndl)
     struct epoll_event ev;
 
     /*  If not polling for IN, do nothing. */
-    if (nn_slow (!(hndl->events & EPOLLIN)))
+    if (!(hndl->events & EPOLLIN))
         return;
 
     /*  Stop polling for IN. */
@@ -134,7 +134,7 @@ void nn_poller_set_out (struct nn_poller *self, struct nn_poller_hndl *hndl)
     int fd = hndl->fd;
 
     /*  If already polling for OUT, do nothing. */
-    if (nn_slow (hndl->events & EPOLLOUT))
+    if (hndl->events & EPOLLOUT)
         return;
 
     /*  Start polling for OUT. */
@@ -151,7 +151,7 @@ void nn_poller_reset_out (struct nn_poller *self, struct nn_poller_hndl *hndl)
     struct epoll_event ev;
 
     /*  If not polling for OUT, do nothing. */
-    if (nn_slow (!(hndl->events & EPOLLOUT)))
+    if (!(hndl->events & EPOLLOUT))
         return;
 
     /*  Stop polling for OUT. */
@@ -179,7 +179,7 @@ int nn_poller_wait (struct nn_poller *self, int timeout)
     while (1) {
         nevents = epoll_wait (self->ep, self->events,
             NN_POLLER_MAX_EVENTS, timeout);
-        if (nn_slow (nevents == -1 && errno == EINTR))
+        if (nevents == -1 && errno == EINTR)
             continue;
         break;
     }
@@ -199,17 +199,17 @@ int nn_poller_event (struct nn_poller *self, int *event,
     }
 
     /*  If there is no stored event, let the caller know. */
-    if (nn_slow (self->index >= self->nevents))
+    if (self->index >= self->nevents)
         return -EAGAIN;
 
     /*  Return next event to the caller. Remove the event from the set. */
     *hndl = (struct nn_poller_hndl*) self->events [self->index].data.ptr;
-    if (nn_fast (self->events [self->index].events & EPOLLIN)) {
+    if (self->events [self->index].events & EPOLLIN) {
         *event = NN_POLLER_IN;
         self->events [self->index].events &= ~EPOLLIN;
         return 0;
     }
-    else if (nn_fast (self->events [self->index].events & EPOLLOUT)) {
+    else if (self->events [self->index].events & EPOLLOUT) {
         *event = NN_POLLER_OUT;
         self->events [self->index].events &= ~EPOLLOUT;
         return 0;
@@ -393,7 +393,7 @@ int nn_poller_event (struct nn_poller *self, int *event,
     }
 
     /*  If there is no stored event, let the caller know. */
-    if (nn_slow (self->index >= self->nevents))
+    if (self->index >= self->nevents)
         return -EAGAIN;
 
     /*  Return next event to the caller. Remove the event from the set. */
@@ -448,7 +448,7 @@ void nn_poller_add (struct nn_poller *self, int fd,
     int rc;
 
     /*  If the capacity is too low to accommodate the next item, resize it. */
-    if (nn_slow (self->size >= self->capacity)) {
+    if (self->size >= self->capacity) {
         self->capacity *= 2;
         self->pollset = nn_realloc (self->pollset,
             sizeof (struct pollfd) * self->capacity);
@@ -528,7 +528,7 @@ int nn_poller_wait (struct nn_poller *self, int timeout)
 
         /*  The fd from the end of the pollset may have been on removed fds
             list itself. If so, adjust the removed list. */
-        if (nn_slow (!self->hndls [i].hndl)) {
+        if (!self->hndls [i].hndl) {
             if (self->hndls [i].prev != -1)
                self->hndls [self->hndls [i].prev].next = i;
             if (self->hndls [i].next != -1)
@@ -545,7 +545,7 @@ int nn_poller_wait (struct nn_poller *self, int timeout)
 again:
 #endif
     rc = poll (self->pollset, self->size, timeout);
-    if (nn_slow (rc < 0 && errno == EINTR))
+    if (rc < 0 && errno == EINTR)
 #if defined NN_IGNORE_EINTR
         goto again;
 #else
@@ -569,17 +569,17 @@ int nn_poller_event (struct nn_poller *self, int *event,
     }
 
     /*  If there is no available event, let the caller know. */
-    if (nn_slow (self->index >= self->size))
+    if (self->index >= self->size)
         return -EAGAIN;
 
     /*  Return next event to the caller. Remove the event from revents. */
     *hndl = self->hndls [self->index].hndl;
-    if (nn_fast (self->pollset [self->index].revents & POLLIN)) {
+    if (self->pollset [self->index].revents & POLLIN) {
         *event = NN_POLLER_IN;
         self->pollset [self->index].revents &= ~POLLIN;
         return 0;
     }
-    else if (nn_fast (self->pollset [self->index].revents & POLLOUT)) {
+    else if (self->pollset [self->index].revents & POLLOUT) {
         *event = NN_POLLER_OUT;
         self->pollset [self->index].revents &= ~POLLOUT;
         return 0;
