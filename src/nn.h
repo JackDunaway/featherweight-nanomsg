@@ -402,6 +402,7 @@ NN_EXPORT int nn_device (int s1, int s2);
 #define NN_STAT_BYTES_RECEIVED          304
 /*  Protocol statistics  */
 #define	NN_STAT_CURRENT_SND_PRIORITY    401
+#define	NN_STAT_CURRENT_RCV_PRIORITY    402
 
 NN_EXPORT uint64_t nn_get_statistic (int s, int stat);
 

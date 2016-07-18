@@ -1040,6 +1040,9 @@ uint64_t nn_get_statistic (int s, int statistic)
     case NN_STAT_CURRENT_SND_PRIORITY:
         val = sock->statistics.current_snd_priority;
         break;
+    case NN_STAT_CURRENT_RCV_PRIORITY:
+        val = sock->statistics.current_rcv_priority;
+        break;
     case NN_STAT_CURRENT_EP_ERRORS:
         val = sock->statistics.current_ep_errors;
         break;

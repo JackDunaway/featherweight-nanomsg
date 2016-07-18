@@ -124,6 +124,8 @@ struct nn_sock
         int inprogress_connections;
         /*  The currently set priority for sending data  */
         int current_snd_priority;
+        /*  The currently set priority for receiving data  */
+        int current_rcv_priority;
         /*  Number of endpoints having last_errno set to non-zero value  */
         int current_ep_errors;
 

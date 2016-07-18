@@ -144,6 +144,7 @@ int nn_sock_init (struct nn_sock *self, struct nn_socktype *socktype, int fd)
     self->statistics.current_connections = 0;
     self->statistics.inprogress_connections = 0;
     self->statistics.current_snd_priority = 0;
+    self->statistics.current_rcv_priority = 0;
     self->statistics.current_ep_errors = 0;
 
     /*  Should be pretty much enough space for just the number  */
