@@ -506,12 +506,15 @@ void nn_usock_recv (struct nn_usock *self, void *buf, size_t len, int *fd)
 static void nn_usock_create_io_completion (struct nn_usock *self)
 {
     struct nn_worker *worker;
+    HANDLE wcp;
     HANDLE cp;
 
     /*  Associate the socket with a worker thread/completion port. */
     worker = nn_fsm_choose_worker (&self->fsm);
-    cp = CreateIoCompletionPort (self->p, nn_worker_getcp (worker), NULL, 0);
-    nn_assert (cp);
+    wcp = nn_worker_getcp (worker);
+    nn_assert_win (wcp);
+    cp = CreateIoCompletionPort (self->p, wcp, (ULONG_PTR) NULL, 0);
+    nn_assert_win (cp);
 }
 
 static void nn_usock_create_pipe (struct nn_usock *self, const char *name)
