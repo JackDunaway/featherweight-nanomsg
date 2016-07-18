@@ -136,7 +136,7 @@ int nn_usock_start (struct nn_usock *self, int domain, int type, int protocol)
 #endif
 
     /* NamedPipes aren't sockets. They don't need all the socket
-    initialisation stuff. */
+        initialisation stuff. */
     if (domain != AF_UNIX) {
 
         /*  Open the underlying socket. */
@@ -196,7 +196,7 @@ int nn_usock_setsockopt (struct nn_usock *self, int level, int optname,
     int rc;
 
     /*  NamedPipes aren't sockets. We can't set socket options on them.
-    For now we'll ignore the options. */
+        For now we'll ignore the options. */
     if (self->domain == AF_UNIX)
         return 0;
 
@@ -220,7 +220,7 @@ int nn_usock_bind (struct nn_usock *self, const struct sockaddr *addr,
     ULONG opt;
 
     /*  In the case of named pipes, let's save the address
-    for the later use. */
+        for the later use. */
     if (self->domain == AF_UNIX) {
         if (addrlen > sizeof (struct sockaddr_un))
             return -EINVAL;
@@ -232,7 +232,7 @@ int nn_usock_bind (struct nn_usock *self, const struct sockaddr *addr,
     nn_assert_state (self, NN_USOCK_STATE_STARTING);
 
     /*  On Windows, the bound port can be hijacked
-    if SO_EXCLUSIVEADDRUSE is not set. */
+        if SO_EXCLUSIVEADDRUSE is not set. */
     opt = 1;
     rc = setsockopt (self->s, SOL_SOCKET, SO_EXCLUSIVEADDRUSE,
         (const char*) &opt, sizeof (opt));
@@ -254,7 +254,7 @@ int nn_usock_listen (struct nn_usock *self, int backlog)
     nn_assert_state (self, NN_USOCK_STATE_STARTING);
 
     /*  Start listening for incoming connections. NamedPipes are already
-    created in the listening state, so no need to do anything here. */
+        created in the listening state, so no need to do anything here. */
     if (self->domain != AF_UNIX) {
         rc = listen (self->s, backlog);
         if (rc == SOCKET_ERROR)
@@ -286,7 +286,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *listener)
     nn_fsm_action (&listener->fsm, NN_USOCK_ACTION_ACCEPT);
     nn_fsm_action (&self->fsm, NN_USOCK_ACTION_BEING_ACCEPTED);
 
-    /*  If the memory for accept information is not yet allocated, do so.  */
+    /*  If the memory for accept information is not yet allocated, do so. */
     if (!listener->ainfo) {
         listener->ainfo = nn_alloc (512, "accept info");
         nn_assert_alloc (listener->ainfo);
@@ -351,7 +351,7 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
         nn_assert_win (brc == TRUE && nbytes == sizeof (pconnectex));
 
         /*  Ensure it is safe to cast this value to what might be a smaller
-        integer type to conform to the pconnectex function signature. */
+            integer type to conform to the pconnectex function signature. */
         nn_assert (addrlen < INT_MAX);
 
         /*  Connect itself. */
@@ -404,10 +404,10 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
     if (self->domain == AF_UNIX)
     {
         /* TODO: Do not copy the buffer, find an efficent way to Write
-        multiple buffers that doesn't affect the state machine. */
+            multiple buffers that doesn't affect the state machine. */
 
         /*  Ensure the total buffer size does not exceed size limitation
-        of WriteFile. */
+            of WriteFile. */
         nn_assert (len <= MAXDWORD);
 
         nn_assert (!self->pipesendbuf);
@@ -472,7 +472,7 @@ void nn_usock_recv (struct nn_usock *self, void *buf, size_t len, int *fd)
     if (self->domain == AF_UNIX) {
 
         /*  Ensure the total buffer size does not exceed size limitation
-        of WriteFile. */
+            of WriteFile. */
         nn_assert (len <= MAXDWORD);
         brc = ReadFile (self->p, buf, (DWORD) len, NULL, &self->in.olpd);
         error = brc ? ERROR_SUCCESS : GetLastError ();
@@ -666,7 +666,7 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
     if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
 
         /*  Socket in ACCEPTING state cannot be closed.
-        Stop the socket being accepted first. */
+            Stop the socket being accepted first. */
         nn_assert (usock->state != NN_USOCK_STATE_ACCEPTING);
 
         /*  Synchronous stop. */
@@ -680,7 +680,7 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
             goto finish1;
 
         /*  When socket that's being accepted is asked to stop, we have to
-        ask the listener socket to stop accepting first. */
+            ask the listener socket to stop accepting first. */
         if (usock->state == NN_USOCK_STATE_BEING_ACCEPTED) {
             nn_fsm_action (&usock->asock->fsm, NN_USOCK_ACTION_CANCEL);
             usock->state = NN_USOCK_STATE_STOPPING_ACCEPT;
@@ -688,8 +688,8 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
         }
 
         /*  If we were already in the process of cancelling overlapped
-        operations, we don't have to do anything. Continue waiting
-        till cancelling is finished. */
+            operations, we don't have to do anything. Continue waiting
+            till cancelling is finished. */
         if (usock->state == NN_USOCK_STATE_CANCELLING_IO) {
             usock->state = NN_USOCK_STATE_STOPPING;
             return;
@@ -699,7 +699,7 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
         nn_fsm_raise (&usock->fsm, &usock->event_error, NN_USOCK_SHUTDOWN);
 
         /*  In all remaining states we'll simply cancel all overlapped
-        operations. */
+            operations. */
         if (nn_usock_cancel_io (usock) == 0)
             goto finish1;
         usock->state = NN_USOCK_STATE_STOPPING;
@@ -734,9 +734,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
 
     switch (usock->state) {
 
-        /*****************************************************************************/
-        /*  IDLE state.                                                              */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  IDLE state.                                                              */
+/*****************************************************************************/
     case NN_USOCK_STATE_IDLE:
         switch (src) {
         case NN_FSM_ACTION:
@@ -751,9 +751,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  STARTING state.                                                          */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  STARTING state.                                                          */
+/*****************************************************************************/
     case NN_USOCK_STATE_STARTING:
         switch (src) {
         case NN_FSM_ACTION:
@@ -774,9 +774,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  BEING_ACCEPTED state.                                                    */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  BEING_ACCEPTED state.                                                    */
+/*****************************************************************************/
     case NN_USOCK_STATE_BEING_ACCEPTED:
         switch (src) {
         case NN_FSM_ACTION:
@@ -793,9 +793,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  ACCEPTED state.                                                          */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  ACCEPTED state.                                                          */
+/*****************************************************************************/
     case NN_USOCK_STATE_ACCEPTED:
         switch (src) {
         case NN_FSM_ACTION:
@@ -810,9 +810,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  CONNECTING state.                                                        */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  CONNECTING state.                                                        */
+/*****************************************************************************/
     case NN_USOCK_STATE_CONNECTING:
         switch (src) {
         case NN_FSM_ACTION:
@@ -849,9 +849,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  ACTIVE state.                                                            */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  ACTIVE state.                                                            */
+/*****************************************************************************/
     case NN_USOCK_STATE_ACTIVE:
         switch (src) {
         case NN_USOCK_SRC_IN:
@@ -914,9 +914,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  CANCELLING_IO state.                                                     */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  CANCELLING_IO state.                                                     */
+/*****************************************************************************/
     case NN_USOCK_STATE_CANCELLING_IO:
         switch (src) {
         case NN_USOCK_SRC_IN:
@@ -932,15 +932,15 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  DONE state.                                                              */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  DONE state.                                                              */
+/*****************************************************************************/
     case NN_USOCK_STATE_DONE:
         nn_fsm_bad_source (usock->state, src, type);
 
-        /*****************************************************************************/
-        /*  LISTENING state.                                                         */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  LISTENING state.                                                         */
+/*****************************************************************************/
     case NN_USOCK_STATE_LISTENING:
         switch (src) {
         case NN_FSM_ACTION:
@@ -955,9 +955,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  ACCEPTING state.                                                         */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  ACCEPTING state.                                                         */
+/*****************************************************************************/
     case NN_USOCK_STATE_ACCEPTING:
         switch (src) {
         case NN_FSM_ACTION:
@@ -1008,9 +1008,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  CANCELLING state.                                                        */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  CANCELLING state.                                                        */
+/*****************************************************************************/
     case NN_USOCK_STATE_CANCELLING:
         switch (src) {
         case NN_USOCK_SRC_IN:
@@ -1034,9 +1034,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /*****************************************************************************/
-        /*  Invalid state.                                                           */
-        /*****************************************************************************/
+/*****************************************************************************/
+/*  Invalid state.                                                           */
+/*****************************************************************************/
     default:
         nn_fsm_bad_state (usock->state, src, type);
     }
@@ -1053,7 +1053,7 @@ static int nn_usock_cancel_io (struct nn_usock *self)
     BOOL brc;
 
     /*  For some reason simple CancelIo doesn't seem to work here.
-    We have to use CancelIoEx instead. */
+        We have to use CancelIoEx instead. */
     rc = 0;
     if (!nn_worker_op_isidle (&self->in)) {
         brc = CancelIoEx (self->p, &self->in.olpd);
@@ -1206,7 +1206,7 @@ int nn_usock_start (struct nn_usock *self, int domain, int type, int protocol)
     int s;
 
     /*  If the operating system allows to directly open the socket with CLOEXEC
-    flag, do so. That way there are no race conditions. */
+        flag, do so. That way there are no race conditions. */
 #ifdef SOCK_CLOEXEC
     type |= SOCK_CLOEXEC;
 #endif
@@ -1243,10 +1243,10 @@ static void nn_usock_init_from_fd (struct nn_usock *self, int s)
     nn_assert (self->s == -1);
     self->s = s;
 
-    /* Setting FD_CLOEXEC option immediately after socket creation is the
-    second best option after using SOCK_CLOEXEC. There is a race condition
-    here (if process is forked between socket creation and setting
-    the option) but the problem is pretty unlikely to happen. */
+    /*  Setting FD_CLOEXEC option immediately after socket creation is the
+        second best option after using SOCK_CLOEXEC. There is a race condition
+        here (if process is forked between socket creation and setting
+        the option) but the problem is pretty unlikely to happen. */
 #if defined FD_CLOEXEC
     rc = fcntl (self->s, F_SETFD, FD_CLOEXEC);
 #if defined NN_HAVE_OSX
@@ -1256,8 +1256,8 @@ static void nn_usock_init_from_fd (struct nn_usock *self, int s)
 #endif
 #endif
 
-    /* If applicable, prevent SIGPIPE signal when writing to the connection
-    already closed by the peer. */
+    /*  If applicable, prevent SIGPIPE signal when writing to the connection
+        already closed by the peer. */
 #ifdef SO_NOSIGPIPE
     opt = 1;
     rc = setsockopt (self->s, SOL_SOCKET, SO_NOSIGPIPE, &opt, sizeof (opt));
@@ -1268,8 +1268,8 @@ static void nn_usock_init_from_fd (struct nn_usock *self, int s)
 #endif
 #endif
 
-    /* Switch the socket to the non-blocking mode. All underlying sockets
-    are always used in the callbackhronous mode. */
+    /*  Switch the socket to the non-blocking mode. All underlying sockets
+        are always used in the callbackhronous mode. */
     opt = fcntl (self->s, F_GETFL, 0);
     if (opt == -1)
         opt = 0;
@@ -1309,10 +1309,10 @@ int nn_usock_setsockopt (struct nn_usock *self, int level, int optname,
         self->state == NN_USOCK_STATE_ACCEPTED);
 
     /*  EINVAL errors are ignored on OSX platform. The reason for that is buggy
-    OSX behaviour where setsockopt returns EINVAL if the peer have already
-    disconnected. Thus, nn_usock_setsockopt() can succeed on OSX even though
-    the option value was invalid, but the peer have already closed the
-    connection. This behaviour should be relatively harmless. */
+        OSX behaviour where setsockopt returns EINVAL if the peer have already
+        disconnected. Thus, nn_usock_setsockopt() can succeed on OSX even though
+        the option value was invalid, but the peer have already closed the
+        connection. This behaviour should be relatively harmless. */
     rc = setsockopt (self->s, level, optname, optval, (socklen_t) optlen);
 #if defined NN_HAVE_OSX
     if (nn_slow (rc != 0 && errno != EINVAL))
@@ -1385,7 +1385,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *listener)
     /*  Immediate success. */
     if (nn_fast (s >= 0)) {
         /*  Disassociate the listener socket from the accepted
-        socket. Is useful if we restart accepting on ACCEPT_ERROR  */
+            socket. Is useful if we restart accepting on ACCEPT_ERROR  */
         listener->asock = NULL;
         self->asock = NULL;
 
@@ -1396,23 +1396,23 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *listener)
     }
 
     /*  Detect a failure. Note that in ECONNABORTED case we simply ignore
-    the error and wait for next connection in asynchronous manner. */
+        the error and wait for next connection in asynchronous manner. */
     errno_assert (errno == EAGAIN || errno == EWOULDBLOCK ||
         errno == ECONNABORTED || errno == ENFILE || errno == EMFILE ||
         errno == ENOBUFS || errno == ENOMEM);
 
     /*  Pair the two sockets.  They are already paired in case
-    previous attempt failed on ACCEPT_ERROR  */
+        previous attempt failed on ACCEPT_ERROR  */
     nn_assert (!self->asock || self->asock == listener);
     self->asock = listener;
     nn_assert (!listener->asock || listener->asock == self);
     listener->asock = self;
 
     /*  Some errors are just ok to ignore for now.  We also stop repeating
-    any errors until next IN_FD event so that we are not in a tight loop
-    and allow processing other events in the meantime  */
     if (nn_slow (errno != EAGAIN && errno != EWOULDBLOCK
         && errno != ECONNABORTED && errno != listener->errnum))
+        any errors until next IN_FD event so that we are not in a tight loop
+        and allow processing other events in the meantime  */
     {
         listener->errnum = errno;
         listener->state = NN_USOCK_STATE_ACCEPTING_ERROR;
@@ -1542,9 +1542,9 @@ void nn_usock_recv (struct nn_usock *self, void *buf, size_t len, int *fd)
 static int nn_internal_tasks (struct nn_usock *usock, int src, int type)
 {
 
-    /******************************************************************************/
-    /*  Internal tasks sent from the user thread to the worker thread.            */
-    /******************************************************************************/
+/******************************************************************************/
+/*  Internal tasks sent from the user thread to the worker thread.            */
+/******************************************************************************/
     switch (src) {
     case NN_USOCK_SRC_TASK_SEND:
         nn_assert (type == NN_WORKER_TASK_EXECUTE);
@@ -1586,7 +1586,7 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
     if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
 
         /*  Socket in ACCEPTING or CANCELLING state cannot be closed.
-        Stop the socket being accepted first. */
+            Stop the socket being accepted first. */
         nn_assert (usock->state != NN_USOCK_STATE_ACCEPTING &&
             usock->state != NN_USOCK_STATE_CANCELLING);
 
@@ -1604,7 +1604,7 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
             goto finish1;
 
         /*  When socket that's being accepted is asked to stop, we have to
-        ask the listener socket to stop accepting first. */
+            ask the listener socket to stop accepting first. */
         if (usock->state == NN_USOCK_STATE_BEING_ACCEPTED) {
             nn_fsm_action (&usock->asock->fsm, NN_USOCK_ACTION_CANCEL);
             usock->state = NN_USOCK_STATE_STOPPING_ACCEPT;
@@ -1655,11 +1655,11 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
 
     switch (usock->state) {
 
-        /******************************************************************************/
-        /*  IDLE state.                                                               */
-        /*  nn_usock object is initialised, but underlying OS socket is not yet       */
-        /*  created.                                                                  */
-        /******************************************************************************/
+/******************************************************************************/
+/*  IDLE state.                                                               */
+/*  nn_usock object is initialised, but underlying OS socket is not yet       */
+/*  created.                                                                  */
+/******************************************************************************/
     case NN_USOCK_STATE_IDLE:
         switch (src) {
         case NN_FSM_ACTION:
@@ -1674,12 +1674,12 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  STARTING state.                                                           */
-        /*  Underlying OS socket is created, but it's not yet passed to the worker    */
-        /*  thread. In this state we can set socket options, local and remote         */
-        /*  address etc.                                                              */
-        /******************************************************************************/
+/******************************************************************************/
+/*  STARTING state.                                                           */
+/*  Underlying OS socket is created, but it's not yet passed to the worker    */
+/*  thread. In this state we can set socket options, local and remote         */
+/*  address etc.                                                              */
+/******************************************************************************/
     case NN_USOCK_STATE_STARTING:
 
         /*  Events from the owner of the usock. */
@@ -1706,11 +1706,11 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  BEING_ACCEPTED state.                                                     */
-        /*  accept() was called on the usock. Now the socket is waiting for a new     */
-        /*  connection to arrive.                                                     */
-        /******************************************************************************/
+/******************************************************************************/
+/*  BEING_ACCEPTED state.                                                     */
+/*  accept() was called on the usock. Now the socket is waiting for a new     */
+/*  connection to arrive.                                                     */
+/******************************************************************************/
     case NN_USOCK_STATE_BEING_ACCEPTED:
         switch (src) {
         case NN_FSM_ACTION:
@@ -1727,11 +1727,11 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  ACCEPTED state.                                                           */
-        /*  Connection was accepted, now it can be tuned. Afterwards, it'll move to   */
-        /*  the active state.                                                         */
-        /******************************************************************************/
+/******************************************************************************/
+/*  ACCEPTED state.                                                           */
+/*  Connection was accepted, now it can be tuned. Afterwards, it'll move to   */
+/*  the active state.                                                         */
+/******************************************************************************/
     case NN_USOCK_STATE_ACCEPTED:
         switch (src) {
         case NN_FSM_ACTION:
@@ -1747,10 +1747,10 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  CONNECTING state.                                                         */
-        /*  Asynchronous connecting is going on.                                      */
-        /******************************************************************************/
+/******************************************************************************/
+/*  CONNECTING state.                                                         */
+/*  Asynchronous connecting is going on.                                      */
+/******************************************************************************/
     case NN_USOCK_STATE_CONNECTING:
         switch (src) {
         case NN_FSM_ACTION:
@@ -1805,10 +1805,10 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  ACTIVE state.                                                             */
-        /*  Socket is connected. It can be used for sending and receiving data.       */
-        /******************************************************************************/
+/******************************************************************************/
+/*  ACTIVE state.                                                             */
+/*  Socket is connected. It can be used for sending and receiving data.       */
+/******************************************************************************/
     case NN_USOCK_STATE_ACTIVE:
         switch (src) {
         case NN_USOCK_SRC_FD:
@@ -1864,9 +1864,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source(usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  REMOVING_FD state.                                                        */
-        /******************************************************************************/
+/******************************************************************************/
+/*  REMOVING_FD state.                                                        */
+/******************************************************************************/
     case NN_USOCK_STATE_REMOVING_FD:
         switch (src) {
         case NN_USOCK_SRC_TASK_STOP:
@@ -1883,7 +1883,7 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             }
 
             /*  Events from the file descriptor are ignored while it is being
-            removed. */
+                removed. */
         case NN_USOCK_SRC_FD:
             return;
 
@@ -1898,19 +1898,19 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  DONE state.                                                               */
-        /*  Socket is closed. The only thing that can be done in this state is        */
-        /*  stopping the usock.                                                       */
-        /******************************************************************************/
+/******************************************************************************/
+/*  DONE state.                                                               */
+/*  Socket is closed. The only thing that can be done in this state is        */
+/*  stopping the usock.                                                       */
+/******************************************************************************/
     case NN_USOCK_STATE_DONE:
         return;
 
-        /******************************************************************************/
-        /*  LISTENING state.                                                          */
-        /*  Socket is listening for new incoming connections, however, user is not    */
-        /*  accepting a new connection.                                               */
-        /******************************************************************************/
+/******************************************************************************/
+/*  LISTENING state.                                                          */
+/*  Socket is listening for new incoming connections, however, user is not    */
+/*  accepting a new connection.                                               */
+/******************************************************************************/
     case NN_USOCK_STATE_LISTENING:
         switch (src) {
         case NN_FSM_ACTION:
@@ -1925,11 +1925,11 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  ACCEPTING state.                                                          */
-        /*  User is waiting asynchronouslyfor a new inbound connection                */
-        /*  to be accepted.                                                           */
-        /******************************************************************************/
+/******************************************************************************/
+/*  ACCEPTING state.                                                          */
+/*  User is waiting asynchronouslyfor a new inbound connection                */
+/*  to be accepted.                                                           */
+/******************************************************************************/
     case NN_USOCK_STATE_ACCEPTING:
         switch (src) {
         case NN_FSM_ACTION:
@@ -1956,18 +1956,18 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
 #endif
 
                 /*  ECONNABORTED is an valid error. New connection was closed
-                by the peer before we were able to accept it. If it happens
-                do nothing and wait for next incoming connection. */
                 if (nn_slow (s < 0 && errno == ECONNABORTED))
+                    by the peer before we were able to accept it. If it happens
+                    do nothing and wait for next incoming connection. */
                     return;
 
                 /*  Resource allocation errors. It's not clear from POSIX
-                specification whether the new connection is closed in this
-                case or whether it remains in the backlog. In the latter
-                case it would be wise to wait here for a while to prevent
-                busy looping. */
                 if (nn_slow (s < 0 && (errno == ENFILE || errno == EMFILE ||
                     errno == ENOBUFS || errno == ENOMEM))) {
+                    specification whether the new connection is closed in this
+                    case or whether it remains in the backlog. In the latter
+                    case it would be wise to wait here for a while to prevent
+                    busy looping. */
                     usock->errnum = errno;
                     usock->state = NN_USOCK_STATE_ACCEPTING_ERROR;
 
@@ -1991,7 +1991,7 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
                     &usock->asock->event_established, NN_USOCK_ACCEPTED);
 
                 /*  Disassociate the listener socket from the accepted
-                socket. */
+                    socket. */
                 usock->asock->asock = NULL;
                 usock->asock = NULL;
 
@@ -2008,10 +2008,10 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  ACCEPTING_ERROR state.                                                    */
-        /*  Waiting the socket to accept the error and restart                        */
-        /******************************************************************************/
+/******************************************************************************/
+/*  ACCEPTING_ERROR state.                                                    */
+/*  Waiting the socket to accept the error and restart                        */
+/******************************************************************************/
     case NN_USOCK_STATE_ACCEPTING_ERROR:
         switch (src) {
         case NN_FSM_ACTION:
@@ -2026,9 +2026,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  CANCELLING state.                                                         */
-        /******************************************************************************/
+/******************************************************************************/
+/*  CANCELLING state.                                                         */
+/******************************************************************************/
     case NN_USOCK_STATE_CANCELLING:
         switch (src) {
         case NN_USOCK_SRC_TASK_STOP:
@@ -2055,9 +2055,9 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             nn_fsm_bad_source (usock->state, src, type);
         }
 
-        /******************************************************************************/
-        /*  Invalid state                                                             */
-        /******************************************************************************/
+/******************************************************************************/
+/*  Invalid state                                                             */
+/******************************************************************************/
     default:
         nn_fsm_bad_state (usock->state, src, type);
     }
@@ -2122,9 +2122,9 @@ static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len)
 #endif
 
     /*  If batch buffer doesn't exist, allocate it. The point of delayed
-    deallocation to allow non-receiving sockets, such as TCP listening
-    sockets, to do without the batch buffer. */
     if (nn_slow (!self->in.batch)) {
+        deallocation to allow non-receiving sockets, such as TCP listening
+        sockets, to do without the batch buffer. */
         self->in.batch = nn_alloc (NN_USOCK_BATCH_SIZE, "AIO batch buffer");
         alloc_assert (self->in.batch);
     }
@@ -2144,7 +2144,7 @@ static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len)
     }
 
     /*  If recv request is greater than the batch buffer, get the data directly
-    into the place. Otherwise, read data to the batch buffer. */
+        into the place. Otherwise, read data to the batch buffer. */
     if (length > NN_USOCK_BATCH_SIZE) {
         iov.iov_base = buf;
         iov.iov_len = length;
@@ -2214,7 +2214,7 @@ static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len)
     }
 
     /*  If the data were received directly into the place we can return
-    straight away. */
+        straight away. */
     if (length > NN_USOCK_BATCH_SIZE) {
         length -= nbytes;
         *len -= length;
@@ -2222,7 +2222,7 @@ static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len)
     }
 
     /*  New data were read to the batch buffer. Copy the requested amount of it
-    to the user-supplied buffer. */
+        to the user-supplied buffer. */
     self->in.batch_len = nbytes;
     self->in.batch_pos = 0;
     if (nbytes) {

@@ -67,7 +67,7 @@ struct nn_usock {
     };
 
     /*  For NamedPipes, closing an accepted pipe differs from other pipes.
-    If the NamedPipe was accepted, this member is set to 1. 0 otherwise. */
+        If the NamedPipe was accepted, this member is set to 1. 0 otherwise. */
     int isaccepted;
 
     /*  Asynchronous operations being executed on the socket. */
@@ -75,8 +75,8 @@ struct nn_usock {
     struct nn_worker_op out;
 
     /*  When accepting new socket, they have to be created with same
-    type as the listening socket. Thus, in listening socket we
-    have to store its exact type. */
+        type as the listening socket. Thus, in listening socket we
+        have to store its exact type. */
     int domain;
     int type;
     int protocol;
@@ -88,11 +88,11 @@ struct nn_usock {
     struct nn_fsm_event event_error;
 
     /*  In ACCEPTING state points to the socket being accepted.
-    In BEING_ACCEPTED state points to the listener socket. */
+        In BEING_ACCEPTED state points to the listener socket. */
     struct nn_usock *asock;
 
     /*  Buffer allocated for output of AcceptEx function. If accepting is not
-    done on this socket, the field is set to NULL. */
+        done on this socket, the field is set to NULL. */
     void *ainfo;
 
     /*  For NamedPipes, we store the address inside the socket. */
@@ -148,8 +148,8 @@ struct nn_usock {
         size_t batch_len;
 
         /*  Current position in the batch buffer. The data preceding this
-        position were already received by the user. The data that follow
-        will be received in the future. */
+            position were already received by the user. The data that follow
+            will be received in the future. */
         size_t batch_pos;
 
         /*  File descriptor received via SCM_RIGHTS, if any. */
