@@ -392,7 +392,7 @@ static void nn_worker_routine (void *arg)
 
             /*  Get next poller event, such as IN or OUT. */
             rc = nn_poller_event (&self->poller, &pevent, &phndl);
-            if (nn_slow (rc == -EAGAIN))
+            if (rc == -EAGAIN)
                 break;
 
             /*  If there are any new incoming worker tasks, process them. */
@@ -413,11 +413,11 @@ static void nn_worker_routine (void *arg)
 
                     /*  Next worker task. */
                     item = nn_queue_pop (&tasks);
-                    if (nn_slow (!item))
+                    if (!item)
                         break;
 
                     /*  If the worker thread is asked to stop, do so. */
-                    if (nn_slow (item == &self->stop)) {
+                    if (item == &self->stop) {
                         /*  Make sure we remove all the other workers from
                             the queue, because we're not doing anything with
                             them. */
