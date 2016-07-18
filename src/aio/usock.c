@@ -1074,7 +1074,6 @@ static int nn_usock_cancel_io (struct nn_usock *self)
 #include "../utils/alloc.h"
 #include "../utils/closefd.h"
 #include "../utils/cont.h"
-#include "../utils/fast.h"
 #include "../utils/err.h"
 #include "../utils/attr.h"
 
@@ -1213,7 +1212,7 @@ int nn_usock_start (struct nn_usock *self, int domain, int type, int protocol)
 
     /* Open the underlying socket. */
     s = socket (domain, type, protocol);
-    if (nn_slow (s < 0))
+    if (s < 0)
         return -errno;
 
     nn_usock_init_from_fd (self, s);
@@ -1315,10 +1314,10 @@ int nn_usock_setsockopt (struct nn_usock *self, int level, int optname,
         connection. This behaviour should be relatively harmless. */
     rc = setsockopt (self->s, level, optname, optval, (socklen_t) optlen);
 #if defined NN_HAVE_OSX
-    if (nn_slow (rc != 0 && errno != EINVAL))
+    if (rc != 0 && errno != EINVAL)
         return -errno;
 #else
-    if (nn_slow (rc != 0))
+    if (rc != 0)
         return -errno;
 #endif
 
@@ -1340,7 +1339,7 @@ int nn_usock_bind (struct nn_usock *self, const struct sockaddr *addr,
     errno_assert (rc == 0);
 
     rc = bind (self->s, addr, (socklen_t) addrlen);
-    if (nn_slow (rc != 0))
+    if (rc != 0)
         return -errno;
 
     return 0;
@@ -1355,7 +1354,7 @@ int nn_usock_listen (struct nn_usock *self, int backlog)
 
     /*  Start listening for incoming connections. */
     rc = listen (self->s, backlog);
-    if (nn_slow (rc != 0))
+    if (rc != 0)
         return -errno;
 
     /*  Notify the state machine. */
@@ -1383,7 +1382,7 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *listener)
 #endif
 
     /*  Immediate success. */
-    if (nn_fast (s >= 0)) {
+    if (s >= 0) {
         /*  Disassociate the listener socket from the accepted
             socket. Is useful if we restart accepting on ACCEPT_ERROR  */
         listener->asock = NULL;
@@ -1409,10 +1408,10 @@ void nn_usock_accept (struct nn_usock *self, struct nn_usock *listener)
     listener->asock = self;
 
     /*  Some errors are just ok to ignore for now.  We also stop repeating
-    if (nn_slow (errno != EAGAIN && errno != EWOULDBLOCK
-        && errno != ECONNABORTED && errno != listener->errnum))
         any errors until next IN_FD event so that we are not in a tight loop
         and allow processing other events in the meantime  */
+    if (errno != EAGAIN && errno != EWOULDBLOCK
+        && errno != ECONNABORTED && errno != listener->errnum)
     {
         listener->errnum = errno;
         listener->state = NN_USOCK_STATE_ACCEPTING_ERROR;
@@ -1442,13 +1441,13 @@ void nn_usock_connect (struct nn_usock *self, const struct sockaddr *addr,
     rc = connect (self->s, addr, (socklen_t) addrlen);
 
     /* Immediate success. */
-    if (nn_fast (rc == 0)) {
+    if (rc == 0) {
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_DONE);
         return;
     }
 
     /*  Immediate error. */
-    if (nn_slow (errno != EINPROGRESS)) {
+    if (errno != EINPROGRESS) {
         self->errnum = errno;
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_ERROR);
         return;
@@ -1488,13 +1487,13 @@ void nn_usock_send (struct nn_usock *self, const struct nn_iovec *iov,
     rc = nn_usock_send_raw (self, &self->out.hdr);
 
     /*  Success. */
-    if (nn_fast (rc == 0)) {
+    if (rc == 0) {
         nn_fsm_raise (&self->fsm, &self->event_sent, NN_USOCK_SENT);
         return;
     }
 
     /*  Errors. */
-    if (nn_slow (rc != -EAGAIN)) {
+    if (rc != -EAGAIN) {
         errnum_assert (rc == -ECONNRESET, -rc);
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_ERROR);
         return;
@@ -1519,14 +1518,14 @@ void nn_usock_recv (struct nn_usock *self, void *buf, size_t len, int *fd)
     nbytes = len;
     self->in.pfd = fd;
     rc = nn_usock_recv_raw (self, buf, &nbytes);
-    if (nn_slow (rc < 0)) {
+    if (rc < 0) {
         errnum_assert (rc == -ECONNRESET, -rc);
         nn_fsm_action (&self->fsm, NN_USOCK_ACTION_ERROR);
         return;
     }
 
     /*  Success. */
-    if (nn_fast (nbytes == len)) {
+    if (nbytes == len) {
         nn_fsm_raise (&self->fsm, &self->event_received, NN_USOCK_RECEIVED);
         return;
     }
@@ -1583,7 +1582,7 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
     if (nn_internal_tasks (usock, src, type))
         return;
 
-    if (nn_slow (src == NN_FSM_ACTION && type == NN_FSM_STOP)) {
+    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
 
         /*  Socket in ACCEPTING or CANCELLING state cannot be closed.
             Stop the socket being accepted first. */
@@ -1617,11 +1616,11 @@ static void nn_usock_shutdown (struct nn_fsm *self, int src, int type,
         usock->state = NN_USOCK_STATE_STOPPING;
         return;
     }
-    if (nn_slow (usock->state == NN_USOCK_STATE_STOPPING_ACCEPT)) {
+    if (usock->state == NN_USOCK_STATE_STOPPING_ACCEPT) {
         nn_assert (src == NN_FSM_ACTION && type == NN_USOCK_ACTION_DONE);
         goto finish2;
     }
-    if (nn_slow (usock->state == NN_USOCK_STATE_STOPPING)) {
+    if (usock->state == NN_USOCK_STATE_STOPPING) {
         if (src != NN_USOCK_SRC_TASK_STOP)
             return;
         nn_assert (type == NN_WORKER_TASK_EXECUTE);
@@ -1816,7 +1815,7 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
             case NN_WORKER_FD_IN:
                 sz = usock->in.len;
                 rc = nn_usock_recv_raw (usock, usock->in.buf, &sz);
-                if (nn_fast (rc == 0)) {
+                if (rc == 0) {
                     usock->in.len -= sz;
                     usock->in.buf += sz;
                     if (!usock->in.len) {
@@ -1830,13 +1829,13 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
                 goto error;
             case NN_WORKER_FD_OUT:
                 rc = nn_usock_send_raw (usock, &usock->out.hdr);
-                if (nn_fast (rc == 0)) {
+                if (rc == 0) {
                     nn_worker_reset_out (usock->worker, &usock->wfd);
                     nn_fsm_raise (&usock->fsm, &usock->event_sent,
                         NN_USOCK_SENT);
                     return;
                 }
-                if (nn_fast (rc == -EAGAIN))
+                if (rc == -EAGAIN)
                     return;
                 errnum_assert (rc == -ECONNRESET, -rc);
                 goto error;
@@ -1956,18 +1955,18 @@ static void nn_usock_handler (struct nn_fsm *self, int src, int type,
 #endif
 
                 /*  ECONNABORTED is an valid error. New connection was closed
-                if (nn_slow (s < 0 && errno == ECONNABORTED))
                     by the peer before we were able to accept it. If it happens
                     do nothing and wait for next incoming connection. */
+                if (s < 0 && errno == ECONNABORTED)
                     return;
 
                 /*  Resource allocation errors. It's not clear from POSIX
-                if (nn_slow (s < 0 && (errno == ENFILE || errno == EMFILE ||
-                    errno == ENOBUFS || errno == ENOMEM))) {
                     specification whether the new connection is closed in this
                     case or whether it remains in the backlog. In the latter
                     case it would be wise to wait here for a while to prevent
                     busy looping. */
+                if (s < 0 && (errno == ENFILE || errno == EMFILE ||
+                    errno == ENOBUFS || errno == ENOMEM)) {
                     usock->errnum = errno;
                     usock->state = NN_USOCK_STATE_ACCEPTING_ERROR;
 
@@ -2075,8 +2074,8 @@ static int nn_usock_send_raw (struct nn_usock *self, struct msghdr *hdr)
 #endif
 
     /*  Handle errors. */
-    if (nn_slow (nbytes < 0)) {
-        if (nn_fast (errno == EAGAIN || errno == EWOULDBLOCK))
+    if (nbytes < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             nbytes = 0;
         else {
 
@@ -2122,9 +2121,9 @@ static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len)
 #endif
 
     /*  If batch buffer doesn't exist, allocate it. The point of delayed
-    if (nn_slow (!self->in.batch)) {
         deallocation to allow non-receiving sockets, such as TCP listening
         sockets, to do without the batch buffer. */
+    if (!self->in.batch) {
         self->in.batch = nn_alloc (NN_USOCK_BATCH_SIZE, "AIO batch buffer");
         alloc_assert (self->in.batch);
     }
@@ -2167,13 +2166,13 @@ static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len)
     nbytes = recvmsg (self->s, &hdr, 0);
 
     /*  Handle any possible errors. */
-    if (nn_slow (nbytes <= 0)) {
+    if (nbytes <= 0) {
 
-        if (nn_slow (nbytes == 0))
+        if (nbytes == 0)
             return -ECONNRESET;
 
         /*  Zero bytes received. */
-        if (nn_fast (errno == EAGAIN || errno == EWOULDBLOCK))
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
             nbytes = 0;
         else {
 
