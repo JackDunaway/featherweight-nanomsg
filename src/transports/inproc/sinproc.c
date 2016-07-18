@@ -50,13 +50,11 @@
 #define NN_SINPROC_FLAG_RECEIVING 2
 
 /*  Private functions. */
-static void nn_sinproc_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr);
-static void nn_sinproc_shutdown (struct nn_fsm *self, int src, int type,
+static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
     void *srcptr);
 
-static int nn_sinproc_send (struct nn_pipebase *self, struct nn_msg *msg);
-static int nn_sinproc_recv (struct nn_pipebase *self, struct nn_msg *msg);
+static int nn_sinproc_send (struct nn_pipebase *mypipe, struct nn_msg *msg);
+static int nn_sinproc_recv (struct nn_pipebase *mypipe, struct nn_msg *msg);
 const struct nn_pipebase_vfptr nn_sinproc_pipebase_vfptr = {
     nn_sinproc_send,
     nn_sinproc_recv
@@ -68,7 +66,7 @@ void nn_sinproc_init (struct nn_sinproc *self, int src,
     int rcvbuf;
     size_t sz;
 
-    nn_fsm_init (&self->fsm, nn_sinproc_handler, nn_sinproc_shutdown,
+    nn_fsm_init (&self->fsm, nn_sinproc_handler, nn_sinproc_handler,
         src, self, owner);
     self->state = NN_SINPROC_STATE_IDLE;
     self->flags = 0;
@@ -132,21 +130,19 @@ void nn_sinproc_stop (struct nn_sinproc *self)
     nn_fsm_stop (&self->fsm);
 }
 
-static int nn_sinproc_send (struct nn_pipebase *self, struct nn_msg *msg)
+static int nn_sinproc_send (struct nn_pipebase *mypipe, struct nn_msg *msg)
 {
-    struct nn_sinproc *sinproc;
+    struct nn_sinproc *self = nn_cont (mypipe, struct nn_sinproc, pipebase);
     struct nn_msg nmsg;
-
-    sinproc = nn_cont (self, struct nn_sinproc, pipebase);
 
     /*  If the peer have already closed the connection, we cannot send
         anymore. */
-    if (sinproc->state == NN_SINPROC_STATE_DISCONNECTED)
+    if (self->state == NN_SINPROC_STATE_DISCONNECTED)
         return -ECONNRESET;
 
     /*  Sanity checks. */
-    nn_assert_state (sinproc, NN_SINPROC_STATE_ACTIVE);
-    nn_assert (!(sinproc->flags & NN_SINPROC_FLAG_SENDING));
+    nn_assert_state (self, NN_SINPROC_STATE_ACTIVE);
+    nn_assert (!(self->flags & NN_SINPROC_FLAG_SENDING));
 
     nn_msg_init (&nmsg,
         nn_chunkref_size (&msg->sphdr) +
@@ -161,24 +157,24 @@ static int nn_sinproc_send (struct nn_pipebase *self, struct nn_msg *msg)
     nn_msg_term (msg);
 
     /*  Expose the message to the peer. */
-    nn_msg_term (&sinproc->msg);
-    nn_msg_mv (&sinproc->msg, &nmsg);
+    nn_msg_term (&self->msg);
+    nn_msg_mv (&self->msg, &nmsg);
 
     /*  Notify the peer that there's a message to get. */
-    sinproc->flags |= NN_SINPROC_FLAG_SENDING;
-    nn_fsm_raiseto (&sinproc->fsm, &sinproc->peer->fsm,
-        &sinproc->peer->event_sent, NN_SINPROC_SRC_PEER,
-        NN_SINPROC_SENT, sinproc);
+    self->flags |= NN_SINPROC_FLAG_SENDING;
+    nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
+        &self->peer->event_sent, NN_SINPROC_SRC_PEER,
+        NN_SINPROC_SENT, self);
 
     return 0;
 }
 
-static int nn_sinproc_recv (struct nn_pipebase *self, struct nn_msg *msg)
+static int nn_sinproc_recv (struct nn_pipebase *mypipe, struct nn_msg *msg)
 {
     int rc;
     struct nn_sinproc *sinproc;
 
-    sinproc = nn_cont (self, struct nn_sinproc, pipebase);
+    sinproc = nn_cont (mypipe, struct nn_sinproc, pipebase);
 
     /*  Sanity check. */
     nn_assert (sinproc->state == NN_SINPROC_STATE_ACTIVE ||
@@ -211,281 +207,186 @@ static int nn_sinproc_recv (struct nn_pipebase *self, struct nn_msg *msg)
     return 0;
 }
 
-static void nn_sinproc_shutdown_events (struct nn_sinproc *self, int src,
-    int type, NN_UNUSED void *srcptr)
-{
-    /*  *******************************  */
-    /*  Any-state events                 */
-    /*  *******************************  */
-    switch (src) {
-    case NN_FSM_ACTION:
-        switch (type) {
-        case NN_FSM_STOP:
-            if (self->state != NN_SINPROC_STATE_IDLE &&
-                  self->state != NN_SINPROC_STATE_DISCONNECTED) {
-                nn_pipebase_stop (&self->pipebase);
-                nn_assert (self->fsm.state == 2 || self->fsm.state == 3);
-                nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
-                    &self->peer->event_disconnect, NN_SINPROC_SRC_PEER,
-                    NN_SINPROC_DISCONNECT, self);
-
-                self->state = NN_SINPROC_STATE_STOPPING_PEER;
-            } else {
-                self->state = NN_SINPROC_STATE_STOPPING;
-            }
-            return;
-        }
-    case NN_SINPROC_SRC_PEER:
-        switch (type) {
-        case NN_SINPROC_RECEIVED:
-            return;
-        }
-    }
-
-    /*  *******************************  */
-    /*  Regular events                   */
-    /*  *******************************  */
-    switch (self->state) {
-    case NN_SINPROC_STATE_STOPPING_PEER:
-        switch (src) {
-        case NN_SINPROC_SRC_PEER:
-            switch (type) {
-            case NN_SINPROC_DISCONNECT:
-                self->state = NN_SINPROC_STATE_STOPPING;
-                return;
-            default:
-                nn_fsm_bad_action (self->state, src, type);
-            }
-        default:
-            nn_fsm_bad_source (self->state, src, type);
-        }
-    default:
-        nn_fsm_bad_state (self->state, src, type);
-    }
-
-    nn_fsm_bad_action (self->state, src, type);
-}
-
-static void nn_sinproc_shutdown (struct nn_fsm *self, int src, int type,
+static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
     void *srcptr)
 {
-    struct nn_sinproc *sinproc;
-
-    sinproc = nn_cont (self, struct nn_sinproc, fsm);
-    nn_assert (sinproc->fsm.state == 3);
-
-    nn_sinproc_shutdown_events (sinproc, src, type, srcptr);
-
-    /*  ***************  */
-    /*  States to check  */
-    /*  ***************  */
-
-    /*  Have we got notification that peer is stopped  */
-    if (sinproc->state != NN_SINPROC_STATE_STOPPING) {
-        return;
-    }
-
-    /*  Are all events processed? We can't cancel them unfortunately  */
-    if (nn_fsm_event_active (&sinproc->event_received)
-        || nn_fsm_event_active (&sinproc->event_disconnect)) {
-        return;
-    }
-    /*  These events are deemed to be impossible here  */
-    nn_assert (!nn_fsm_event_active (&sinproc->event_connect));
-    nn_assert (!nn_fsm_event_active (&sinproc->event_sent));
-
-    /*  **********************************************  */
-    /*  All checks are successful. Just stop right now  */
-    /*  **********************************************  */
-
-    nn_fsm_stopped (&sinproc->fsm, NN_SINPROC_STOPPED);
-    return;
-}
-
-static void nn_sinproc_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr)
-{
+    struct nn_sinproc *self = nn_cont (myfsm, struct nn_sinproc, fsm);
     int rc;
-    struct nn_sinproc *sinproc;
     int empty;
 
-    sinproc = nn_cont (self, struct nn_sinproc, fsm);
-
-    switch (sinproc->state) {
-
-/******************************************************************************/
-/*  IDLE state.                                                               */
-/******************************************************************************/
-    case NN_SINPROC_STATE_IDLE:
-        switch (src) {
-
-        case NN_FSM_ACTION:
-            switch (type) {
-            case NN_FSM_START:
-                sinproc->state = NN_SINPROC_STATE_CONNECTING;
-                return;
-            default:
-                nn_fsm_bad_action (sinproc->state, src, type);
-            }
-
-        default:
-            nn_fsm_bad_source (sinproc->state, src, type);
-        }
-
-/******************************************************************************/
-/*  CONNECTING state.                                                         */
-/*  CONNECT request was sent to the peer. Now we are waiting for the          */
-/*  acknowledgement.                                                          */
-/******************************************************************************/
-    case NN_SINPROC_STATE_CONNECTING:
-        switch (src) {
-
-        case NN_FSM_ACTION:
-            switch (type) {
-            case NN_SINPROC_ACTION_READY:
-                sinproc->state = NN_SINPROC_STATE_READY;
-                return;
-            default:
-                nn_fsm_bad_action (sinproc->state, src, type);
-            }
-
-        case NN_SINPROC_SRC_PEER:
-            switch (type) {
-            case NN_SINPROC_READY:
-                sinproc->peer = (struct nn_sinproc*) srcptr;
-                rc = nn_pipebase_start (&sinproc->pipebase);
-                errnum_assert (rc == 0, -rc);
-                sinproc->state = NN_SINPROC_STATE_ACTIVE;
-                nn_fsm_raiseto (&sinproc->fsm, &sinproc->peer->fsm,
-                    &sinproc->event_connect,
-                    NN_SINPROC_SRC_PEER, NN_SINPROC_ACCEPTED, self);
-                return;
-            default:
-                nn_fsm_bad_action (sinproc->state, src, type);
-            }
-
-        default:
-            nn_fsm_bad_source (sinproc->state, src, type);
-        }
-
-/******************************************************************************/
-/*  READY state.                                                              */
-/*                                                                            */
-/******************************************************************************/
-    case NN_SINPROC_STATE_READY:
-        switch (src) {
-
-        case NN_SINPROC_SRC_PEER:
-            switch (type) {
-            case NN_SINPROC_READY:
-                /*  This means both peers sent READY so they are both
-                    ready for receiving messages  */
-                rc = nn_pipebase_start (&sinproc->pipebase);
-                errnum_assert (rc == 0, -rc);
-                sinproc->state = NN_SINPROC_STATE_ACTIVE;
-                return;
-            case NN_SINPROC_ACCEPTED:
-                rc = nn_pipebase_start (&sinproc->pipebase);
-
-                /*  TODO: this assertion needs to be replaced with a run-time
-                    failure. It can be triggered with code disabled within the
-                    inproc test. */
-                errnum_assert (rc == 0, -rc);
-                sinproc->state = NN_SINPROC_STATE_ACTIVE;
-                return;
-            default:
-                nn_fsm_bad_action (sinproc->state, src, type);
-            }
-
-        default:
-            nn_fsm_bad_source (sinproc->state, src, type);
-        }
-
-/******************************************************************************/
-/*  ACTIVE state.                                                             */
-/******************************************************************************/
-    case NN_SINPROC_STATE_ACTIVE:
-        switch (src) {
-
-        case NN_SINPROC_SRC_PEER:
-            switch (type) {
-            case NN_SINPROC_SENT:
-
-                empty = nn_msgqueue_empty (&sinproc->msgqueue);
-
-                /*  Push the message to the inbound message queue. */
-                rc = nn_msgqueue_send (&sinproc->msgqueue,
-                    &sinproc->peer->msg);
-                if (rc == -EAGAIN) {
-                    sinproc->flags |= NN_SINPROC_FLAG_RECEIVING;
-                    return;
-                }
-                errnum_assert (rc == 0, -rc);
-                nn_msg_init (&sinproc->peer->msg, 0);
-
-                /*  Notify the user that there's a message to receive. */
-                if (empty)
-                    nn_pipebase_received (&sinproc->pipebase);
-
-                /*  Notify the peer that the message was received. */
-                nn_fsm_raiseto (&sinproc->fsm, &sinproc->peer->fsm,
-                    &sinproc->peer->event_received, NN_SINPROC_SRC_PEER,
-                    NN_SINPROC_RECEIVED, sinproc);
-
-                return;
-
-            case NN_SINPROC_RECEIVED:
-                nn_assert (sinproc->flags & NN_SINPROC_FLAG_SENDING);
-                nn_pipebase_sent (&sinproc->pipebase);
-                sinproc->flags &= ~NN_SINPROC_FLAG_SENDING;
-                return;
-
-            case NN_SINPROC_DISCONNECT:
-                nn_pipebase_stop (&sinproc->pipebase);
-                nn_fsm_raiseto (&sinproc->fsm, &sinproc->peer->fsm,
-                    &sinproc->peer->event_disconnect, NN_SINPROC_SRC_PEER,
-                    NN_SINPROC_DISCONNECT, sinproc);
-                sinproc->state = NN_SINPROC_STATE_DISCONNECTED;
-                sinproc->peer = NULL;
-                nn_fsm_raise (&sinproc->fsm, &sinproc->event_disconnect,
-                    NN_SINPROC_DISCONNECT);
-                return;
-
-            default:
-                nn_fsm_bad_action (sinproc->state, src, type);
-            }
-
-        default:
-            nn_fsm_bad_source (sinproc->state, src, type);
-        }
-
-/******************************************************************************/
-/*  DISCONNECTED state.                                                       */
-/*  The peer have already closed the connection, but the object was not yet   */
-/*  asked to stop.                                                            */
-/******************************************************************************/
-    case NN_SINPROC_STATE_DISCONNECTED:
-        switch (src) {
-        case NN_SINPROC_SRC_PEER:
-            switch (type) {
-            case NN_SINPROC_RECEIVED:
-            case NN_SINPROC_SENT:
-                /*  These cases may be safely be ignored. They may happen when
-                    nn_close() comes before the already enqueued
-                    NN_SINPROC_RECEIVED has been delivered.  */
-                return;
-            default:
-                nn_fsm_bad_action (sinproc->state, src, type);
-            };
-        default:
-            nn_fsm_bad_source (sinproc->state, src, type);
-        }
-
-/******************************************************************************/
-/*  Invalid state.                                                            */
-/******************************************************************************/
-    default:
-        nn_fsm_bad_state (sinproc->state, src, type);
+    NN_FSM_JOB (NN_SINPROC_STATE_IDLE, NN_FSM_ACTION, NN_FSM_STOP) {
+        self->state = NN_SINPROC_STATE_STOPPING;
+        /*  These events are deemed to be impossible here  */
+        nn_assert (!nn_fsm_event_active (&self->event_connect));
+        nn_assert (!nn_fsm_event_active (&self->event_sent));
+        nn_fsm_stopped (&self->fsm, NN_SINPROC_STOPPED);
+        return;
     }
-}
+    NN_FSM_JOB (NN_SINPROC_STATE_CONNECTING, NN_FSM_ACTION, NN_FSM_STOP) {
+        nn_pipebase_stop (&self->pipebase);
+        nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
+            &self->peer->event_disconnect, NN_SINPROC_SRC_PEER,
+            NN_SINPROC_DISCONNECT, self);
+        self->state = NN_SINPROC_STATE_STOPPING_PEER;
+        return;
+    }
+    NN_FSM_JOB (NN_SINPROC_STATE_READY, NN_FSM_ACTION, NN_FSM_STOP) {
+        nn_pipebase_stop (&self->pipebase);
+        nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
+            &self->peer->event_disconnect, NN_SINPROC_SRC_PEER,
+            NN_SINPROC_DISCONNECT, self);
+        self->state = NN_SINPROC_STATE_STOPPING_PEER;
+        return;
+    }
+    NN_FSM_JOB (NN_SINPROC_STATE_ACTIVE, NN_FSM_ACTION, NN_FSM_STOP) {
+        nn_pipebase_stop (&self->pipebase);
+        nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
+            &self->peer->event_disconnect, NN_SINPROC_SRC_PEER,
+            NN_SINPROC_DISCONNECT, self);
+        self->state = NN_SINPROC_STATE_STOPPING_PEER;
+        return;
+    }
+    NN_FSM_JOB (NN_SINPROC_STATE_DISCONNECTED, NN_FSM_ACTION, NN_FSM_STOP) {
+        self->state = NN_SINPROC_STATE_STOPPING;
+        /*  These events are deemed to be impossible here  */
+        nn_assert (!nn_fsm_event_active (&self->event_connect));
+        nn_assert (!nn_fsm_event_active (&self->event_sent));
+        nn_fsm_stopped (&self->fsm, NN_SINPROC_STOPPED);
+        return;
+    }
+    NN_FSM_JOB (NN_SINPROC_STATE_STOPPING_PEER, NN_FSM_ACTION, NN_FSM_STOP) {
+        self->state = NN_SINPROC_STATE_STOPPING;
+        /*  Are all events processed? We can't cancel them unfortunately  */
+        if (nn_fsm_event_active (&self->event_received)
+            || nn_fsm_event_active (&self->event_disconnect)) {
+            return;
+        }
+        /*  These events are deemed to be impossible here  */
+        nn_assert (!nn_fsm_event_active (&self->event_connect));
+        nn_assert (!nn_fsm_event_active (&self->event_sent));
 
+        nn_fsm_stopped (&self->fsm, NN_SINPROC_STOPPED);
+        return;
+    }
+    /* Ignore incoming messages during shutdown. */
+    NN_FSM_JOB (NN_SINPROC_STATE_STOPPING_PEER, NN_SINPROC_SRC_PEER, NN_SINPROC_RECEIVED) {
+        return;
+    }
+
+    NN_FSM_JOB (NN_SINPROC_STATE_STOPPING_PEER, NN_SINPROC_SRC_PEER, NN_SINPROC_DISCONNECT) {
+        self->state = NN_SINPROC_STATE_STOPPING;
+        /*  Are all events processed? We can't cancel them unfortunately  */
+        if (nn_fsm_event_active (&self->event_received)
+            || nn_fsm_event_active (&self->event_disconnect)) {
+            return;
+        }
+        /*  These events are deemed to be impossible here  */
+        nn_assert (!nn_fsm_event_active (&self->event_connect));
+        nn_assert (!nn_fsm_event_active (&self->event_sent));
+        nn_fsm_stopped (&self->fsm, NN_SINPROC_STOPPED);
+        return;
+    }
+
+    NN_FSM_JOB (NN_SINPROC_STATE_IDLE, NN_FSM_ACTION, NN_FSM_START) {
+        self->state = NN_SINPROC_STATE_CONNECTING;
+        return;
+    }
+
+    /*  CONNECTING - connection request was sent to the peer, and now we are waiting
+        for the acknowledgement. */
+    NN_FSM_JOB (NN_SINPROC_STATE_CONNECTING, NN_FSM_ACTION, NN_SINPROC_ACTION_READY) {
+        self->state = NN_SINPROC_STATE_READY;
+        return;
+    }
+
+    NN_FSM_JOB (NN_SINPROC_STATE_CONNECTING, NN_SINPROC_SRC_PEER, NN_SINPROC_READY) {
+        self->peer = (struct nn_sinproc*) srcptr;
+        rc = nn_pipebase_start (&self->pipebase);
+        errnum_assert (rc == 0, -rc);
+        self->state = NN_SINPROC_STATE_ACTIVE;
+        nn_fsm_raiseto (&self->fsm, &self->peer->fsm, &self->event_connect,
+            NN_SINPROC_SRC_PEER, NN_SINPROC_ACCEPTED, myfsm);
+        return;
+    }
+
+    /*  Both peers sent READY so we are both ready for receiving messages. */
+    NN_FSM_JOB (NN_SINPROC_STATE_READY, NN_SINPROC_SRC_PEER, NN_SINPROC_READY) {
+        rc = nn_pipebase_start (&self->pipebase);
+        errnum_assert (rc == 0, -rc);
+        self->state = NN_SINPROC_STATE_ACTIVE;
+        return;
+    }
+
+    NN_FSM_JOB (NN_SINPROC_STATE_READY, NN_SINPROC_SRC_PEER, NN_SINPROC_ACCEPTED) {
+        rc = nn_pipebase_start (&self->pipebase);
+
+        /*  TODO: this assertion needs to be replaced with a run-time
+            failure. It can be triggered with code disabled within the
+            inproc test. */
+        errnum_assert (rc == 0, -rc);
+        self->state = NN_SINPROC_STATE_ACTIVE;
+        return;
+    }
+
+    NN_FSM_JOB (NN_SINPROC_STATE_ACTIVE, NN_SINPROC_SRC_PEER, NN_SINPROC_SENT) {
+        empty = nn_msgqueue_empty (&self->msgqueue);
+
+        /*  Push the message to the inbound message queue. */
+        rc = nn_msgqueue_send (&self->msgqueue,
+            &self->peer->msg);
+        if (rc == -EAGAIN) {
+            self->flags |= NN_SINPROC_FLAG_RECEIVING;
+            return;
+        }
+        errnum_assert (rc == 0, -rc);
+        nn_msg_init (&self->peer->msg, 0);
+
+        /*  Notify the user that there's a message to receive. */
+        if (empty)
+            nn_pipebase_received (&self->pipebase);
+
+        /*  Notify the peer that the message was received. */
+        nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
+            &self->peer->event_received, NN_SINPROC_SRC_PEER,
+            NN_SINPROC_RECEIVED, self);
+
+        return;
+    }
+
+    NN_FSM_JOB (NN_SINPROC_STATE_ACTIVE, NN_SINPROC_SRC_PEER, NN_SINPROC_RECEIVED) {
+        nn_assert (self->flags & NN_SINPROC_FLAG_SENDING);
+        nn_pipebase_sent (&self->pipebase);
+        self->flags &= ~NN_SINPROC_FLAG_SENDING;
+        return;
+    }
+
+    NN_FSM_JOB (NN_SINPROC_STATE_ACTIVE, NN_SINPROC_SRC_PEER, NN_SINPROC_DISCONNECT) {
+        nn_pipebase_stop (&self->pipebase);
+        nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
+            &self->peer->event_disconnect, NN_SINPROC_SRC_PEER,
+            NN_SINPROC_DISCONNECT, self);
+        self->state = NN_SINPROC_STATE_DISCONNECTED;
+        self->peer = NULL;
+        nn_fsm_raise (&self->fsm, &self->event_disconnect, NN_SINPROC_DISCONNECT);
+        return;
+    }
+
+/*  DISCONNECTED: the peer has already closed the connection, but this object
+    has not yet been asked to stop. */
+    NN_FSM_JOB (NN_SINPROC_STATE_DISCONNECTED, NN_SINPROC_SRC_PEER, NN_SINPROC_RECEIVED) {
+
+        /*  These cases may be safely be ignored. They may happen when
+            nn_close() comes before the already enqueued
+            NN_SINPROC_RECEIVED has been delivered.  */
+        return;
+    }
+    NN_FSM_JOB (NN_SINPROC_STATE_DISCONNECTED, NN_SINPROC_SRC_PEER, NN_SINPROC_SENT) {
+
+        /*  These cases may be safely be ignored. They may happen when
+            nn_close() comes before the already enqueued
+            NN_SINPROC_RECEIVED has been delivered.  */
+        return;
+    }
+
+    nn_fsm_bad_state (self->state, src, type);
+}

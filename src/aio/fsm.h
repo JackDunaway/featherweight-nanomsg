@@ -53,6 +53,11 @@ void nn_fsm_event_process (struct nn_fsm_event *self);
 #define NN_FSM_START -2
 #define NN_FSM_STOP -3
 
+
+#define NN_FSM_JOB(mystate, jobsrc, jobtype) \
+    if (self->state == (mystate) && src == (jobsrc) && type == (jobtype))
+
+
 /*  Virtual function to be implemented by the derived class to handle the
     incoming events. */
 typedef void (*nn_fsm_fn) (struct nn_fsm *self, int src, int type,
