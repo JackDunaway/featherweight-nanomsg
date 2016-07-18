@@ -70,7 +70,8 @@ void nn_fsm_feed (struct nn_fsm *self, int src, int type, void *srcptr)
 {
     if (self->state != NN_FSM_STATE_STOPPING) {
         self->fn (self, src, type, srcptr);
-    } else {
+    }
+    else {
         self->shutdown_fn (self, src, type, srcptr);
     }
 }
