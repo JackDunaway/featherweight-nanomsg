@@ -1056,6 +1056,24 @@ uint64_t nn_get_statistic (int s, int statistic)
     return val;
 }
 
+int nn_get_statistics (int s, void *statistics, size_t *sz)
+{
+    int rc;
+    struct nn_sock *sock;
+
+    rc = nn_global_hold_socket (&sock, s);
+    if (rc < 0) {
+        errno = -rc;
+        return -1;
+    }
+
+    *sz = 0;
+
+    nn_global_rele_socket (sock);
+
+    return 0;
+}
+
 static void nn_global_add_transport (struct nn_transport *transport)
 {
     if (transport->init)
