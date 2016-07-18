@@ -99,8 +99,8 @@ struct nn_poller {
     struct pollfd *pollset;
 
     /*  List of handles associated with elements in the pollset. Either points
-    to the handle associated with the file descriptor (hndl) or is part
-    of the list of removed pollitems (removed). */
+        to the handle associated with the file descriptor (hndl) or is part
+        of the list of removed pollitems (removed). */
     struct nn_hndls_item {
         struct nn_poller_hndl *hndl;
         int prev;

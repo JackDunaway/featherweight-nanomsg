@@ -412,6 +412,7 @@ int nn_poller_event (struct nn_poller *self, int *event,
 }
 
 #elif defined NN_USE_POLL
+
 #include "../utils/alloc.h"
 #include "../utils/err.h"
 
