@@ -77,7 +77,7 @@ void nn_efd_signal (struct nn_efd *self)
     ssize_t nbytes;
     int fd = self->efd;
 
-    if (nn_slow (fd < 0))
+    if (fd < 0)
         return;
 
     nbytes = write (fd, &one, sizeof (one));
@@ -89,7 +89,7 @@ void nn_efd_unsignal (struct nn_efd *self)
     uint64_t count;
     int fd = self->efd;
 
-    if (nn_slow (fd < 0))
+    if (fd < 0)
         return;
 
     /*  Extract all the signals from the eventfd. */
@@ -174,7 +174,7 @@ void nn_efd_signal (struct nn_efd *self)
     char c = 101;
     int fd = self->w;
 
-    if (nn_slow (fd < 0))
+    if (fd < 0)
         return;
     nbytes = write (self->w, &c, 1);
     errno_assert (nbytes != -1);
@@ -188,13 +188,13 @@ void nn_efd_unsignal (struct nn_efd *self)
 
     while (1) {
         int fd = self->r;
-        if (nn_slow (fd < 0))
+        if (fd < 0)
             return;
         nbytes = read (fd, buf, sizeof (buf));
         if (nbytes < 0 && errno == EAGAIN)
             nbytes = 0;
         errno_assert (nbytes >= 0);
-        if (nn_fast ((size_t) nbytes < sizeof (buf)))
+        if ((size_t) nbytes < sizeof (buf))
             break;
     }
 }
@@ -271,7 +271,7 @@ void nn_efd_signal (struct nn_efd *self)
     char c = 101;
     int fd = self->w;
 
-    if (nn_slow (fd < 0))
+    if (fd < 0)
         return;
 #if defined MSG_NOSIGNAL
     nbytes = send (fd, &c, 1, MSG_NOSIGNAL);
@@ -289,13 +289,13 @@ void nn_efd_unsignal (struct nn_efd *self)
 
     while (1) {
         int fd = self->r;
-        if (nn_slow (fd < 0))
+        if (fd < 0)
             return;
         nbytes = recv (self->r, buf, sizeof (buf), 0);
         if (nbytes < 0 && errno == EAGAIN)
             nbytes = 0;
         errno_assert (nbytes >= 0);
-        if (nn_fast (nbytes < sizeof (buf)))
+        if (nbytes < sizeof (buf))
             break;
     }
 }
