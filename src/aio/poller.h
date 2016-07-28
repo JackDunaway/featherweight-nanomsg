@@ -74,6 +74,21 @@ struct nn_poller_hndl {
     int events;
 };
 
+struct nn_poller {
+
+    /*  Current pollset. */
+    int kq;
+
+    /*  Number of events being processed at the moment. */
+    int nevents;
+
+    /*  Index of the event being processed at the moment. */
+    int index;
+
+    /*  Cached events. */
+    struct kevent events [NN_POLLER_MAX_EVENTS];
+};
+
 #elif defined NN_USE_POLL
 
 #include <poll.h>
