@@ -239,6 +239,11 @@ if (WIN32)
     list (APPEND NN_SOURCES
         utils/win.h
     )
+else ()
+    list (APPEND NN_SOURCES
+        aio/poller.h
+        aio/poller.c
+    )
 endif ()
 
 if (NN_HAVE_EPOLL)
