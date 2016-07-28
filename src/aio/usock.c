@@ -2116,7 +2116,7 @@ static int nn_usock_recv_raw (struct nn_usock *self, void *buf, size_t *len)
         sockets, to do without the batch buffer. */
     if (!self->in.batch) {
         self->in.batch = nn_alloc (NN_USOCK_BATCH_SIZE, "AIO batch buffer");
-        alloc_assert (self->in.batch);
+        nn_assert_alloc (self->in.batch);
     }
 
     /*  Try to satisfy the recv request by data from the batch buffer. */
