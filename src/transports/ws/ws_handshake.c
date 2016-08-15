@@ -25,7 +25,10 @@
 #include "ws_handshake.h"
 #include "sha1.h"
 
+#include "../tcp/utcp.h"
+
 #include "../../aio/timer.h"
+#include "../../aio/stream.h"
 
 #include "../../core/sock.h"
 
@@ -185,7 +188,7 @@ int nn_ws_handshake_isidle (struct nn_ws_handshake *self)
 }
 
 void nn_ws_handshake_start (struct nn_ws_handshake *self,
-    struct nn_usock *usock, struct nn_pipebase *pipebase,
+    struct nn_utcp *usock, struct nn_pipebase *pipebase,
     int mode, const char *resource, const char *host)
 {
     /*  It's expected this resource has been allocated during intial connect. */
@@ -196,7 +199,7 @@ void nn_ws_handshake_start (struct nn_ws_handshake *self,
     nn_assert (self->usock == NULL && self->usock_owner.fsm == NULL);
     self->usock_owner.src = NN_WS_HANDSHAKE_SRC_USOCK;
     self->usock_owner.fsm = &self->fsm;
-    nn_usock_swap_owner (usock, &self->usock_owner);
+    nn_utcp_swap_owner (usock, &self->usock_owner);
     self->usock = usock;
     self->pipebase = pipebase;
     self->mode = mode;
@@ -425,8 +428,8 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
                     nn_assert (handshaker->recv_len <=
                         sizeof (handshaker->opening_hs));
                     handshaker->state = NN_WS_HANDSHAKE_STATE_SERVER_RECV;
-                    nn_usock_recv (handshaker->usock, handshaker->opening_hs,
-                        handshaker->recv_len, NULL);
+                    nn_utcp_recv (handshaker->usock, handshaker->opening_hs,
+                        handshaker->recv_len);
                     return;
                 default:
                     nn_assert_unreachable ("Unexpected [mode] value.");
@@ -449,7 +452,7 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 
         case NN_WS_HANDSHAKE_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_RECEIVED:
+            case NN_STREAM_RECEIVED:
                 /*  Parse bytes received thus far. */
                 switch (nn_ws_handshake_parse_client_opening (handshaker)) {
                 case NN_WS_HANDSHAKE_INVALID:
@@ -511,9 +514,9 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
                     }
                     else {
                         handshaker->retries++;
-                        nn_usock_recv (handshaker->usock,
+                        nn_utcp_recv (handshaker->usock,
                             handshaker->opening_hs + handshaker->recv_pos,
-                            handshaker->recv_len, NULL);
+                            handshaker->recv_len);
                     }
                     return;
                 default:
@@ -521,10 +524,10 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
                         handshaker->state, src, type);
                 }
                 return;
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 /*  Ignore it and wait for ERROR event. */
                 return;
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 nn_timer_stop (&handshaker->timer);
                 handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
                 return;
@@ -554,15 +557,15 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 
         case NN_WS_HANDSHAKE_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SENT:
+            case NN_STREAM_SENT:
                 /*  As per RFC 6455 4.2.2, the handshake is now complete
                     and the connection is immediately ready for send/recv. */
                 nn_timer_stop (&handshaker->timer);
                 handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE;
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 /*  Ignore it and wait for ERROR event. */
                 return;
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 nn_timer_stop (&handshaker->timer);
                 handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
                 return;
@@ -592,15 +595,15 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 
         case NN_WS_HANDSHAKE_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SENT:
+            case NN_STREAM_SENT:
                 handshaker->state = NN_WS_HANDSHAKE_STATE_CLIENT_RECV;
-                nn_usock_recv (handshaker->usock, handshaker->response,
-                    handshaker->recv_len, NULL);
+                nn_utcp_recv (handshaker->usock, handshaker->response,
+                    handshaker->recv_len);
                 return;
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 /*  Ignore it and wait for ERROR event. */
                 return;
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 nn_timer_stop (&handshaker->timer);
                 handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
                 return;
@@ -630,7 +633,7 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 
         case NN_WS_HANDSHAKE_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_RECEIVED:
+            case NN_STREAM_RECEIVED:
                 /*  Parse bytes received thus far. */
                 switch (nn_ws_handshake_parse_server_response (handshaker)) {
                 case NN_WS_HANDSHAKE_INVALID:
@@ -688,9 +691,9 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
                     }
                     else {
                         handshaker->retries++;
-                        nn_usock_recv (handshaker->usock,
+                        nn_utcp_recv (handshaker->usock,
                             handshaker->response + handshaker->recv_pos,
-                            handshaker->recv_len, NULL);
+                            handshaker->recv_len);
                     }
                     return;
                 default:
@@ -698,10 +701,10 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
                         handshaker->state, src, type);
                 }
                 return;
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 /*  Ignore it and wait for ERROR event. */
                 return;
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 nn_timer_stop (&handshaker->timer);
                 handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
                 return;
@@ -731,16 +734,16 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 
         case NN_WS_HANDSHAKE_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SENT:
+            case NN_STREAM_SENT:
                 /*  As per RFC 6455 4.2.2, the handshake is now complete
                     and the connection is immediately ready for send/recv. */
                 nn_timer_stop (&handshaker->timer);
                 handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE;
                 return;
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 /*  Ignore it and wait for ERROR event. */
                 return;
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 nn_timer_stop (&handshaker->timer);
                 handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
                 return;
@@ -834,7 +837,7 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 
 static void nn_ws_handshake_leave (struct nn_ws_handshake *self, int rc)
 {
-    nn_usock_swap_owner (self->usock, &self->usock_owner);
+    nn_utcp_swap_owner (self->usock, &self->usock_owner);
     self->usock = NULL;
     self->usock_owner.src = -1;
     self->usock_owner.fsm = NULL;
@@ -1253,7 +1256,7 @@ static void nn_ws_handshake_client_request (struct nn_ws_handshake *self)
     open_request.iov_len = strlen (self->opening_hs);
     open_request.iov_base = self->opening_hs;
 
-    nn_usock_send (self->usock, &open_request, 1);
+    nn_utcp_send (self->usock, &open_request, 1);
 }
 
 static void nn_ws_handshake_server_reply (struct nn_ws_handshake *self)
@@ -1336,7 +1339,7 @@ static void nn_ws_handshake_server_reply (struct nn_ws_handshake *self)
     response.iov_len = strlen (self->response);
     response.iov_base = &self->response;
 
-    nn_usock_send (self->usock, &response, 1);
+    nn_utcp_send (self->usock, &response, 1);
 
     return;
 }

@@ -331,17 +331,6 @@ void nn_term (void)
     nn_mutex_unlock (&self.lock);
 }
 
-void nn_init (void)
-{
-    nn_mutex_lock (&self.lock);
-    /*  Wait for any in progress term to complete. */
-    while (self.flags & NN_CTX_FLAG_TERMING) {
-        nn_condvar_wait (&self.cond, &self.lock, -1);
-    }
-    self.flags &= ~NN_CTX_FLAG_TERMED;
-    nn_mutex_unlock (&self.lock);
-}
-
 void *nn_allocmsg (size_t size, int type)
 {
     int rc;

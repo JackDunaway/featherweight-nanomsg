@@ -52,7 +52,7 @@ void nn_atcp_init (struct nn_atcp *self, int src,
         src, self, owner);
     self->state = NN_ATCP_STATE_IDLE;
     self->epbase = epbase;
-    nn_usock_init (&self->usock, NN_ATCP_SRC_USOCK, &self->fsm);
+    nn_utcp_init (&self->usock, NN_ATCP_SRC_USOCK, &self->fsm);
     self->listener = NULL;
     self->listener_owner.src = -1;
     self->listener_owner.fsm = NULL;
@@ -70,7 +70,7 @@ void nn_atcp_term (struct nn_atcp *self)
     nn_fsm_event_term (&self->done);
     nn_fsm_event_term (&self->accepted);
     nn_stcp_term (&self->stcp);
-    nn_usock_term (&self->usock);
+    nn_utcp_term (&self->usock);
     nn_fsm_term (&self->fsm);
 }
 
@@ -79,7 +79,7 @@ int nn_atcp_isidle (struct nn_atcp *self)
     return nn_fsm_isidle (&self->fsm);
 }
 
-void nn_atcp_start (struct nn_atcp *self, struct nn_usock *listener)
+void nn_atcp_start (struct nn_atcp *self, struct nn_utcp *listener)
 {
     nn_assert_state (self, NN_ATCP_STATE_IDLE);
 
@@ -87,7 +87,7 @@ void nn_atcp_start (struct nn_atcp *self, struct nn_usock *listener)
     self->listener = listener;
     self->listener_owner.src = NN_ATCP_SRC_LISTENER;
     self->listener_owner.fsm = &self->fsm;
-    nn_usock_swap_owner (listener, &self->listener_owner);
+    nn_utcp_swap_owner (listener, &self->listener_owner);
 
     /*  Start the state machine. */
     nn_fsm_start (&self->fsm);
@@ -116,15 +116,15 @@ static void nn_atcp_shutdown (struct nn_fsm *self, int src, int type,
     if (atcp->state == NN_ATCP_STATE_STOPPING_STCP_FINAL) {
         if (!nn_stcp_isidle (&atcp->stcp))
             return;
-        nn_usock_stop (&atcp->usock);
+        nn_utcp_stop (&atcp->usock);
         atcp->state = NN_ATCP_STATE_STOPPING;
     }
     if (atcp->state == NN_ATCP_STATE_STOPPING) {
-        if (!nn_usock_isidle (&atcp->usock))
+        if (!nn_utcp_isidle (&atcp->usock))
             return;
        if (atcp->listener) {
             nn_assert (atcp->listener_owner.fsm);
-            nn_usock_swap_owner (atcp->listener, &atcp->listener_owner);
+            nn_utcp_swap_owner (atcp->listener, &atcp->listener_owner);
             atcp->listener = NULL;
             atcp->listener_owner.src = -1;
             atcp->listener_owner.fsm = NULL;
@@ -158,7 +158,7 @@ static void nn_atcp_handler (struct nn_fsm *self, int src, int type,
         case NN_FSM_ACTION:
             switch (type) {
             case NN_FSM_START:
-                nn_usock_accept (&atcp->usock, atcp->listener);
+                nn_utcp_accept (&atcp->usock, atcp->listener);
                 atcp->state = NN_ATCP_STATE_ACCEPTING;
                 return;
             default:
@@ -178,7 +178,7 @@ static void nn_atcp_handler (struct nn_fsm *self, int src, int type,
 
         case NN_ATCP_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_ACCEPTED:
+            case NN_STREAM_ACCEPTED:
                 nn_epbase_clear_error (atcp->epbase);
 
                 /*  Set the relevant socket options. */
@@ -186,24 +186,24 @@ static void nn_atcp_handler (struct nn_fsm *self, int src, int type,
                 nn_epbase_getopt (atcp->epbase, NN_SOL_SOCKET, NN_SNDBUF,
                     &val, &sz);
                 nn_assert (sz == sizeof (val));
-                nn_usock_setsockopt (&atcp->usock, SOL_SOCKET, SO_SNDBUF,
+                nn_utcp_setsockopt (&atcp->usock, SOL_SOCKET, SO_SNDBUF,
                     &val, sizeof (val));
                 sz = sizeof (val);
                 nn_epbase_getopt (atcp->epbase, NN_SOL_SOCKET, NN_RCVBUF,
                     &val, &sz);
                 nn_assert (sz == sizeof (val));
-                nn_usock_setsockopt (&atcp->usock, SOL_SOCKET, SO_RCVBUF,
+                nn_utcp_setsockopt (&atcp->usock, SOL_SOCKET, SO_RCVBUF,
                     &val, sizeof (val));
 
                 /*  Return ownership of the listening socket to the parent. */
-                nn_usock_swap_owner (atcp->listener, &atcp->listener_owner);
+                nn_utcp_swap_owner (atcp->listener, &atcp->listener_owner);
                 atcp->listener = NULL;
                 atcp->listener_owner.src = -1;
                 atcp->listener_owner.fsm = NULL;
                 nn_fsm_raise (&atcp->fsm, &atcp->accepted, NN_ATCP_ACCEPTED);
 
                 /*  Start the stcp state machine. */
-                nn_usock_activate (&atcp->usock);
+                nn_utcp_activate (&atcp->usock);
                 nn_stcp_start (&atcp->stcp, &atcp->usock);
                 atcp->state = NN_ATCP_STATE_ACTIVE;
 
@@ -219,12 +219,11 @@ static void nn_atcp_handler (struct nn_fsm *self, int src, int type,
         case NN_ATCP_SRC_LISTENER:
             switch (type) {
 
-            case NN_USOCK_ACCEPT_ERROR:
-                nn_epbase_set_error (atcp->epbase,
-                    nn_usock_geterrno(atcp->listener));
+            case NN_STREAM_ACCEPT_ERROR:
+                nn_epbase_set_error (atcp->epbase, atcp->listener->errnum);
                 nn_epbase_stat_increment (atcp->epbase,
                     NN_STAT_ACCEPT_ERRORS, 1);
-                nn_usock_accept (&atcp->usock, atcp->listener);
+                nn_utcp_accept (&atcp->usock, atcp->listener);
                 return;
 
             default:
@@ -265,10 +264,10 @@ static void nn_atcp_handler (struct nn_fsm *self, int src, int type,
 
         case NN_ATCP_SRC_STCP:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
             case NN_STCP_STOPPED:
-                nn_usock_stop (&atcp->usock);
+                nn_utcp_stop (&atcp->usock);
                 atcp->state = NN_ATCP_STATE_STOPPING_USOCK;
                 return;
             default:
@@ -287,9 +286,9 @@ static void nn_atcp_handler (struct nn_fsm *self, int src, int type,
 
         case NN_ATCP_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
-            case NN_USOCK_STOPPED:
+            case NN_STREAM_STOPPED:
                 nn_fsm_raise (&atcp->fsm, &atcp->done, NN_ATCP_ERROR);
                 atcp->state = NN_ATCP_STATE_DONE;
                 return;

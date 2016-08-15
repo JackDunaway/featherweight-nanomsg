@@ -22,6 +22,7 @@
 
 #include "ctcp.h"
 #include "stcp.h"
+#include "utcp.h"
 
 #include "../../tcp.h"
 
@@ -32,7 +33,6 @@
 #include "../utils/literal.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
@@ -77,7 +77,7 @@ struct nn_ctcp {
     struct nn_epbase epbase;
 
     /*  The underlying TCP socket. */
-    struct nn_usock usock;
+    struct nn_utcp usock;
 
     /*  Used to wait before retrying to connect. */
     struct nn_backoff retry;
@@ -181,7 +181,7 @@ int nn_ctcp_create (void *hint, struct nn_epbase **epbase)
     nn_fsm_init_root (&self->fsm, nn_ctcp_handler, nn_ctcp_shutdown,
         nn_epbase_getctx (&self->epbase));
     self->state = NN_CTCP_STATE_IDLE;
-    nn_usock_init (&self->usock, NN_CTCP_SRC_USOCK, &self->fsm);
+    nn_utcp_init (&self->usock, NN_CTCP_SRC_USOCK, &self->fsm);
     sz = sizeof (reconnect_ivl);
     nn_epbase_getopt (&self->epbase, NN_SOL_SOCKET, NN_RECONNECT_IVL,
         &reconnect_ivl, &sz);
@@ -224,7 +224,7 @@ static void nn_ctcp_destroy (struct nn_epbase *self)
     nn_dns_term (&ctcp->dns);
     nn_stcp_term (&ctcp->stcp);
     nn_backoff_term (&ctcp->retry);
-    nn_usock_term (&ctcp->usock);
+    nn_utcp_term (&ctcp->usock);
     nn_fsm_term (&ctcp->fsm);
     nn_epbase_term (&ctcp->epbase);
 
@@ -250,13 +250,13 @@ static void nn_ctcp_shutdown (struct nn_fsm *self, int src, int type,
         if (!nn_stcp_isidle (&ctcp->stcp))
             return;
         nn_backoff_stop (&ctcp->retry);
-        nn_usock_stop (&ctcp->usock);
+        nn_utcp_stop (&ctcp->usock);
         nn_dns_stop (&ctcp->dns);
         ctcp->state = NN_CTCP_STATE_STOPPING;
     }
     if (ctcp->state == NN_CTCP_STATE_STOPPING) {
         if (!nn_backoff_isidle (&ctcp->retry) ||
-              !nn_usock_isidle (&ctcp->usock) ||
+              !nn_utcp_isidle (&ctcp->usock) ||
               !nn_dns_isidle (&ctcp->dns))
             return;
         ctcp->state = NN_CTCP_STATE_IDLE;
@@ -353,7 +353,7 @@ static void nn_ctcp_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CTCP_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_CONNECTED:
+            case NN_STREAM_CONNECTED:
                 nn_stcp_start (&ctcp->stcp, &ctcp->usock);
                 ctcp->state = NN_CTCP_STATE_ACTIVE;
                 nn_epbase_stat_increment (&ctcp->epbase,
@@ -362,10 +362,9 @@ static void nn_ctcp_handler (struct nn_fsm *self, int src, int type,
                     NN_STAT_ESTABLISHED_CONNECTIONS, 1);
                 nn_epbase_clear_error (&ctcp->epbase);
                 return;
-            case NN_USOCK_ERROR:
-                nn_epbase_set_error (&ctcp->epbase,
-                    nn_usock_geterrno (&ctcp->usock));
-                nn_usock_stop (&ctcp->usock);
+            case NN_STREAM_ERROR:
+                nn_epbase_set_error (&ctcp->epbase, ctcp->usock.errnum);
+                nn_utcp_stop (&ctcp->usock);
                 ctcp->state = NN_CTCP_STATE_STOPPING_USOCK;
                 nn_epbase_stat_increment (&ctcp->epbase,
                     NN_STAT_INPROGRESS_CONNECTIONS, -1);
@@ -412,10 +411,10 @@ static void nn_ctcp_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CTCP_SRC_STCP:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
             case NN_STCP_STOPPED:
-                nn_usock_stop (&ctcp->usock);
+                nn_utcp_stop (&ctcp->usock);
                 ctcp->state = NN_CTCP_STATE_STOPPING_USOCK;
                 return;
             default:
@@ -435,9 +434,9 @@ static void nn_ctcp_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CTCP_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
-            case NN_USOCK_STOPPED:
+            case NN_STREAM_STOPPED:
                 nn_backoff_start (&ctcp->retry);
                 ctcp->state = NN_CTCP_STATE_WAITING;
                 return;
@@ -593,7 +592,7 @@ static void nn_ctcp_start_connecting (struct nn_ctcp *self,
         nn_assert_unreachable ("Unexpected ss_family.");
 
     /*  Try to start the underlying socket. */
-    rc = nn_usock_start (&self->usock, remote.ss_family, SOCK_STREAM, 0);
+    rc = nn_utcp_start (&self->usock, remote.ss_family, SOCK_STREAM, 0);
     if (rc < 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CTCP_STATE_WAITING;
@@ -604,16 +603,16 @@ static void nn_ctcp_start_connecting (struct nn_ctcp *self,
     sz = sizeof (val);
     nn_epbase_getopt (&self->epbase, NN_SOL_SOCKET, NN_SNDBUF, &val, &sz);
     nn_assert (sz == sizeof (val));
-    nn_usock_setsockopt (&self->usock, SOL_SOCKET, SO_SNDBUF,
+    nn_utcp_setsockopt (&self->usock, SOL_SOCKET, SO_SNDBUF,
         &val, sizeof (val));
     sz = sizeof (val);
     nn_epbase_getopt (&self->epbase, NN_SOL_SOCKET, NN_RCVBUF, &val, &sz);
     nn_assert (sz == sizeof (val));
-    nn_usock_setsockopt (&self->usock, SOL_SOCKET, SO_RCVBUF,
+    nn_utcp_setsockopt (&self->usock, SOL_SOCKET, SO_RCVBUF,
         &val, sizeof (val));
 
     /*  Bind the socket to the local network interface. */
-    rc = nn_usock_bind (&self->usock, (struct sockaddr*) &local, locallen);
+    rc = nn_utcp_bind (&self->usock, (struct sockaddr*) &local, locallen);
     if (rc != 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CTCP_STATE_WAITING;
@@ -621,7 +620,7 @@ static void nn_ctcp_start_connecting (struct nn_ctcp *self,
     }
 
     /*  Start connecting. */
-    nn_usock_connect (&self->usock, (struct sockaddr*) &remote, remotelen);
+    nn_utcp_connect (&self->usock, (struct sockaddr*) &remote, remotelen);
     self->state = NN_CTCP_STATE_CONNECTING;
     nn_epbase_stat_increment (&self->epbase,
         NN_STAT_INPROGRESS_CONNECTIONS, 1);

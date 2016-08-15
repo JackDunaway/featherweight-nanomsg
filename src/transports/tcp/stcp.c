@@ -29,25 +29,32 @@
 
 /*  States of the object as a whole. */
 #define NN_STCP_STATE_IDLE 1
-#define NN_STCP_STATE_PROTOHDR 2
-#define NN_STCP_STATE_STOPPING_STREAMHDR 3
-#define NN_STCP_STATE_ACTIVE 4
-#define NN_STCP_STATE_SHUTTING_DOWN 5
-#define NN_STCP_STATE_DONE 6
-#define NN_STCP_STATE_STOPPING 7
+#define NN_STCP_STATE_STREAMHDR_SENDING 2
+#define NN_STCP_STATE_STREAMHDR_RECVING 3
+#define NN_STCP_STATE_STREAMHDR_ERROR 4
+#define NN_STCP_STATE_STREAMHDR_SUCCESS 5
+#define NN_STCP_STATE_ACTIVE 6
+#define NN_STCP_STATE_SHUTTING_DOWN 7
+#define NN_STCP_STATE_DONE 8
+#define NN_STCP_STATE_STOPPING_TIMER 9
+
+/*  Subordinate srcptr objects. */
+#define NN_STCP_SRC_USOCK 1
+#define NN_STCP_SRC_TIMER 2
 
 /*  Possible states of the inbound part of the object. */
 #define NN_STCP_INSTATE_HDR 1
 #define NN_STCP_INSTATE_BODY 2
 #define NN_STCP_INSTATE_HASMSG 3
 
+/*  Time allowed to complete opening handshake. */
+#ifndef NN_STCP_STREAMHDR_TIMEOUT
+#   define NN_STCP_STREAMHDR_TIMEOUT 1000
+#endif
+
 /*  Possible states of the outbound part of the object. */
 #define NN_STCP_OUTSTATE_IDLE 1
 #define NN_STCP_OUTSTATE_SENDING 2
-
-/*  Subordinate srcptr objects. */
-#define NN_STCP_SRC_USOCK 1
-#define NN_STCP_SRC_STREAMHDR 2
 
 /*  Stream is a special type of pipe. Implementation of the virtual pipe API. */
 static int nn_stcp_send (struct nn_pipebase *self, struct nn_msg *msg);
@@ -69,7 +76,7 @@ void nn_stcp_init (struct nn_stcp *self, int src,
     nn_fsm_init (&self->fsm, nn_stcp_handler, nn_stcp_shutdown,
         src, self, owner);
     self->state = NN_STCP_STATE_IDLE;
-    nn_streamhdr_init (&self->streamhdr, NN_STCP_SRC_STREAMHDR, &self->fsm);
+    nn_timer_init (&self->timer, NN_STCP_SRC_TIMER, &self->fsm);
     self->usock = NULL;
     self->usock_owner.src = -1;
     self->usock_owner.fsm = NULL;
@@ -89,7 +96,7 @@ void nn_stcp_term (struct nn_stcp *self)
     nn_msg_term (&self->outmsg);
     nn_msg_term (&self->inmsg);
     nn_pipebase_term (&self->pipebase);
-    nn_streamhdr_term (&self->streamhdr);
+    nn_timer_term (&self->timer);
     nn_fsm_term (&self->fsm);
 }
 
@@ -98,14 +105,27 @@ int nn_stcp_isidle (struct nn_stcp *self)
     return nn_fsm_isidle (&self->fsm);
 }
 
-void nn_stcp_start (struct nn_stcp *self, struct nn_usock *usock)
+void nn_stcp_start (struct nn_stcp *self, struct nn_utcp *usock)
 {
+    size_t sz;
+    int protocol;
+
     /*  Take ownership of the underlying socket. */
     nn_assert (self->usock == NULL && self->usock_owner.fsm == NULL);
     self->usock_owner.src = NN_STCP_SRC_USOCK;
     self->usock_owner.fsm = &self->fsm;
-    nn_usock_swap_owner (usock, &self->usock_owner);
+    nn_utcp_swap_owner (usock, &self->usock_owner);
     self->usock = usock;
+
+    /*  Get the protocol identifier. */
+    sz = sizeof (protocol);
+    nn_pipebase_getopt (&self->pipebase, NN_SOL_SOCKET, NN_PROTOCOL,
+        &protocol, &sz);
+    nn_assert (sz == sizeof (protocol));
+
+    /*  Compose the protocol header. */
+    memcpy (self->protohdr, "\0SP\0\0\0\0\0", 8);
+    nn_puts (self->protohdr + 4, (uint16_t) protocol);
 
     /*  Launch the state machine. */
     nn_fsm_start (&self->fsm);
@@ -141,7 +161,7 @@ static int nn_stcp_send (struct nn_pipebase *self, struct nn_msg *msg)
     iov [1].iov_len = nn_chunkref_size (&stcp->outmsg.sphdr);
     iov [2].iov_base = nn_chunkref_data (&stcp->outmsg.body);
     iov [2].iov_len = nn_chunkref_size (&stcp->outmsg.body);
-    nn_usock_send (stcp->usock, iov, 3);
+    nn_utcp_send (stcp->usock, iov, 3);
 
     stcp->outstate = NN_STCP_OUTSTATE_SENDING;
 
@@ -163,7 +183,7 @@ static int nn_stcp_recv (struct nn_pipebase *self, struct nn_msg *msg)
 
     /*  Start receiving new message. */
     stcp->instate = NN_STCP_INSTATE_HDR;
-    nn_usock_recv (stcp->usock, stcp->inhdr, sizeof (stcp->inhdr), NULL);
+    nn_utcp_recv (stcp->usock, stcp->inhdr, sizeof (stcp->inhdr));
 
     return 0;
 }
@@ -177,12 +197,12 @@ static void nn_stcp_shutdown (struct nn_fsm *self, int src, int type,
 
     if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_pipebase_stop (&stcp->pipebase);
-        nn_streamhdr_stop (&stcp->streamhdr);
-        stcp->state = NN_STCP_STATE_STOPPING;
+        nn_timer_stop (&stcp->timer);
+        stcp->state = NN_STCP_STATE_STOPPING_TIMER;
     }
-    if (stcp->state == NN_STCP_STATE_STOPPING) {
-        if (nn_streamhdr_isidle (&stcp->streamhdr)) {
-            nn_usock_swap_owner (stcp->usock, &stcp->usock_owner);
+    if (stcp->state == NN_STCP_STATE_STOPPING_TIMER) {
+        if (nn_timer_isidle (&stcp->timer)) {
+            nn_utcp_swap_owner (stcp->usock, &stcp->usock_owner);
             stcp->usock = NULL;
             stcp->usock_owner.src = -1;
             stcp->usock_owner.fsm = NULL;
@@ -199,9 +219,11 @@ static void nn_stcp_shutdown (struct nn_fsm *self, int src, int type,
 static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
     NN_UNUSED void *srcptr)
 {
-    int rc;
     struct nn_stcp *stcp;
+    struct nn_iovec iovec;
+    int protocol;
     uint64_t size;
+    int rc;
     int opt;
     size_t opt_sz = sizeof (opt);
 
@@ -218,9 +240,11 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
         case NN_FSM_ACTION:
             switch (type) {
             case NN_FSM_START:
-                nn_streamhdr_start (&stcp->streamhdr, stcp->usock,
-                    &stcp->pipebase);
-                stcp->state = NN_STCP_STATE_PROTOHDR;
+                nn_timer_start (&stcp->timer, NN_STCP_STREAMHDR_TIMEOUT);
+                iovec.iov_base = stcp->protohdr;
+                iovec.iov_len = sizeof (stcp->protohdr);
+                nn_utcp_send (stcp->usock, &iovec, 1);
+                stcp->state = NN_STCP_STATE_STREAMHDR_SENDING;
                 return;
             default:
                 nn_fsm_bad_action (stcp->state, src, type);
@@ -231,29 +255,113 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
         }
 
 /******************************************************************************/
-/*  PROTOHDR state.                                                           */
+/*  STREAMHDR_SENDING state.                                                  */
 /******************************************************************************/
-    case NN_STCP_STATE_PROTOHDR:
+    case NN_STCP_STATE_STREAMHDR_SENDING:
         switch (src) {
 
-        case NN_STCP_SRC_STREAMHDR:
+        case NN_STCP_SRC_USOCK:
             switch (type) {
-            case NN_STREAMHDR_OK:
-
-                /*  Before moving to the active state stop the streamhdr
-                    state machine. */
-                nn_streamhdr_stop (&stcp->streamhdr);
-                stcp->state = NN_STCP_STATE_STOPPING_STREAMHDR;
+            case NN_STREAM_SENT:
+                nn_utcp_recv (stcp->usock, stcp->protohdr,
+                    sizeof (stcp->protohdr));
+                stcp->state = NN_STCP_STATE_STREAMHDR_RECVING;
                 return;
+            case NN_STREAM_SHUTDOWN:
+                /*  Ignore it. Wait for ERROR event  */
+                return;
+            case NN_STREAM_ERROR:
+                nn_timer_stop (&stcp->timer);
+                stcp->state = NN_STCP_STATE_STREAMHDR_ERROR;
+                return;
+            default:
+                nn_fsm_bad_action (stcp->state, src, type);
+            }
 
-            case NN_STREAMHDR_ERROR:
+        case NN_STCP_SRC_TIMER:
+            switch (type) {
+            case NN_TIMER_TIMEOUT:
+                nn_timer_stop (&stcp->timer);
+                stcp->state = NN_STCP_STATE_STREAMHDR_ERROR;
+                return;
+            default:
+                nn_fsm_bad_action (stcp->state, src, type);
+            }
 
-                /* Raise the error and move directly to the DONE state.
-                   streamhdr object will be stopped later on. */
+        default:
+            nn_fsm_bad_source (stcp->state, src, type);
+        }
+
+/******************************************************************************/
+/*  STREAMHDR_RECVING state.                                                  */
+/******************************************************************************/
+    case NN_STCP_STATE_STREAMHDR_RECVING:
+        switch (src) {
+
+        case NN_STCP_SRC_USOCK:
+            switch (type) {
+            case NN_STREAM_RECEIVED:
+
+                /*  Here we are checking whether the peer speaks the same
+                    protocol as this socket. */
+                if (memcmp (stcp->protohdr, "\0SP\0", 4) != 0) {
+                    nn_timer_stop (&stcp->timer);
+                    stcp->state = NN_STCP_STATE_STREAMHDR_ERROR;
+                    return;
+                }
+                protocol = nn_gets (stcp->protohdr + 4);
+                if (!nn_pipebase_ispeer (&stcp->pipebase, protocol)) {
+                    nn_timer_stop (&stcp->timer);
+                    stcp->state = NN_STCP_STATE_STREAMHDR_ERROR;
+                    return;
+                }
+                nn_timer_stop (&stcp->timer);
+                stcp->state = NN_STCP_STATE_STREAMHDR_SUCCESS;
+                return;
+            case NN_STREAM_SHUTDOWN:
+                /*  Ignore it. Wait for ERROR event  */
+                return;
+            case NN_STREAM_ERROR:
+                nn_timer_stop (&stcp->timer);
+                stcp->state = NN_STCP_STATE_STREAMHDR_ERROR;
+                return;
+            default:
+                nn_fsm_bad_action (stcp->state, src, type);
+            }
+
+        case NN_STCP_SRC_TIMER:
+            switch (type) {
+            case NN_TIMER_TIMEOUT:
+                nn_timer_stop (&stcp->timer);
+                stcp->state = NN_STCP_STATE_STREAMHDR_ERROR;
+                return;
+            default:
+                nn_fsm_bad_action (stcp->state, src, type);
+            }
+
+        default:
+            nn_fsm_bad_source (stcp->state, src, type);
+        }
+
+/******************************************************************************/
+/*  STREAMHDR_ERROR state.                                                    */
+/******************************************************************************/
+    case NN_STCP_STATE_STREAMHDR_ERROR:
+        switch (src) {
+
+        case NN_STCP_SRC_USOCK:
+            /*  It's safe to ignore usock event when we are stopping, but there
+                is only a subset of events that are plausible. */
+            nn_assert (type == NN_STREAM_ERROR);
+            return;
+
+        case NN_STCP_SRC_TIMER:
+            switch (type) {
+            case NN_TIMER_STOPPED:
+                /*  Raise the error and move directly to the DONE state. */
                 stcp->state = NN_STCP_STATE_DONE;
                 nn_fsm_raise (&stcp->fsm, &stcp->done, NN_STCP_ERROR);
                 return;
-
             default:
                 nn_fsm_bad_action (stcp->state, src, type);
             }
@@ -263,34 +371,39 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
         }
 
 /******************************************************************************/
-/*  STOPPING_STREAMHDR state.                                                 */
+/*  STREAMHDR_SUCCESS state.                                                  */
 /******************************************************************************/
-    case NN_STCP_STATE_STOPPING_STREAMHDR:
+    case NN_STCP_STATE_STREAMHDR_SUCCESS:
         switch (src) {
 
-        case NN_STCP_SRC_STREAMHDR:
-            switch (type) {
-            case NN_STREAMHDR_STOPPED:
+        case NN_STCP_SRC_USOCK:
+            /*  It's safe to ignore usock event when we are stopping, but there
+                is only a subset of events that are plausible. */
+            nn_assert (type == NN_STREAM_ERROR);
+            return;
 
-                 /*  Start the pipe. */
-                 rc = nn_pipebase_start (&stcp->pipebase);
-                 if (rc < 0) {
+        case NN_STCP_SRC_TIMER:
+            switch (type) {
+            case NN_TIMER_STOPPED:
+
+                /*  Start the pipe. */
+                rc = nn_pipebase_start (&stcp->pipebase);
+                if (rc < 0) {
                     stcp->state = NN_STCP_STATE_DONE;
                     nn_fsm_raise (&stcp->fsm, &stcp->done, NN_STCP_ERROR);
                     return;
-                 }
+                }
 
-                 /*  Start receiving a message in asynchronous manner. */
-                 stcp->instate = NN_STCP_INSTATE_HDR;
-                 nn_usock_recv (stcp->usock, &stcp->inhdr,
-                     sizeof (stcp->inhdr), NULL);
+                /*  Start receiving a message in asynchronous manner. */
+                stcp->instate = NN_STCP_INSTATE_HDR;
+                nn_utcp_recv (stcp->usock, &stcp->inhdr,
+                    sizeof (stcp->inhdr));
 
-                 /*  Mark the pipe as available for sending. */
-                 stcp->outstate = NN_STCP_OUTSTATE_IDLE;
+                /*  Mark the pipe as available for sending. */
+                stcp->outstate = NN_STCP_OUTSTATE_IDLE;
 
-                 stcp->state = NN_STCP_STATE_ACTIVE;
-                 return;
-
+                stcp->state = NN_STCP_STATE_ACTIVE;
+                return;
             default:
                 nn_fsm_bad_action (stcp->state, src, type);
             }
@@ -307,7 +420,7 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
 
         case NN_STCP_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SENT:
+            case NN_STREAM_SENT:
 
                 /*  The message is now fully sent. */
                 nn_assert (stcp->outstate == NN_STCP_OUTSTATE_SENDING);
@@ -317,7 +430,7 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
                 nn_pipebase_sent (&stcp->pipebase);
                 return;
 
-            case NN_USOCK_RECEIVED:
+            case NN_STREAM_RECEIVED:
 
                 switch (stcp->instate) {
                 case NN_STCP_INSTATE_HDR:
@@ -349,9 +462,9 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
 
                     /*  Start receiving the message body. */
                     stcp->instate = NN_STCP_INSTATE_BODY;
-                    nn_usock_recv (stcp->usock,
+                    nn_utcp_recv (stcp->usock,
                         nn_chunkref_data (&stcp->inmsg.body),
-                       (size_t) size, NULL);
+                        (size_t) size);
 
                     return;
 
@@ -365,16 +478,15 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
                     return;
 
                 default:
-                    nn_fsm_error("Unexpected socket instate",
-                        stcp->state, src, type);
+                    nn_assert_unreachable ("Unexpected [instate] value.");
                 }
 
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 nn_pipebase_stop (&stcp->pipebase);
                 stcp->state = NN_STCP_STATE_SHUTTING_DOWN;
                 return;
 
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 nn_pipebase_stop (&stcp->pipebase);
                 stcp->state = NN_STCP_STATE_DONE;
                 nn_fsm_raise (&stcp->fsm, &stcp->done, NN_STCP_ERROR);
@@ -398,7 +510,7 @@ static void nn_stcp_handler (struct nn_fsm *self, int src, int type,
 
         case NN_STCP_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 stcp->state = NN_STCP_STATE_DONE;
                 nn_fsm_raise (&stcp->fsm, &stcp->done, NN_STCP_ERROR);
                 return;

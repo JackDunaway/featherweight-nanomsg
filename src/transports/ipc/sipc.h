@@ -23,13 +23,10 @@
 #ifndef NN_SIPC_INCLUDED
 #define NN_SIPC_INCLUDED
 
+#include "uipc.h"
 #include "../../transport.h"
-
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
-
-#include "../utils/streamhdr.h"
-
+#include "../../aio/timer.h"
 #include "../../utils/msg.h"
 
 /*  This state machine handles IPC connection from the point where it is
@@ -45,10 +42,13 @@ struct nn_sipc {
     int state;
 
     /*  The underlying socket. */
-    struct nn_usock *usock;
+    struct nn_uipc *usock;
 
-    /*  Child state machine to do protocol header exchange. */
-    struct nn_streamhdr streamhdr;
+    /*  Used to timeout the protocol header exchange. */
+    struct nn_timer timer;
+
+    /*  Protocol header. */
+    uint8_t protohdr [8];
 
     /*  The original owner of the underlying socket. */
     struct nn_fsm_owner usock_owner;
@@ -83,7 +83,7 @@ void nn_sipc_init (struct nn_sipc *self, int src,
 void nn_sipc_term (struct nn_sipc *self);
 
 int nn_sipc_isidle (struct nn_sipc *self);
-void nn_sipc_start (struct nn_sipc *self, struct nn_usock *usock);
+void nn_sipc_start (struct nn_sipc *self, struct nn_uipc *usock);
 void nn_sipc_stop (struct nn_sipc *self);
 
 #endif

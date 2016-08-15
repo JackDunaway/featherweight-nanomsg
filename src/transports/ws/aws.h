@@ -26,10 +26,11 @@
 
 #include "sws.h"
 
+#include "../tcp/utcp.h"
+
 #include "../../transport.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
 
 #include "../../utils/list.h"
 
@@ -52,10 +53,10 @@ struct nn_aws {
     struct nn_epbase *epbase;
 
     /*  Underlying socket. */
-    struct nn_usock usock;
+    struct nn_utcp usock;
 
     /*  Listening socket. Valid only while accepting new connection. */
-    struct nn_usock *listener;
+    struct nn_utcp *listener;
     struct nn_fsm_owner listener_owner;
 
     /*  State machine that takes care of the connection in the active state. */
@@ -74,7 +75,7 @@ void nn_aws_init (struct nn_aws *self, int src,
 void nn_aws_term (struct nn_aws *self);
 
 int nn_aws_isidle (struct nn_aws *self);
-void nn_aws_start (struct nn_aws *self, struct nn_usock *listener);
+void nn_aws_start (struct nn_aws *self, struct nn_utcp *listener);
 void nn_aws_stop (struct nn_aws *self);
 
 #endif

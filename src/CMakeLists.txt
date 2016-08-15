@@ -53,12 +53,11 @@ set (NN_SOURCES
     aio/fsm.c
     aio/pool.h
     aio/pool.c
+    aio/stream.h
     aio/timer.h
     aio/timer.c
     aio/timerset.h
     aio/timerset.c
-    aio/usock.h
-    aio/usock.c
     aio/worker.h
     aio/worker.c
 
@@ -179,8 +178,6 @@ set (NN_SOURCES
     transports/utils/literal.c
     transports/utils/port.h
     transports/utils/port.c
-    transports/utils/streamhdr.h
-    transports/utils/streamhdr.c
     transports/utils/base64.h
     transports/utils/base64.c
 
@@ -207,6 +204,8 @@ set (NN_SOURCES
     transports/ipc/ipc.c
     transports/ipc/sipc.h
     transports/ipc/sipc.c
+    transports/ipc/uipc.h
+    transports/ipc/uipc.c
 
     transports/tcp/atcp.h
     transports/tcp/atcp.c
@@ -218,6 +217,8 @@ set (NN_SOURCES
     transports/tcp/stcp.c
     transports/tcp/tcp.h
     transports/tcp/tcp.c
+    transports/tcp/utcp.h
+    transports/tcp/utcp.c
 
     transports/ws/aws.h
     transports/ws/aws.c

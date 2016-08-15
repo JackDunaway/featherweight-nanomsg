@@ -380,6 +380,7 @@ if (NN_TESTS)
     add_libnanomsg_test (device7 5)
     add_libnanomsg_test (domain 5)
     add_libnanomsg_test (emfile 5 ISOLATE) #ISOLATE since this test is designed to exhaust available sockets
+    add_libnanomsg_test (impatient_req 10 ISOLATE) # ISOLATE since this is particularly strenuous
     add_libnanomsg_test (iovec 5)
     add_libnanomsg_test (inproc 5)
     add_libnanomsg_test (ipc 5)

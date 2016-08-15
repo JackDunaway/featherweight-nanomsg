@@ -115,17 +115,6 @@ static void nn_cinproc_connect (struct nn_ins_item *self,
     nn_fsm_action (&cinproc->fsm, NN_CINPROC_ACTION_CONNECT);
 }
 
-static void nn_cinproc_shutdown (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
-{
-    struct nn_cinproc *cinproc;
-
-    cinproc = nn_cont (self, struct nn_cinproc, fsm);
-
-
-    nn_fsm_bad_state(cinproc->state, src, type);
-}
-
 static void nn_cinproc_handler (struct nn_fsm *myfsm, int src, int type,
     void *srcptr)
 {

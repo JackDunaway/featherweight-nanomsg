@@ -29,7 +29,7 @@
 #include "../utils/iface.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
+#include "../../aio/stream.h"
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
@@ -69,7 +69,7 @@ struct nn_bws {
     struct nn_epbase epbase;
 
     /*  The underlying listening WS socket. */
-    struct nn_usock usock;
+    struct nn_utcp usock;
 
     /*  The connection being accepted at the moment. */
     struct nn_aws *aws;
@@ -151,7 +151,7 @@ int nn_bws_create (void *hint, struct nn_epbase **epbase)
     /*  Start the state machine. */
     nn_fsm_start (&self->fsm);
 
-    nn_usock_init (&self->usock, NN_BWS_SRC_USOCK, &self->fsm);
+    nn_utcp_init (&self->usock, NN_BWS_SRC_USOCK, &self->fsm);
 
     rc = nn_bws_listen (self);
     if (rc != 0) {
@@ -183,7 +183,7 @@ static void nn_bws_destroy (struct nn_epbase *self)
     nn_assert_state (bws, NN_BWS_STATE_IDLE);
     nn_list_term (&bws->awss);
     nn_assert (bws->aws == NULL);
-    nn_usock_term (&bws->usock);
+    nn_utcp_term (&bws->usock);
     nn_epbase_term (&bws->epbase);
     nn_fsm_term (&bws->fsm);
 
@@ -214,11 +214,11 @@ static void nn_bws_shutdown (struct nn_fsm *self, int src, int type,
         nn_aws_term (bws->aws);
         nn_free (bws->aws);
         bws->aws = NULL;
-        nn_usock_stop (&bws->usock);
+        nn_utcp_stop (&bws->usock);
         bws->state = NN_BWS_STATE_STOPPING_USOCK;
     }
     if (bws->state == NN_BWS_STATE_STOPPING_USOCK) {
-       if (!nn_usock_isidle (&bws->usock))
+       if (!nn_utcp_isidle (&bws->usock))
             return;
         for (it = nn_list_begin (&bws->awss);
               it != nn_list_end (&bws->awss);
@@ -277,7 +277,7 @@ static void nn_bws_handler (struct nn_fsm *self, int src, int type,
 /******************************************************************************/
     case NN_BWS_STATE_ACTIVE:
         if (src == NN_BWS_SRC_USOCK) {
-            nn_assert (type == NN_USOCK_SHUTDOWN || type == NN_USOCK_STOPPED);
+            nn_assert (type == NN_STREAM_SHUTDOWN || type == NN_STREAM_STOPPED);
             return;
         }
 
@@ -369,20 +369,20 @@ static int nn_bws_listen (struct nn_bws *self)
     }
 
     /*  Start listening for incoming connections. */
-    rc = nn_usock_start (&self->usock, ss.ss_family, SOCK_STREAM, 0);
+    rc = nn_utcp_start (&self->usock, ss.ss_family, SOCK_STREAM, 0);
     if (rc < 0) {
         return rc;
     }
 
-    rc = nn_usock_bind (&self->usock, (struct sockaddr*) &ss, (size_t) sslen);
+    rc = nn_utcp_bind (&self->usock, (struct sockaddr*) &ss, (size_t) sslen);
     if (rc < 0) {
-        nn_usock_stop (&self->usock);
+        nn_utcp_stop (&self->usock);
         return rc;
     }
 
-    rc = nn_usock_listen (&self->usock, NN_BWS_BACKLOG);
+    rc = nn_utcp_listen (&self->usock, NN_BWS_BACKLOG);
     if (rc < 0) {
-        nn_usock_stop (&self->usock);
+        nn_utcp_stop (&self->usock);
         return rc;
     }
     nn_bws_start_accepting(self);

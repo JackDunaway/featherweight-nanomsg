@@ -24,6 +24,7 @@
 
 #include "aws.h"
 
+#include "../../aio/stream.h"
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
 #include "../../utils/attr.h"
@@ -55,7 +56,7 @@ void nn_aws_init (struct nn_aws *self, int src,
         src, self, owner);
     self->state = NN_AWS_STATE_IDLE;
     self->epbase = epbase;
-    nn_usock_init (&self->usock, NN_AWS_SRC_USOCK, &self->fsm);
+    nn_utcp_init (&self->usock, NN_AWS_SRC_USOCK, &self->fsm);
     self->listener = NULL;
     self->listener_owner.src = -1;
     self->listener_owner.fsm = NULL;
@@ -73,7 +74,7 @@ void nn_aws_term (struct nn_aws *self)
     nn_fsm_event_term (&self->done);
     nn_fsm_event_term (&self->accepted);
     nn_sws_term (&self->sws);
-    nn_usock_term (&self->usock);
+    nn_utcp_term (&self->usock);
     nn_fsm_term (&self->fsm);
 }
 
@@ -82,7 +83,7 @@ int nn_aws_isidle (struct nn_aws *self)
     return nn_fsm_isidle (&self->fsm);
 }
 
-void nn_aws_start (struct nn_aws *self, struct nn_usock *listener)
+void nn_aws_start (struct nn_aws *self, struct nn_utcp *listener)
 {
     nn_assert_state (self, NN_AWS_STATE_IDLE);
 
@@ -90,7 +91,7 @@ void nn_aws_start (struct nn_aws *self, struct nn_usock *listener)
     self->listener = listener;
     self->listener_owner.src = NN_AWS_SRC_LISTENER;
     self->listener_owner.fsm = &self->fsm;
-    nn_usock_swap_owner (listener, &self->listener_owner);
+    nn_utcp_swap_owner (listener, &self->listener_owner);
 
     /*  Start the state machine. */
     nn_fsm_start (&self->fsm);
@@ -119,15 +120,15 @@ static void nn_aws_shutdown (struct nn_fsm *self, int src, int type,
     if (aws->state == NN_AWS_STATE_STOPPING_SWS_FINAL) {
         if (!nn_sws_isidle (&aws->sws))
             return;
-        nn_usock_stop (&aws->usock);
+        nn_utcp_stop (&aws->usock);
         aws->state = NN_AWS_STATE_STOPPING;
     }
     if (aws->state == NN_AWS_STATE_STOPPING) {
-        if (!nn_usock_isidle (&aws->usock))
+        if (!nn_utcp_isidle (&aws->usock))
             return;
        if (aws->listener) {
             nn_assert (aws->listener_owner.fsm);
-            nn_usock_swap_owner (aws->listener, &aws->listener_owner);
+            nn_utcp_swap_owner (aws->listener, &aws->listener_owner);
             aws->listener = NULL;
             aws->listener_owner.src = -1;
             aws->listener_owner.fsm = NULL;
@@ -162,7 +163,7 @@ static void nn_aws_handler (struct nn_fsm *self, int src, int type,
         case NN_FSM_ACTION:
             switch (type) {
             case NN_FSM_START:
-                nn_usock_accept (&aws->usock, aws->listener);
+                nn_utcp_accept (&aws->usock, aws->listener);
                 aws->state = NN_AWS_STATE_ACCEPTING;
                 return;
             default:
@@ -182,7 +183,7 @@ static void nn_aws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_AWS_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_ACCEPTED:
+            case NN_STREAM_ACCEPTED:
                 nn_epbase_clear_error (aws->epbase);
 
                 /*  Set the relevant socket options. */
@@ -190,13 +191,13 @@ static void nn_aws_handler (struct nn_fsm *self, int src, int type,
                 nn_epbase_getopt (aws->epbase, NN_SOL_SOCKET, NN_SNDBUF,
                     &val, &sz);
                 nn_assert (sz == sizeof (val));
-                nn_usock_setsockopt (&aws->usock, SOL_SOCKET, SO_SNDBUF,
+                nn_utcp_setsockopt (&aws->usock, SOL_SOCKET, SO_SNDBUF,
                     &val, sizeof (val));
                 sz = sizeof (val);
                 nn_epbase_getopt (aws->epbase, NN_SOL_SOCKET, NN_RCVBUF,
                     &val, &sz);
                 nn_assert (sz == sizeof (val));
-                nn_usock_setsockopt (&aws->usock, SOL_SOCKET, SO_RCVBUF,
+                nn_utcp_setsockopt (&aws->usock, SOL_SOCKET, SO_RCVBUF,
                     &val, sizeof (val));
                 sz = sizeof (val);
                 nn_epbase_getopt (aws->epbase, NN_WS, NN_WS_MSG_TYPE,
@@ -208,18 +209,18 @@ static void nn_aws_handler (struct nn_fsm *self, int src, int type,
                      to the value specified by the socket option. */
                 val = 0;
                 sz = sizeof (val);
-                nn_usock_setsockopt (&aws->usock, SOL_SOCKET, SO_RCVTIMEO,
+                nn_utcp_setsockopt (&aws->usock, SOL_SOCKET, SO_RCVTIMEO,
                     &val, sizeof (val));
 
                 /*  Return ownership of the listening socket to the parent. */
-                nn_usock_swap_owner (aws->listener, &aws->listener_owner);
+                nn_utcp_swap_owner (aws->listener, &aws->listener_owner);
                 aws->listener = NULL;
                 aws->listener_owner.src = -1;
                 aws->listener_owner.fsm = NULL;
                 nn_fsm_raise (&aws->fsm, &aws->accepted, NN_AWS_ACCEPTED);
 
                 /*  Start the sws state machine. */
-                nn_usock_activate (&aws->usock);
+                nn_utcp_activate (&aws->usock);
                 nn_sws_start (&aws->sws, &aws->usock, NN_WS_SERVER,
                     NULL, NULL, msg_type);
                 aws->state = NN_AWS_STATE_ACTIVE;
@@ -236,12 +237,11 @@ static void nn_aws_handler (struct nn_fsm *self, int src, int type,
         case NN_AWS_SRC_LISTENER:
             switch (type) {
 
-            case NN_USOCK_ACCEPT_ERROR:
-                nn_epbase_set_error (aws->epbase,
-                    nn_usock_geterrno (aws->listener));
+            case NN_STREAM_ACCEPT_ERROR:
+                nn_epbase_set_error (aws->epbase, aws->listener->errnum);
                 nn_epbase_stat_increment (aws->epbase,
                     NN_STAT_ACCEPT_ERRORS, 1);
-                nn_usock_accept (&aws->usock, aws->listener);
+                nn_utcp_accept (&aws->usock, aws->listener);
                 return;
 
             default:
@@ -288,10 +288,10 @@ static void nn_aws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_AWS_SRC_SWS:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
             case NN_SWS_RETURN_STOPPED:
-                nn_usock_stop (&aws->usock);
+                nn_utcp_stop (&aws->usock);
                 aws->state = NN_AWS_STATE_STOPPING_USOCK;
                 return;
             default:
@@ -310,9 +310,9 @@ static void nn_aws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_AWS_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
-            case NN_USOCK_STOPPED:
+            case NN_STREAM_STOPPED:
                 nn_fsm_raise (&aws->fsm, &aws->done, NN_AWS_ERROR);
                 aws->state = NN_AWS_STATE_DONE;
                 return;

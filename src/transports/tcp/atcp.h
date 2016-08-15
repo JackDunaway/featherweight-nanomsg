@@ -24,11 +24,11 @@
 #define NN_ATCP_INCLUDED
 
 #include "stcp.h"
+#include "utcp.h"
 
 #include "../../transport.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
 
 #include "../../utils/list.h"
 
@@ -51,10 +51,10 @@ struct nn_atcp {
     struct nn_epbase *epbase;
 
     /*  Underlying socket. */
-    struct nn_usock usock;
+    struct nn_utcp usock;
 
     /*  Listening socket. Valid only while accepting new connection. */
-    struct nn_usock *listener;
+    struct nn_utcp *listener;
     struct nn_fsm_owner listener_owner;
 
     /*  State machine that takes care of the connection in the active state. */
@@ -73,7 +73,7 @@ void nn_atcp_init (struct nn_atcp *self, int src,
 void nn_atcp_term (struct nn_atcp *self);
 
 int nn_atcp_isidle (struct nn_atcp *self);
-void nn_atcp_start (struct nn_atcp *self, struct nn_usock *listener);
+void nn_atcp_start (struct nn_atcp *self, struct nn_utcp *listener);
 void nn_atcp_stop (struct nn_atcp *self);
 
 #endif

@@ -222,6 +222,7 @@ static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
         nn_fsm_stopped (&self->fsm, NN_SINPROC_STOPPED);
         return;
     }
+
     NN_FSM_JOB (NN_SINPROC_STATE_CONNECTING, NN_FSM_ACTION, NN_FSM_STOP) {
         nn_pipebase_stop (&self->pipebase);
         nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
@@ -230,6 +231,7 @@ static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
         self->state = NN_SINPROC_STATE_STOPPING_PEER;
         return;
     }
+
     NN_FSM_JOB (NN_SINPROC_STATE_READY, NN_FSM_ACTION, NN_FSM_STOP) {
         nn_pipebase_stop (&self->pipebase);
         nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
@@ -238,6 +240,7 @@ static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
         self->state = NN_SINPROC_STATE_STOPPING_PEER;
         return;
     }
+
     NN_FSM_JOB (NN_SINPROC_STATE_ACTIVE, NN_FSM_ACTION, NN_FSM_STOP) {
         nn_pipebase_stop (&self->pipebase);
         nn_fsm_raiseto (&self->fsm, &self->peer->fsm,
@@ -246,6 +249,7 @@ static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
         self->state = NN_SINPROC_STATE_STOPPING_PEER;
         return;
     }
+
     NN_FSM_JOB (NN_SINPROC_STATE_DISCONNECTED, NN_FSM_ACTION, NN_FSM_STOP) {
         self->state = NN_SINPROC_STATE_STOPPING;
         /*  These events are deemed to be impossible here  */
@@ -254,6 +258,7 @@ static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
         nn_fsm_stopped (&self->fsm, NN_SINPROC_STOPPED);
         return;
     }
+
     NN_FSM_JOB (NN_SINPROC_STATE_STOPPING_PEER, NN_FSM_ACTION, NN_FSM_STOP) {
         self->state = NN_SINPROC_STATE_STOPPING;
         /*  Are all events processed? We can't cancel them unfortunately  */
@@ -268,6 +273,7 @@ static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
         nn_fsm_stopped (&self->fsm, NN_SINPROC_STOPPED);
         return;
     }
+
     /* Ignore incoming messages during shutdown. */
     NN_FSM_JOB (NN_SINPROC_STATE_STOPPING_PEER, NN_SINPROC_SRC_PEER, NN_SINPROC_RECEIVED) {
         return;
@@ -332,8 +338,7 @@ static void nn_sinproc_handler (struct nn_fsm *myfsm, int src, int type,
         empty = nn_msgqueue_empty (&self->msgqueue);
 
         /*  Push the message to the inbound message queue. */
-        rc = nn_msgqueue_send (&self->msgqueue,
-            &self->peer->msg);
+        rc = nn_msgqueue_send (&self->msgqueue, &self->peer->msg);
         if (rc == -EAGAIN) {
             self->flags |= NN_SINPROC_FLAG_RECEIVING;
             return;

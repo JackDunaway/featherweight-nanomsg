@@ -52,7 +52,7 @@ void nn_aipc_init (struct nn_aipc *self, int src,
         src, self, owner);
     self->state = NN_AIPC_STATE_IDLE;
     self->epbase = epbase;
-    nn_usock_init (&self->usock, NN_AIPC_SRC_USOCK, &self->fsm);
+    nn_uipc_init (&self->usock, NN_AIPC_SRC_USOCK, &self->fsm);
     self->listener = NULL;
     self->listener_owner.src = -1;
     self->listener_owner.fsm = NULL;
@@ -70,7 +70,7 @@ void nn_aipc_term (struct nn_aipc *self)
     nn_fsm_event_term (&self->done);
     nn_fsm_event_term (&self->accepted);
     nn_sipc_term (&self->sipc);
-    nn_usock_term (&self->usock);
+    nn_uipc_term (&self->usock);
     nn_fsm_term (&self->fsm);
 }
 
@@ -79,7 +79,7 @@ int nn_aipc_isidle (struct nn_aipc *self)
     return nn_fsm_isidle (&self->fsm);
 }
 
-void nn_aipc_start (struct nn_aipc *self, struct nn_usock *listener)
+void nn_aipc_start (struct nn_aipc *self, struct nn_uipc *listener)
 {
 #if defined NN_HAVE_WINDOWS
     size_t sz;
@@ -90,7 +90,7 @@ void nn_aipc_start (struct nn_aipc *self, struct nn_usock *listener)
     self->listener = listener;
     self->listener_owner.src = NN_AIPC_SRC_LISTENER;
     self->listener_owner.fsm = &self->fsm;
-    nn_usock_swap_owner (listener, &self->listener_owner);
+    nn_uipc_swap_owner (listener, &self->listener_owner);
 
 #if defined NN_HAVE_WINDOWS
     /* Get/Set security attribute pointer*/
@@ -126,15 +126,15 @@ static void nn_aipc_shutdown (struct nn_fsm *self, int src, int type,
     if (aipc->state == NN_AIPC_STATE_STOPPING_SIPC_FINAL) {
         if (!nn_sipc_isidle (&aipc->sipc))
             return;
-        nn_usock_stop (&aipc->usock);
+        nn_uipc_stop (&aipc->usock);
         aipc->state = NN_AIPC_STATE_STOPPING;
     }
     if (aipc->state == NN_AIPC_STATE_STOPPING) {
-        if (!nn_usock_isidle (&aipc->usock))
+        if (!nn_uipc_isidle (&aipc->usock))
             return;
        if (aipc->listener) {
             nn_assert (aipc->listener_owner.fsm);
-            nn_usock_swap_owner (aipc->listener, &aipc->listener_owner);
+            nn_uipc_swap_owner (aipc->listener, &aipc->listener_owner);
             aipc->listener = NULL;
             aipc->listener_owner.src = -1;
             aipc->listener_owner.fsm = NULL;
@@ -168,7 +168,7 @@ static void nn_aipc_handler (struct nn_fsm *self, int src, int type,
         case NN_FSM_ACTION:
             switch (type) {
             case NN_FSM_START:
-                nn_usock_accept (&aipc->usock, aipc->listener);
+                nn_uipc_accept (&aipc->usock, aipc->listener);
                 aipc->state = NN_AIPC_STATE_ACCEPTING;
                 return;
             default:
@@ -188,7 +188,7 @@ static void nn_aipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_AIPC_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_ACCEPTED:
+            case NN_STREAM_ACCEPTED:
                 nn_epbase_clear_error (aipc->epbase);
 
                 /*  Set the relevant socket options. */
@@ -196,24 +196,24 @@ static void nn_aipc_handler (struct nn_fsm *self, int src, int type,
                 nn_epbase_getopt (aipc->epbase, NN_SOL_SOCKET, NN_SNDBUF,
                     &val, &sz);
                 nn_assert (sz == sizeof (val));
-                nn_usock_setsockopt (&aipc->usock, SOL_SOCKET, SO_SNDBUF,
+                nn_uipc_setsockopt (&aipc->usock, SOL_SOCKET, SO_SNDBUF,
                     &val, sizeof (val));
                 sz = sizeof (val);
                 nn_epbase_getopt (aipc->epbase, NN_SOL_SOCKET, NN_RCVBUF,
                     &val, &sz);
                 nn_assert (sz == sizeof (val));
-                nn_usock_setsockopt (&aipc->usock, SOL_SOCKET, SO_RCVBUF,
+                nn_uipc_setsockopt (&aipc->usock, SOL_SOCKET, SO_RCVBUF,
                     &val, sizeof (val));
 
                 /*  Return ownership of the listening socket to the parent. */
-                nn_usock_swap_owner (aipc->listener, &aipc->listener_owner);
+                nn_uipc_swap_owner (aipc->listener, &aipc->listener_owner);
                 aipc->listener = NULL;
                 aipc->listener_owner.src = -1;
                 aipc->listener_owner.fsm = NULL;
                 nn_fsm_raise (&aipc->fsm, &aipc->accepted, NN_AIPC_ACCEPTED);
 
                 /*  Start the sipc state machine. */
-                nn_usock_activate (&aipc->usock);
+                nn_uipc_activate (&aipc->usock);
                 nn_sipc_start (&aipc->sipc, &aipc->usock);
                 aipc->state = NN_AIPC_STATE_ACTIVE;
 
@@ -228,12 +228,11 @@ static void nn_aipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_AIPC_SRC_LISTENER:
             switch (type) {
-            case NN_USOCK_ACCEPT_ERROR:
-                nn_epbase_set_error (aipc->epbase,
-                    nn_usock_geterrno (aipc->listener));
+            case NN_STREAM_ACCEPT_ERROR:
+                nn_epbase_set_error (aipc->epbase, aipc->listener->errnum);
                 nn_epbase_stat_increment (aipc->epbase,
                     NN_STAT_ACCEPT_ERRORS, 1);
-                nn_usock_accept (&aipc->usock, aipc->listener);
+                nn_uipc_accept (&aipc->usock, aipc->listener);
 
                 return;
 
@@ -275,10 +274,10 @@ static void nn_aipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_AIPC_SRC_SIPC:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
             case NN_SIPC_STOPPED:
-                nn_usock_stop (&aipc->usock);
+                nn_uipc_stop (&aipc->usock);
                 aipc->state = NN_AIPC_STATE_STOPPING_USOCK;
                 return;
             default:
@@ -297,9 +296,9 @@ static void nn_aipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_AIPC_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
-            case NN_USOCK_STOPPED:
+            case NN_STREAM_STOPPED:
                 nn_fsm_raise (&aipc->fsm, &aipc->done, NN_AIPC_ERROR);
                 aipc->state = NN_AIPC_STATE_DONE;
                 return;

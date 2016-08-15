@@ -22,9 +22,9 @@
 
 #include "cipc.h"
 #include "sipc.h"
+#include "uipc.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
 
 #include "../utils/backoff.h"
 
@@ -66,7 +66,7 @@ struct nn_cipc {
     struct nn_epbase epbase;
 
     /*  The underlying IPC socket. */
-    struct nn_usock usock;
+    struct nn_uipc usock;
 
     /*  Used to wait before retrying to connect. */
     struct nn_backoff retry;
@@ -107,7 +107,7 @@ int nn_cipc_create (void *hint, struct nn_epbase **epbase)
     nn_fsm_init_root (&self->fsm, nn_cipc_handler, nn_cipc_shutdown,
         nn_epbase_getctx (&self->epbase));
     self->state = NN_CIPC_STATE_IDLE;
-    nn_usock_init (&self->usock, NN_CIPC_SRC_USOCK, &self->fsm);
+    nn_uipc_init (&self->usock, NN_CIPC_SRC_USOCK, &self->fsm);
     sz = sizeof (reconnect_ivl);
     nn_epbase_getopt (&self->epbase, NN_SOL_SOCKET, NN_RECONNECT_IVL,
         &reconnect_ivl, &sz);
@@ -148,7 +148,7 @@ static void nn_cipc_destroy (struct nn_epbase *self)
 
     nn_sipc_term (&cipc->sipc);
     nn_backoff_term (&cipc->retry);
-    nn_usock_term (&cipc->usock);
+    nn_uipc_term (&cipc->usock);
     nn_fsm_term (&cipc->fsm);
     nn_epbase_term (&cipc->epbase);
 
@@ -174,12 +174,12 @@ static void nn_cipc_shutdown (struct nn_fsm *self, int src, int type,
         if (!nn_sipc_isidle (&cipc->sipc))
             return;
         nn_backoff_stop (&cipc->retry);
-        nn_usock_stop (&cipc->usock);
+        nn_uipc_stop (&cipc->usock);
         cipc->state = NN_CIPC_STATE_STOPPING;
     }
     if (cipc->state == NN_CIPC_STATE_STOPPING) {
         if (!nn_backoff_isidle (&cipc->retry) ||
-              !nn_usock_isidle (&cipc->usock))
+              !nn_uipc_isidle (&cipc->usock))
             return;
         cipc->state = NN_CIPC_STATE_IDLE;
         nn_fsm_stopped_noevent (&cipc->fsm);
@@ -228,7 +228,7 @@ static void nn_cipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CIPC_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_CONNECTED:
+            case NN_STREAM_CONNECTED:
                 nn_sipc_start (&cipc->sipc, &cipc->usock);
                 cipc->state = NN_CIPC_STATE_ACTIVE;
                 nn_epbase_stat_increment (&cipc->epbase,
@@ -237,10 +237,9 @@ static void nn_cipc_handler (struct nn_fsm *self, int src, int type,
                     NN_STAT_ESTABLISHED_CONNECTIONS, 1);
                 nn_epbase_clear_error (&cipc->epbase);
                 return;
-            case NN_USOCK_ERROR:
-                nn_epbase_set_error (&cipc->epbase,
-                    nn_usock_geterrno (&cipc->usock));
-                nn_usock_stop (&cipc->usock);
+            case NN_STREAM_ERROR:
+                nn_epbase_set_error (&cipc->epbase, cipc->usock.errnum);
+                nn_uipc_stop (&cipc->usock);
                 cipc->state = NN_CIPC_STATE_STOPPING_USOCK;
                 nn_epbase_stat_increment (&cipc->epbase,
                     NN_STAT_INPROGRESS_CONNECTIONS, -1);
@@ -287,10 +286,10 @@ static void nn_cipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CIPC_SRC_SIPC:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
             case NN_SIPC_STOPPED:
-                nn_usock_stop (&cipc->usock);
+                nn_uipc_stop (&cipc->usock);
                 cipc->state = NN_CIPC_STATE_STOPPING_USOCK;
                 return;
             default:
@@ -310,9 +309,9 @@ static void nn_cipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CIPC_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
-            case NN_USOCK_STOPPED:
+            case NN_STREAM_STOPPED:
                 nn_backoff_start (&cipc->retry);
                 cipc->state = NN_CIPC_STATE_WAITING;
                 return;
@@ -388,7 +387,7 @@ static void nn_cipc_start_connecting (struct nn_cipc *self)
     size_t sz;
 
     /*  Try to start the underlying socket. */
-    rc = nn_usock_start (&self->usock, AF_UNIX, SOCK_STREAM, 0);
+    rc = nn_uipc_start (&self->usock, AF_UNIX, SOCK_STREAM, 0);
     if (rc < 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CIPC_STATE_WAITING;
@@ -399,12 +398,12 @@ static void nn_cipc_start_connecting (struct nn_cipc *self)
     sz = sizeof (val);
     nn_epbase_getopt (&self->epbase, NN_SOL_SOCKET, NN_SNDBUF, &val, &sz);
     nn_assert (sz == sizeof (val));
-    nn_usock_setsockopt (&self->usock, SOL_SOCKET, SO_SNDBUF,
+    nn_uipc_setsockopt (&self->usock, SOL_SOCKET, SO_SNDBUF,
         &val, sizeof (val));
     sz = sizeof (val);
     nn_epbase_getopt (&self->epbase, NN_SOL_SOCKET, NN_RCVBUF, &val, &sz);
     nn_assert (sz == sizeof (val));
-    nn_usock_setsockopt (&self->usock, SOL_SOCKET, SO_RCVBUF,
+    nn_uipc_setsockopt (&self->usock, SOL_SOCKET, SO_RCVBUF,
         &val, sizeof (val));
 
     /*  Create the IPC address from the address string. */
@@ -424,7 +423,7 @@ static void nn_cipc_start_connecting (struct nn_cipc *self)
 #endif
 
     /*  Start connecting. */
-    nn_usock_connect (&self->usock, (struct sockaddr*) &ss,
+    nn_uipc_connect (&self->usock, (struct sockaddr*) &ss,
         sizeof (struct sockaddr_un));
     self->state  = NN_CIPC_STATE_CONNECTING;
 

@@ -24,12 +24,12 @@
 #define NN_AIPC_INCLUDED
 
 #include "sipc.h"
+#include "uipc.h"
 
 #include "../../transport.h"
 #include "../../ipc.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
 
 #include "../../utils/list.h"
 
@@ -52,10 +52,10 @@ struct nn_aipc {
     struct nn_epbase *epbase;
 
     /*  Underlying socket. */
-    struct nn_usock usock;
+    struct nn_uipc usock;
 
     /*  Listening socket. Valid only while accepting new connection. */
-    struct nn_usock *listener;
+    struct nn_uipc *listener;
     struct nn_fsm_owner listener_owner;
 
     /*  State machine that takes care of the connection in the active state. */
@@ -74,7 +74,7 @@ void nn_aipc_init (struct nn_aipc *self, int src,
 void nn_aipc_term (struct nn_aipc *self);
 
 int nn_aipc_isidle (struct nn_aipc *self);
-void nn_aipc_start (struct nn_aipc *self, struct nn_usock *listener);
+void nn_aipc_start (struct nn_aipc *self, struct nn_uipc *listener);
 void nn_aipc_stop (struct nn_aipc *self);
 
 #endif

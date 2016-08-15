@@ -320,12 +320,12 @@ static int nn_sock_setopt_inner (struct nn_sock *self, int level,
         self->linger = val;
         return 0;
     case NN_SNDBUF:
-        if (val <= 0)
+        if (val < 0)
             return -EINVAL;
         self->sndbuf = val;
         return 0;
     case NN_RCVBUF:
-        if (val <= 0)
+        if (val < 0)
             return -EINVAL;
         self->rcvbuf = val;
         return 0;
@@ -654,6 +654,7 @@ int nn_sock_send (struct nn_sock *self, struct nn_msg *msg, int flags)
 int nn_sock_recv (struct nn_sock *self, struct nn_msg *msg, int flags)
 {
     int rc;
+    int tries;
     uint64_t deadline;
     uint64_t now;
     int timeout;
@@ -673,7 +674,7 @@ int nn_sock_recv (struct nn_sock *self, struct nn_msg *msg, int flags)
         deadline = nn_clock_ms() + self->rcvtimeo;
         timeout = self->rcvtimeo;
     }
-
+    tries = 0;
     while (1) {
 
         switch (self->state) {
@@ -727,9 +728,9 @@ int nn_sock_recv (struct nn_sock *self, struct nn_msg *msg, int flags)
             return -EBADF;
         errnum_assert (rc == 0, rc);
         nn_ctx_enter (&self->ctx);
-        /*
-         *  Double check if pipes are still available for receiving
-         */
+        tries++;
+        
+        /*  Double check if pipes are still available for receiving. */
         if (!nn_efd_wait (&self->rcvfd, 0)) {
             self->flags |= NN_SOCK_FLAG_IN;
         }

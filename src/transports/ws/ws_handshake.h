@@ -28,7 +28,7 @@
 #include "../../transport.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
+//#include "../../aio/usock.h"
 #include "../../aio/timer.h"
 
 /*  This state machine exchanges a handshake with a WebSocket client. */
@@ -72,7 +72,7 @@ struct nn_ws_handshake {
     int timeout;
 
     /*  The underlying socket. */
-    struct nn_usock *usock;
+    struct nn_utcp *usock;
 
     /*  The original owner of the underlying socket. */
     struct nn_fsm_owner usock_owner;
@@ -169,7 +169,7 @@ void nn_ws_handshake_term (struct nn_ws_handshake *self);
 
 int nn_ws_handshake_isidle (struct nn_ws_handshake *self);
 void nn_ws_handshake_start (struct nn_ws_handshake *self,
-    struct nn_usock *usock, struct nn_pipebase *pipebase,
+    struct nn_utcp *usock, struct nn_pipebase *pipebase,
     int mode, const char *resource, const char *host);
 void nn_ws_handshake_stop (struct nn_ws_handshake *self);
 

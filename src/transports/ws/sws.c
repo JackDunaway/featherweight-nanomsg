@@ -23,8 +23,13 @@
 */
 
 #include "sws.h"
+
+#include "../tcp/utcp.h"
+
 #include "../../ws.h"
 #include "../../nn.h"
+
+#include "../../aio/stream.h"
 
 #include "../../utils/alloc.h"
 #include "../../utils/err.h"
@@ -179,14 +184,14 @@ int nn_sws_isidle (struct nn_sws *self)
     return nn_fsm_isidle (&self->fsm);
 }
 
-void nn_sws_start (struct nn_sws *self, struct nn_usock *usock, int mode,
+void nn_sws_start (struct nn_sws *self, struct nn_utcp *usock, int mode,
     const char *resource, const char *host, uint8_t msg_type)
 {
     /*  Take ownership of the underlying socket. */
     nn_assert (self->usock == NULL && self->usock_owner.fsm == NULL);
     self->usock_owner.src = NN_SWS_SRC_USOCK;
     self->usock_owner.fsm = &self->fsm;
-    nn_usock_swap_owner (usock, &self->usock_owner);
+    nn_utcp_swap_owner (usock, &self->usock_owner);
     self->usock = usock;
     self->mode = mode;
     self->resource = resource;
@@ -358,7 +363,7 @@ static int nn_sws_recv_hdr (struct nn_sws *self)
     memset (self->inmsg_control, 0, NN_SWS_PAYLOAD_MAX_LENGTH);
     memset (self->inhdr, 0, NN_SWS_FRAME_MAX_HDR_LEN);
     self->instate = NN_SWS_INSTATE_RECV_HDR;
-    nn_usock_recv (self->usock, self->inhdr, NN_SWS_FRAME_SIZE_INITIAL, NULL);
+    nn_utcp_recv (self->usock, self->inhdr, NN_SWS_FRAME_SIZE_INITIAL);
 
     return 0;
 }
@@ -467,7 +472,7 @@ static int nn_sws_send (struct nn_pipebase *self, struct nn_msg *msg)
     iov [1].iov_len = nn_chunkref_size (&sws->outmsg.sphdr);
     iov [2].iov_base = nn_chunkref_data (&sws->outmsg.body);
     iov [2].iov_len = nn_chunkref_size (&sws->outmsg.body);
-    nn_usock_send (sws->usock, iov, 3);
+    nn_utcp_send (sws->usock, iov, 3);
 
     sws->outstate = NN_SWS_OUTSTATE_SENDING;
 
@@ -822,7 +827,7 @@ static void nn_sws_fail_conn (struct nn_sws *self, int code, char *reason)
     if (self->outstate == NN_SWS_OUTSTATE_IDLE) {
         iov.iov_base = self->fail_msg;
         iov.iov_len = self->fail_msg_len;
-        nn_usock_send (self->usock, &iov, 1);
+        nn_utcp_send (self->usock, &iov, 1);
         self->outstate = NN_SWS_OUTSTATE_SENDING;
         self->state = NN_SWS_STATE_CLOSING_CONNECTION;
     } else {
@@ -848,7 +853,7 @@ static void nn_sws_shutdown (struct nn_fsm *self, int src, int type,
     }
     if (sws->state == NN_SWS_STATE_STOPPING) {
         if (nn_ws_handshake_isidle (&sws->handshaker)) {
-            nn_usock_swap_owner (sws->usock, &sws->usock_owner);
+            nn_utcp_swap_owner (sws->usock, &sws->usock_owner);
             sws->usock = NULL;
             sws->usock_owner.src = -1;
             sws->usock_owner.fsm = NULL;
@@ -971,7 +976,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_SWS_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SENT:
+            case NN_STREAM_SENT:
 
                 /*  The message is now fully sent. */
                 nn_assert (sws->outstate == NN_SWS_OUTSTATE_SENDING);
@@ -981,7 +986,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                 nn_pipebase_sent (&sws->pipebase);
                 return;
 
-            case NN_USOCK_RECEIVED:
+            case NN_STREAM_RECEIVED:
 
                 switch (sws->instate) {
                 case NN_SWS_INSTATE_RECV_HDR:
@@ -1284,17 +1289,16 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                         }
 
                         sws->instate = NN_SWS_INSTATE_RECV_PAYLOAD;
-                        nn_usock_recv (sws->usock, sws->inmsg_current_chunk_buf,
-                            sws->inmsg_current_chunk_len, NULL);
+                        nn_utcp_recv (sws->usock, sws->inmsg_current_chunk_buf,
+                            sws->inmsg_current_chunk_len);
                         return;
                     }
                     else {
                         /*  Continue receiving the rest of the header frame. */
                         sws->instate = NN_SWS_INSTATE_RECV_HDREXT;
-                        nn_usock_recv (sws->usock,
+                        nn_utcp_recv (sws->usock,
                             sws->inhdr + NN_SWS_FRAME_SIZE_INITIAL,
-                            sws->ext_hdr_len,
-                            NULL);
+                            sws->ext_hdr_len);
                         return;
                     }
 
@@ -1391,8 +1395,8 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                     }
 
                     sws->instate = NN_SWS_INSTATE_RECV_PAYLOAD;
-                    nn_usock_recv (sws->usock, sws->inmsg_current_chunk_buf,
-                        sws->inmsg_current_chunk_len, NULL);
+                    nn_utcp_recv (sws->usock, sws->inmsg_current_chunk_buf,
+                        sws->inmsg_current_chunk_len);
                     return;
 
                 case NN_SWS_INSTATE_RECV_PAYLOAD:
@@ -1460,12 +1464,12 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                         sws->state, src, type);
                 }
 
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 nn_pipebase_stop (&sws->pipebase);
                 sws->state = NN_SWS_STATE_BROKEN_CONNECTION;
                 return;
 
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 nn_pipebase_stop (&sws->pipebase);
                 sws->state = NN_SWS_STATE_DONE;
                 nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
@@ -1490,7 +1494,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_SWS_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SENT:
+            case NN_STREAM_SENT:
                 /*  Wait for acknowledgement closing handshake was sent
                     to peer. */
                 nn_assert (sws->outstate == NN_SWS_OUTSTATE_SENDING);
@@ -1499,9 +1503,9 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                 nn_fsm_raise (&sws->fsm, &sws->done,
                     NN_SWS_RETURN_CLOSE_HANDSHAKE);
                 return;
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 sws->state = NN_SWS_STATE_DONE;
                 nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
                 return;
@@ -1523,7 +1527,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_SWS_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 sws->state = NN_SWS_STATE_DONE;
                 nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
                 return;

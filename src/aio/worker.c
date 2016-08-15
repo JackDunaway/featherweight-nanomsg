@@ -30,7 +30,6 @@
 #if defined NN_HAVE_WINDOWS
 
 #include "ctx.h"
-#include "usock.h"
 
 #define NN_WORKER_MAX_EVENTS 32
 
@@ -128,9 +127,15 @@ void nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer)
     nn_timerset_rm (&((struct nn_worker*) self)->timerset, &timer->hndl);
 }
 
-HANDLE nn_worker_getcp (struct nn_worker *self)
+void nn_worker_register_iocp (struct nn_fsm *fsm, HANDLE h)
 {
-    return self->cp;
+    HANDLE cp;
+    struct nn_worker *worker;
+
+    worker = nn_fsm_choose_worker (fsm);
+
+    cp = CreateIoCompletionPort (h, worker->cp, (ULONG_PTR) NULL, 0);
+    nn_assert_win (cp == worker->cp);
 }
 
 static void nn_worker_routine (void *arg)
@@ -178,8 +183,7 @@ static void nn_worker_routine (void *arg)
 
             /*  Process I/O completion events. */
             if (entries [i].lpOverlapped != NULL) {
-                op = nn_cont (entries [i].lpOverlapped,
-                    struct nn_worker_op, olpd);
+                op = nn_cont (entries [i].lpOverlapped, struct nn_worker_op, olpd);
 
                 /*  The 'Internal' field is actually an NTSTATUS. Report
                     success and error. Ignore warnings and informational

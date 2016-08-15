@@ -27,31 +27,38 @@
 #include "../../utils/wire.h"
 #include "../../utils/attr.h"
 
-/*  Types of messages passed via IPC transport. */
-#define NN_SIPC_MSG_NORMAL 1
-#define NN_SIPC_MSG_SHMEM 2
-
 /*  States of the object as a whole. */
 #define NN_SIPC_STATE_IDLE 1
-#define NN_SIPC_STATE_PROTOHDR 2
-#define NN_SIPC_STATE_STOPPING_STREAMHDR 3
-#define NN_SIPC_STATE_ACTIVE 4
-#define NN_SIPC_STATE_SHUTTING_DOWN 5
-#define NN_SIPC_STATE_DONE 6
-#define NN_SIPC_STATE_STOPPING 7
+#define NN_SIPC_STATE_STREAMHDR_SENDING 2
+#define NN_SIPC_STATE_STREAMHDR_RECVING 3
+#define NN_SIPC_STATE_STREAMHDR_ERROR 4
+#define NN_SIPC_STATE_STREAMHDR_SUCCESS 5
+#define NN_SIPC_STATE_ACTIVE 6
+#define NN_SIPC_STATE_SHUTTING_DOWN 7
+#define NN_SIPC_STATE_DONE 8
+#define NN_SIPC_STATE_STOPPING_TIMER 9
 
-/*  Subordinated srcptr objects. */
+/*  Subordinate srcptr objects. */
 #define NN_SIPC_SRC_USOCK 1
-#define NN_SIPC_SRC_STREAMHDR 2
+#define NN_SIPC_SRC_TIMER 2
 
 /*  Possible states of the inbound part of the object. */
 #define NN_SIPC_INSTATE_HDR 1
 #define NN_SIPC_INSTATE_BODY 2
 #define NN_SIPC_INSTATE_HASMSG 3
 
+/*  Time allowed to complete opening handshake. */
+#ifndef NN_SIPC_STREAMHDR_TIMEOUT
+#   define NN_SIPC_STREAMHDR_TIMEOUT 1000
+#endif
+
 /*  Possible states of the outbound part of the object. */
 #define NN_SIPC_OUTSTATE_IDLE 1
 #define NN_SIPC_OUTSTATE_SENDING 2
+
+/*  Types of messages passed via IPC transport. */
+#define NN_SIPC_MSG_NORMAL 1
+#define NN_SIPC_MSG_SHMEM 2
 
 /*  Stream is a special type of pipe. Implementation of the virtual pipe API. */
 static int nn_sipc_send (struct nn_pipebase *self, struct nn_msg *msg);
@@ -73,7 +80,7 @@ void nn_sipc_init (struct nn_sipc *self, int src,
     nn_fsm_init (&self->fsm, nn_sipc_handler, nn_sipc_shutdown,
         src, self, owner);
     self->state = NN_SIPC_STATE_IDLE;
-    nn_streamhdr_init (&self->streamhdr, NN_SIPC_SRC_STREAMHDR, &self->fsm);
+    nn_timer_init (&self->timer, NN_SIPC_SRC_TIMER, &self->fsm);
     self->usock = NULL;
     self->usock_owner.src = -1;
     self->usock_owner.fsm = NULL;
@@ -93,7 +100,7 @@ void nn_sipc_term (struct nn_sipc *self)
     nn_msg_term (&self->outmsg);
     nn_msg_term (&self->inmsg);
     nn_pipebase_term (&self->pipebase);
-    nn_streamhdr_term (&self->streamhdr);
+    nn_timer_term (&self->timer);
     nn_fsm_term (&self->fsm);
 }
 
@@ -102,14 +109,27 @@ int nn_sipc_isidle (struct nn_sipc *self)
     return nn_fsm_isidle (&self->fsm);
 }
 
-void nn_sipc_start (struct nn_sipc *self, struct nn_usock *usock)
+void nn_sipc_start (struct nn_sipc *self, struct nn_uipc *usock)
 {
+    size_t sz;
+    int protocol;
+
     /*  Take ownership of the underlying socket. */
     nn_assert (self->usock == NULL && self->usock_owner.fsm == NULL);
     self->usock_owner.src = NN_SIPC_SRC_USOCK;
     self->usock_owner.fsm = &self->fsm;
-    nn_usock_swap_owner (usock, &self->usock_owner);
+    nn_uipc_swap_owner (usock, &self->usock_owner);
     self->usock = usock;
+
+    /*  Get the protocol identifier. */
+    sz = sizeof (protocol);
+    nn_pipebase_getopt (&self->pipebase, NN_SOL_SOCKET, NN_PROTOCOL,
+        &protocol, &sz);
+    nn_assert (sz == sizeof (protocol));
+
+    /*  Compose the protocol header. */
+    memcpy (self->protohdr, "\0SP\0\0\0\0\0", 8);
+    nn_puts (self->protohdr + 4, (uint16_t) protocol);
 
     /*  Launch the state machine. */
     nn_fsm_start (&self->fsm);
@@ -146,7 +166,7 @@ static int nn_sipc_send (struct nn_pipebase *self, struct nn_msg *msg)
     iov [1].iov_len = nn_chunkref_size (&sipc->outmsg.sphdr);
     iov [2].iov_base = nn_chunkref_data (&sipc->outmsg.body);
     iov [2].iov_len = nn_chunkref_size (&sipc->outmsg.body);
-    nn_usock_send (sipc->usock, iov, 3);
+    nn_uipc_send (sipc->usock, iov, 3);
 
     sipc->outstate = NN_SIPC_OUTSTATE_SENDING;
 
@@ -168,7 +188,7 @@ static int nn_sipc_recv (struct nn_pipebase *self, struct nn_msg *msg)
 
     /*  Start receiving new message. */
     sipc->instate = NN_SIPC_INSTATE_HDR;
-    nn_usock_recv (sipc->usock, sipc->inhdr, sizeof (sipc->inhdr), NULL);
+    nn_uipc_recv (sipc->usock, sipc->inhdr, sizeof (sipc->inhdr));
 
     return 0;
 }
@@ -182,12 +202,12 @@ static void nn_sipc_shutdown (struct nn_fsm *self, int src, int type,
 
     if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         nn_pipebase_stop (&sipc->pipebase);
-        nn_streamhdr_stop (&sipc->streamhdr);
-        sipc->state = NN_SIPC_STATE_STOPPING;
+        nn_timer_stop (&sipc->timer);
+        sipc->state = NN_SIPC_STATE_STOPPING_TIMER;
     }
-    if (sipc->state == NN_SIPC_STATE_STOPPING) {
-        if (nn_streamhdr_isidle (&sipc->streamhdr)) {
-            nn_usock_swap_owner (sipc->usock, &sipc->usock_owner);
+    if (sipc->state == NN_SIPC_STATE_STOPPING_TIMER) {
+        if (nn_timer_isidle (&sipc->timer)) {
+            nn_uipc_swap_owner (sipc->usock, &sipc->usock_owner);
             sipc->usock = NULL;
             sipc->usock_owner.src = -1;
             sipc->usock_owner.fsm = NULL;
@@ -204,12 +224,15 @@ static void nn_sipc_shutdown (struct nn_fsm *self, int src, int type,
 static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
     NN_UNUSED void *srcptr)
 {
-    int rc;
     struct nn_sipc *sipc;
+    struct nn_iovec iovec;
+    int protocol;
     uint64_t size;
+    int rc;
+    int opt;
+    size_t opt_sz = sizeof (opt);
 
     sipc = nn_cont (self, struct nn_sipc, fsm);
-
 
     switch (sipc->state) {
 
@@ -222,9 +245,11 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
         case NN_FSM_ACTION:
             switch (type) {
             case NN_FSM_START:
-                nn_streamhdr_start (&sipc->streamhdr, sipc->usock,
-                    &sipc->pipebase);
-                sipc->state = NN_SIPC_STATE_PROTOHDR;
+                nn_timer_start (&sipc->timer, NN_SIPC_STREAMHDR_TIMEOUT);
+                iovec.iov_base = sipc->protohdr;
+                iovec.iov_len = sizeof (sipc->protohdr);
+                nn_uipc_send (sipc->usock, &iovec, 1);
+                sipc->state = NN_SIPC_STATE_STREAMHDR_SENDING;
                 return;
             default:
                 nn_fsm_bad_action (sipc->state, src, type);
@@ -235,29 +260,113 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
         }
 
 /******************************************************************************/
-/*  PROTOHDR state.                                                           */
+/*  STREAMHDR_SENDING state.                                                  */
 /******************************************************************************/
-    case NN_SIPC_STATE_PROTOHDR:
+    case NN_SIPC_STATE_STREAMHDR_SENDING:
         switch (src) {
 
-        case NN_SIPC_SRC_STREAMHDR:
+        case NN_SIPC_SRC_USOCK:
             switch (type) {
-            case NN_STREAMHDR_OK:
-
-                /*  Before moving to the active state stop the streamhdr
-                    state machine. */
-                nn_streamhdr_stop (&sipc->streamhdr);
-                sipc->state = NN_SIPC_STATE_STOPPING_STREAMHDR;
+            case NN_STREAM_SENT:
+                nn_uipc_recv (sipc->usock, sipc->protohdr,
+                    sizeof (sipc->protohdr));
+                sipc->state = NN_SIPC_STATE_STREAMHDR_RECVING;
                 return;
+            case NN_STREAM_SHUTDOWN:
+                /*  Ignore it. Wait for ERROR event  */
+                return;
+            case NN_STREAM_ERROR:
+                nn_timer_stop (&sipc->timer);
+                sipc->state = NN_SIPC_STATE_STREAMHDR_ERROR;
+                return;
+            default:
+                nn_fsm_bad_action (sipc->state, src, type);
+            }
 
-            case NN_STREAMHDR_ERROR:
+        case NN_SIPC_SRC_TIMER:
+            switch (type) {
+            case NN_TIMER_TIMEOUT:
+                nn_timer_stop (&sipc->timer);
+                sipc->state = NN_SIPC_STATE_STREAMHDR_ERROR;
+                return;
+            default:
+                nn_fsm_bad_action (sipc->state, src, type);
+            }
 
-                /* Raise the error and move directly to the DONE state.
-                   streamhdr object will be stopped later on. */
+        default:
+            nn_fsm_bad_source (sipc->state, src, type);
+        }
+
+/******************************************************************************/
+/*  STREAMHDR_RECVING state.                                                  */
+/******************************************************************************/
+    case NN_SIPC_STATE_STREAMHDR_RECVING:
+        switch (src) {
+
+        case NN_SIPC_SRC_USOCK:
+            switch (type) {
+            case NN_STREAM_RECEIVED:
+
+                /*  Here we are checking whether the peer speaks the same
+                protocol as this socket. */
+                if (memcmp (sipc->protohdr, "\0SP\0", 4) != 0) {
+                    nn_timer_stop (&sipc->timer);
+                    sipc->state = NN_SIPC_STATE_STREAMHDR_ERROR;
+                    return;
+                }
+                protocol = nn_gets (sipc->protohdr + 4);
+                if (!nn_pipebase_ispeer (&sipc->pipebase, protocol)) {
+                    nn_timer_stop (&sipc->timer);
+                    sipc->state = NN_SIPC_STATE_STREAMHDR_ERROR;
+                    return;
+                }
+                nn_timer_stop (&sipc->timer);
+                sipc->state = NN_SIPC_STATE_STREAMHDR_SUCCESS;
+                return;
+            case NN_STREAM_SHUTDOWN:
+                /*  Ignore it. Wait for ERROR event  */
+                return;
+            case NN_STREAM_ERROR:
+                nn_timer_stop (&sipc->timer);
+                sipc->state = NN_SIPC_STATE_STREAMHDR_ERROR;
+                return;
+            default:
+                nn_fsm_bad_action (sipc->state, src, type);
+            }
+
+        case NN_SIPC_SRC_TIMER:
+            switch (type) {
+            case NN_TIMER_TIMEOUT:
+                nn_timer_stop (&sipc->timer);
+                sipc->state = NN_SIPC_STATE_STREAMHDR_ERROR;
+                return;
+            default:
+                nn_fsm_bad_action (sipc->state, src, type);
+            }
+
+        default:
+            nn_fsm_bad_source (sipc->state, src, type);
+        }
+
+/******************************************************************************/
+/*  STREAMHDR_ERROR state.                                                    */
+/******************************************************************************/
+    case NN_SIPC_STATE_STREAMHDR_ERROR:
+        switch (src) {
+
+        case NN_SIPC_SRC_USOCK:
+            /*  It's safe to ignore usock event when we are stopping, but there
+                is only a subset of events that are plausible. */
+            nn_assert (type == NN_STREAM_ERROR);
+            return;
+
+        case NN_SIPC_SRC_TIMER:
+            switch (type) {
+            case NN_TIMER_STOPPED:
+                /*  Raise the error and move directly to the DONE state. */
                 sipc->state = NN_SIPC_STATE_DONE;
                 nn_fsm_raise (&sipc->fsm, &sipc->done, NN_SIPC_ERROR);
                 return;
-
             default:
                 nn_fsm_bad_action (sipc->state, src, type);
             }
@@ -267,34 +376,39 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
         }
 
 /******************************************************************************/
-/*  STOPPING_STREAMHDR state.                                                 */
+/*  STREAMHDR_SUCCESS state.                                                  */
 /******************************************************************************/
-    case NN_SIPC_STATE_STOPPING_STREAMHDR:
+    case NN_SIPC_STATE_STREAMHDR_SUCCESS:
         switch (src) {
 
-        case NN_SIPC_SRC_STREAMHDR:
-            switch (type) {
-            case NN_STREAMHDR_STOPPED:
+        case NN_SIPC_SRC_USOCK:
+            /*  It's safe to ignore usock event when we are stopping, but there
+                is only a subset of events that are plausible. */
+            nn_assert (type == NN_STREAM_ERROR);
+            return;
 
-                 /*  Start the pipe. */
-                 rc = nn_pipebase_start (&sipc->pipebase);
-                 if (rc < 0) {
+        case NN_SIPC_SRC_TIMER:
+            switch (type) {
+            case NN_TIMER_STOPPED:
+
+                /*  Start the pipe. */
+                rc = nn_pipebase_start (&sipc->pipebase);
+                if (rc < 0) {
                     sipc->state = NN_SIPC_STATE_DONE;
                     nn_fsm_raise (&sipc->fsm, &sipc->done, NN_SIPC_ERROR);
                     return;
-                 }
+                }
 
-                 /*  Start receiving a message in asynchronous manner. */
-                 sipc->instate = NN_SIPC_INSTATE_HDR;
-                 nn_usock_recv (sipc->usock, &sipc->inhdr,
-                     sizeof (sipc->inhdr), NULL);
+                /*  Start receiving a message in asynchronous manner. */
+                sipc->instate = NN_SIPC_INSTATE_HDR;
+                nn_uipc_recv (sipc->usock, &sipc->inhdr,
+                    sizeof (sipc->inhdr));
 
-                 /*  Mark the pipe as available for sending. */
-                 sipc->outstate = NN_SIPC_OUTSTATE_IDLE;
+                /*  Mark the pipe as available for sending. */
+                sipc->outstate = NN_SIPC_OUTSTATE_IDLE;
 
-                 sipc->state = NN_SIPC_STATE_ACTIVE;
-                 return;
-
+                sipc->state = NN_SIPC_STATE_ACTIVE;
+                return;
             default:
                 nn_fsm_bad_action (sipc->state, src, type);
             }
@@ -311,7 +425,7 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_SIPC_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SENT:
+            case NN_STREAM_SENT:
 
                 /*  The message is now fully sent. */
                 nn_assert (sipc->outstate == NN_SIPC_OUTSTATE_SENDING);
@@ -321,15 +435,27 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
                 nn_pipebase_sent (&sipc->pipebase);
                 return;
 
-            case NN_USOCK_RECEIVED:
+            case NN_STREAM_RECEIVED:
 
                 switch (sipc->instate) {
                 case NN_SIPC_INSTATE_HDR:
 
-                    /*  Message header was received. Allocate memory for the
-                        message. */
+                    /*  Message header was received. Check that message size
+                        is acceptable by comparing with NN_RCVMAXSIZE;
+                        if it's too large, drop the connection. */
                     nn_assert (sipc->inhdr [0] == NN_SIPC_MSG_NORMAL);
                     size = nn_getll (sipc->inhdr + 1);
+
+                    nn_pipebase_getopt (&sipc->pipebase, NN_SOL_SOCKET,
+                        NN_RCVMAXSIZE, &opt, &opt_sz);
+
+                    if (opt >= 0 && size > (unsigned) opt) {
+                        sipc->state = NN_SIPC_STATE_DONE;
+                        nn_fsm_raise (&sipc->fsm, &sipc->done, NN_SIPC_ERROR);
+                        return;
+                    }
+
+                    /*  Allocate memory for the message. */
                     nn_msg_term (&sipc->inmsg);
                     nn_msg_init (&sipc->inmsg, (size_t) size);
 
@@ -342,9 +468,9 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
 
                     /*  Start receiving the message body. */
                     sipc->instate = NN_SIPC_INSTATE_BODY;
-                    nn_usock_recv (sipc->usock,
+                    nn_uipc_recv (sipc->usock,
                         nn_chunkref_data (&sipc->inmsg.body),
-                        (size_t) size, NULL);
+                        (size_t) size);
 
                     return;
 
@@ -361,12 +487,12 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
                     nn_assert_unreachable ("Unexpected [instate] value.");
                 }
 
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 nn_pipebase_stop (&sipc->pipebase);
                 sipc->state = NN_SIPC_STATE_SHUTTING_DOWN;
                 return;
 
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 nn_pipebase_stop (&sipc->pipebase);
                 sipc->state = NN_SIPC_STATE_DONE;
                 nn_fsm_raise (&sipc->fsm, &sipc->done, NN_SIPC_ERROR);
@@ -391,7 +517,7 @@ static void nn_sipc_handler (struct nn_fsm *self, int src, int type,
 
         case NN_SIPC_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_ERROR:
+            case NN_STREAM_ERROR:
                 sipc->state = NN_SIPC_STATE_DONE;
                 nn_fsm_raise (&sipc->fsm, &sipc->done, NN_SIPC_ERROR);
                 return;

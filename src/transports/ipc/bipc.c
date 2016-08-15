@@ -24,9 +24,9 @@
 
 #include "bipc.h"
 #include "aipc.h"
+#include "uipc.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
@@ -64,7 +64,7 @@ struct nn_bipc {
     struct nn_epbase epbase;
 
     /*  The underlying listening IPC socket. */
-    struct nn_usock usock;
+    struct nn_uipc usock;
 
     /*  The connection being accepted at the moment. */
     struct nn_aipc *aipc;
@@ -110,7 +110,7 @@ int nn_bipc_create (void *hint, struct nn_epbase **epbase)
     /*  Start the state machine. */
     nn_fsm_start (&self->fsm);
 
-    nn_usock_init (&self->usock, NN_BIPC_SRC_USOCK, &self->fsm);
+    nn_uipc_init (&self->usock, NN_BIPC_SRC_USOCK, &self->fsm);
 
     rc = nn_bipc_listen (self);
     if (rc != 0) {
@@ -142,7 +142,7 @@ static void nn_bipc_destroy (struct nn_epbase *self)
     nn_assert_state (bipc, NN_BIPC_STATE_IDLE);
     nn_list_term (&bipc->aipcs);
     nn_assert (bipc->aipc == NULL);
-    nn_usock_term (&bipc->usock);
+    nn_uipc_term (&bipc->usock);
     nn_epbase_term (&bipc->epbase);
     nn_fsm_term (&bipc->fsm);
 
@@ -186,11 +186,11 @@ static void nn_bipc_shutdown (struct nn_fsm *self, int src, int type,
         errno_assert (rc == 0 || errno == ENOENT);
 #endif
 
-        nn_usock_stop (&bipc->usock);
+        nn_uipc_stop (&bipc->usock);
         bipc->state = NN_BIPC_STATE_STOPPING_USOCK;
     }
     if (bipc->state == NN_BIPC_STATE_STOPPING_USOCK) {
-       if (!nn_usock_isidle (&bipc->usock))
+       if (!nn_uipc_isidle (&bipc->usock))
             return;
         for (it = nn_list_begin (&bipc->aipcs);
               it != nn_list_end (&bipc->aipcs);
@@ -249,7 +249,7 @@ static void nn_bipc_handler (struct nn_fsm *self, int src, int type,
 /******************************************************************************/
     case NN_BIPC_STATE_ACTIVE:
         if (src == NN_BIPC_SRC_USOCK) {
-            nn_assert (type == NN_USOCK_SHUTDOWN || type == NN_USOCK_STOPPED);
+            nn_assert (type == NN_STREAM_SHUTDOWN || type == NN_STREAM_STOPPED);
             return;
         }
 
@@ -323,21 +323,21 @@ static int nn_bipc_listen (struct nn_bipc *self)
 #endif
 
     /*  Start listening for incoming connections. */
-    rc = nn_usock_start (&self->usock, AF_UNIX, SOCK_STREAM, 0);
+    rc = nn_uipc_start (&self->usock, AF_UNIX, SOCK_STREAM, 0);
     if (rc < 0) {
         return rc;
     }
 
-    rc = nn_usock_bind (&self->usock,
+    rc = nn_uipc_bind (&self->usock,
         (struct sockaddr*) &ss, sizeof (struct sockaddr_un));
     if (rc < 0) {
-        nn_usock_stop (&self->usock);
+        nn_uipc_stop (&self->usock);
         return rc;
     }
 
-    rc = nn_usock_listen (&self->usock, NN_BIPC_BACKLOG);
+    rc = nn_uipc_listen (&self->usock, NN_BIPC_BACKLOG);
     if (rc < 0) {
-        nn_usock_stop (&self->usock);
+        nn_uipc_stop (&self->usock);
         return rc;
     }
     nn_bipc_start_accepting (self);

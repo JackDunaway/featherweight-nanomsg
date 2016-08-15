@@ -67,8 +67,10 @@ struct nn_worker {
     struct nn_thread thread;
 };
 
-HANDLE nn_worker_getcp (struct nn_worker *self);
+void nn_worker_register_iocp (struct nn_fsm *fsm, HANDLE h);
+
 #else
+
 #include "../utils/queue.h"
 #include "../utils/mutex.h"
 #include "../utils/thread.h"

@@ -23,13 +23,10 @@
 #ifndef NN_STCP_INCLUDED
 #define NN_STCP_INCLUDED
 
+#include "utcp.h"
 #include "../../transport.h"
-
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
-
-#include "../utils/streamhdr.h"
-
+#include "../../aio/timer.h"
 #include "../../utils/msg.h"
 
 /*  This state machine handles TCP connection from the point where it is
@@ -45,10 +42,13 @@ struct nn_stcp {
     int state;
 
     /*  The underlying socket. */
-    struct nn_usock *usock;
+    struct nn_utcp *usock;
 
-    /*  Child state machine to do protocol header exchange. */
-    struct nn_streamhdr streamhdr;
+    /*  Used to timeout the protocol header exchange. */
+    struct nn_timer timer;
+
+    /*  Protocol header. */
+    uint8_t protohdr [8];
 
     /*  The original owner of the underlying socket. */
     struct nn_fsm_owner usock_owner;
@@ -83,7 +83,7 @@ void nn_stcp_init (struct nn_stcp *self, int src,
 void nn_stcp_term (struct nn_stcp *self);
 
 int nn_stcp_isidle (struct nn_stcp *self);
-void nn_stcp_start (struct nn_stcp *self, struct nn_usock *usock);
+void nn_stcp_start (struct nn_stcp *self, struct nn_utcp *usock);
 void nn_stcp_stop (struct nn_stcp *self);
 
 #endif

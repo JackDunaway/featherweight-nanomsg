@@ -25,6 +25,8 @@
 #include "cws.h"
 #include "sws.h"
 
+#include "../tcp/utcp.h"
+
 #include "../../ws.h"
 
 #include "../utils/dns.h"
@@ -34,7 +36,7 @@
 #include "../utils/literal.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
+#include "../../aio/stream.h"
 
 #include "../../utils/err.h"
 #include "../../utils/cont.h"
@@ -79,7 +81,7 @@ struct nn_cws {
     struct nn_epbase epbase;
 
     /*  The underlying WS socket. */
-    struct nn_usock usock;
+    struct nn_utcp usock;
 
     /*  Used to wait before retrying to connect. */
     struct nn_backoff retry;
@@ -236,7 +238,7 @@ int nn_cws_create (void *hint, struct nn_epbase **epbase)
     nn_fsm_init_root (&self->fsm, nn_cws_handler, nn_cws_shutdown,
         nn_epbase_getctx (&self->epbase));
     self->state = NN_CWS_STATE_IDLE;
-    nn_usock_init (&self->usock, NN_CWS_SRC_USOCK, &self->fsm);
+    nn_utcp_init (&self->usock, NN_CWS_SRC_USOCK, &self->fsm);
 
     sz = sizeof (msg_type);
     nn_epbase_getopt (&self->epbase, NN_WS, NN_WS_MSG_TYPE,
@@ -290,7 +292,7 @@ static void nn_cws_destroy (struct nn_epbase *self)
     nn_dns_term (&cws->dns);
     nn_sws_term (&cws->sws);
     nn_backoff_term (&cws->retry);
-    nn_usock_term (&cws->usock);
+    nn_utcp_term (&cws->usock);
     nn_fsm_term (&cws->fsm);
     nn_epbase_term (&cws->epbase);
 
@@ -316,13 +318,13 @@ static void nn_cws_shutdown (struct nn_fsm *self, int src, int type,
         if (!nn_sws_isidle (&cws->sws))
             return;
         nn_backoff_stop (&cws->retry);
-        nn_usock_stop (&cws->usock);
+        nn_utcp_stop (&cws->usock);
         nn_dns_stop (&cws->dns);
         cws->state = NN_CWS_STATE_STOPPING;
     }
     if (cws->state == NN_CWS_STATE_STOPPING) {
         if (!nn_backoff_isidle (&cws->retry) ||
-              !nn_usock_isidle (&cws->usock) ||
+              !nn_utcp_isidle (&cws->usock) ||
               !nn_dns_isidle (&cws->dns))
             return;
         cws->state = NN_CWS_STATE_IDLE;
@@ -419,7 +421,7 @@ static void nn_cws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CWS_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_CONNECTED:
+            case NN_STREAM_CONNECTED:
                 nn_sws_start (&cws->sws, &cws->usock, NN_WS_CLIENT,
                     nn_chunkref_data (&cws->resource),
                     nn_chunkref_data (&cws->remote_host), cws->msg_type);
@@ -431,10 +433,9 @@ static void nn_cws_handler (struct nn_fsm *self, int src, int type,
                     NN_STAT_ESTABLISHED_CONNECTIONS, 1);
                 nn_epbase_clear_error (&cws->epbase);
                 return;
-            case NN_USOCK_ERROR:
-                nn_epbase_set_error (&cws->epbase,
-                    nn_usock_geterrno (&cws->usock));
-                nn_usock_stop (&cws->usock);
+            case NN_STREAM_ERROR:
+                nn_epbase_set_error (&cws->epbase, cws->usock.errnum);
+                nn_utcp_stop (&cws->usock);
                 cws->state = NN_CWS_STATE_STOPPING_USOCK;
                 nn_epbase_stat_increment (&cws->epbase,
                     NN_STAT_INPROGRESS_CONNECTIONS, -1);
@@ -488,10 +489,10 @@ static void nn_cws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CWS_SRC_SWS:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
             case NN_SWS_RETURN_STOPPED:
-                nn_usock_stop (&cws->usock);
+                nn_utcp_stop (&cws->usock);
                 cws->state = NN_CWS_STATE_STOPPING_USOCK;
                 return;
             default:
@@ -511,9 +512,9 @@ static void nn_cws_handler (struct nn_fsm *self, int src, int type,
 
         case NN_CWS_SRC_USOCK:
             switch (type) {
-            case NN_USOCK_SHUTDOWN:
+            case NN_STREAM_SHUTDOWN:
                 return;
-            case NN_USOCK_STOPPED:
+            case NN_STREAM_STOPPED:
                 /*  If the peer has confirmed itself gone with a Closing
                     Handshake, or if the local endpoint failed the remote,
                     don't try to reconnect. */
@@ -648,7 +649,7 @@ static void nn_cws_start_connecting (struct nn_cws *self,
     }
 
     /*  Try to start the underlying socket. */
-    rc = nn_usock_start (&self->usock, remote.ss_family, SOCK_STREAM, 0);
+    rc = nn_utcp_start (&self->usock, remote.ss_family, SOCK_STREAM, 0);
     if (rc < 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CWS_STATE_WAITING;
@@ -659,16 +660,16 @@ static void nn_cws_start_connecting (struct nn_cws *self,
     sz = sizeof (val);
     nn_epbase_getopt (&self->epbase, NN_SOL_SOCKET, NN_SNDBUF, &val, &sz);
     nn_assert (sz == sizeof (val));
-    nn_usock_setsockopt (&self->usock, SOL_SOCKET, SO_SNDBUF,
+    nn_utcp_setsockopt (&self->usock, SOL_SOCKET, SO_SNDBUF,
         &val, sizeof (val));
     sz = sizeof (val);
     nn_epbase_getopt (&self->epbase, NN_SOL_SOCKET, NN_RCVBUF, &val, &sz);
     nn_assert (sz == sizeof (val));
-    nn_usock_setsockopt (&self->usock, SOL_SOCKET, SO_RCVBUF,
+    nn_utcp_setsockopt (&self->usock, SOL_SOCKET, SO_RCVBUF,
         &val, sizeof (val));
 
     /*  Bind the socket to the local network interface. */
-    rc = nn_usock_bind (&self->usock, (struct sockaddr*) &local, locallen);
+    rc = nn_utcp_bind (&self->usock, (struct sockaddr*) &local, locallen);
     if (rc != 0) {
         nn_backoff_start (&self->retry);
         self->state = NN_CWS_STATE_WAITING;
@@ -676,7 +677,7 @@ static void nn_cws_start_connecting (struct nn_cws *self,
     }
 
     /*  Start connecting. */
-    nn_usock_connect (&self->usock, (struct sockaddr*) &remote, remotelen);
+    nn_utcp_connect (&self->usock, (struct sockaddr*) &remote, remotelen);
     self->state = NN_CWS_STATE_CONNECTING;
     nn_epbase_stat_increment (&self->epbase,
         NN_STAT_INPROGRESS_CONNECTIONS, 1);

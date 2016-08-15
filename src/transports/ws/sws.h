@@ -28,7 +28,6 @@
 #include "../../transport.h"
 
 #include "../../aio/fsm.h"
-#include "../../aio/usock.h"
 
 #include "ws_handshake.h"
 
@@ -94,7 +93,7 @@ struct nn_sws {
     int mode;
 
     /*  The underlying socket. */
-    struct nn_usock *usock;
+    struct nn_utcp *usock;
 
     /*  Child state machine to do protocol header exchange. */
     struct nn_ws_handshake handshaker;
@@ -197,7 +196,7 @@ void nn_sws_init (struct nn_sws *self, int src,
 void nn_sws_term (struct nn_sws *self);
 
 int nn_sws_isidle (struct nn_sws *self);
-void nn_sws_start (struct nn_sws *self, struct nn_usock *usock, int mode,
+void nn_sws_start (struct nn_sws *self, struct nn_utcp *usock, int mode,
     const char *resource, const char *host, uint8_t msg_type);
 void nn_sws_stop (struct nn_sws *self);
 

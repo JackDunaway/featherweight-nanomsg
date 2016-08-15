@@ -154,12 +154,14 @@ void nn_req_in (struct nn_sockbase *self, struct nn_pipe *pipe)
         /*  No request was sent. Getting a reply doesn't make sense. */
         if (!nn_req_inprogress (req)) {
             nn_msg_term (&req->task.reply);
+            nn_msg_init (&req->task.reply, 0);
             continue;
         }
 
         /*  Ignore malformed replies. */
         if (nn_chunkref_size (&req->task.reply.sphdr) != NN_WIRE_REQID_LEN) {
             nn_msg_term (&req->task.reply);
+            nn_msg_init (&req->task.reply, 0);
             continue;
         }
 
@@ -167,10 +169,12 @@ void nn_req_in (struct nn_sockbase *self, struct nn_pipe *pipe)
         reqid = nn_getl (nn_chunkref_data (&req->task.reply.sphdr));
         if (!nn_reqid_is_final (reqid)) {
             nn_msg_term (&req->task.reply);
+            nn_msg_init (&req->task.reply, 0);
             continue;
         }
         if (req->task.id != reqid) {
             nn_msg_term (&req->task.reply);
+            nn_msg_init (&req->task.reply, 0);
             continue;
         }
 
@@ -181,8 +185,10 @@ void nn_req_in (struct nn_sockbase *self, struct nn_pipe *pipe)
         /*  TODO: Deallocate the request here? */
 
         /*  Notify the state machine. */
-        if (req->state == NN_REQ_STATE_ACTIVE)
+        if (req->state == NN_REQ_STATE_ACTIVE) {
+            nn_assert (nn_chunkref_size (&req->task.reply.body) > 0);
             nn_fsm_action (&req->fsm, NN_REQ_ACTION_IN);
+        }
 
         return;
     }
@@ -260,6 +266,7 @@ int nn_req_crecv (struct nn_sockbase *self, struct nn_msg *msg)
         return -EAGAIN;
 
     /*  If the reply was already received, just pass it to the caller. */
+    nn_assert (nn_chunkref_size (&req->task.reply.body) > 0);
     nn_msg_mv (msg, &req->task.reply);
     nn_msg_init (&req->task.reply, 0);
 
@@ -422,6 +429,7 @@ void nn_req_handler (struct nn_fsm *self, int src, int type,
                 nn_timer_stop (&req->task.timer);
                 req->task.sent_to = NULL;
                 req->state = NN_REQ_STATE_STOPPING_TIMER;
+                nn_assert (nn_chunkref_size (&req->task.reply.body) >= 0);
                 return;
 
             case NN_REQ_ACTION_SENT:
@@ -540,6 +548,7 @@ void nn_req_handler (struct nn_fsm *self, int src, int type,
             switch (type) {
             case NN_TIMER_STOPPED:
                 req->state = NN_REQ_STATE_DONE;
+                nn_assert (nn_chunkref_size (&req->task.reply.body) > 0);
                 return;
             default:
                 nn_fsm_bad_action (req->state, src, type);
@@ -568,6 +577,7 @@ void nn_req_handler (struct nn_fsm *self, int src, int type,
         case NN_FSM_ACTION:
              switch (type) {
              case NN_REQ_ACTION_RECEIVED:
+                 nn_assert (nn_chunkref_size (&req->task.reply.body) == 0);
                  req->state = NN_REQ_STATE_PASSIVE;
                  return;
              case NN_REQ_ACTION_SENT:
