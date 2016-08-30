@@ -63,8 +63,6 @@ static int nn_sock_setopt_inner (struct nn_sock *self, int level,
 static void nn_sock_onleave (struct nn_ctx *self);
 static void nn_sock_handler (struct nn_fsm *self, int src, int type,
     void *srcptr);
-static void nn_sock_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr);
 
 /*  Initialize a socket.  A hold is placed on the initialized socket for
     the caller as well. */
@@ -78,11 +76,11 @@ int nn_sock_init (struct nn_sock *self, struct nn_socktype *socktype, int fd)
         !(socktype->flags & NN_SOCKTYPE_FLAG_NORECV));
 
     /*  Create the AIO context for the SP socket. */
-    nn_ctx_init (&self->ctx, nn_global_getpool (), nn_sock_onleave);
+    nn_ctx_init (&self->ctx, nn_global_getpool (), nn_sock_onleave, 1);
 
     /*  Initialise the state machine. */
     nn_fsm_init_root (&self->fsm, nn_sock_handler,
-        nn_sock_shutdown, &self->ctx);
+        nn_sock_handler, &self->ctx);
     self->state = NN_SOCK_STATE_INIT;
 
     /*  Open the NN_SNDFD and NN_RCVFD efds. Do so, only if the socket type
@@ -105,9 +103,7 @@ int nn_sock_init (struct nn_sock *self, struct nn_socktype *socktype, int fd)
         }
     }
     nn_sem_init (&self->termsem);
-    nn_sem_init (&self->relesem);
 
-    self->holds = 1;   /*  Callers hold. */
     self->flags = 0;
     nn_list_init (&self->eps);
     nn_list_init (&self->sdeps);
@@ -150,12 +146,6 @@ int nn_sock_init (struct nn_sock *self, struct nn_socktype *socktype, int fd)
     /*  Should be pretty much enough space for just the number  */
     sprintf(self->socket_name, "%d", fd);
 
-    /* Security attribute */
-    self->sec_attr = NULL;
-    self->sec_attr_size = 0;
-    self->inbuffersz = 4096;
-    self->outbuffersz = 4096;
-
     /*  The transport-specific options are not initialised immediately,
         rather, they are allocated later on when needed. */
     for (i = 0; i != NN_MAX_TRANSPORT; ++i)
@@ -177,7 +167,7 @@ int nn_sock_init (struct nn_sock *self, struct nn_socktype *socktype, int fd)
 void nn_sock_stopped (struct nn_sock *self)
 {
     /*  TODO: Do the following in a more sane way. */
-    self->fsm.stopped.fsm = &self->fsm;
+    self->fsm.stopped.dest = &self->fsm;
     self->fsm.stopped.src = NN_FSM_ACTION;
     self->fsm.stopped.srcptr = NULL;
     self->fsm.stopped.type = NN_SOCK_ACTION_STOPPED;
@@ -196,40 +186,23 @@ void nn_sock_stop (struct nn_sock *self)
 
 int nn_sock_term (struct nn_sock *self)
 {
-    int rc;
     int i;
 
     /*  NOTE: nn_sock_stop must have already been called. */
 
-    /*  Some endpoints may still be alive.  Here we are going to wait
+    /*  Some endpoints may still be active.  Here we are going to wait
         till they are all closed.  This loop is not interruptible, because
         making it so would leave a partially cleaned up socket, and we don't
         have a way to defer resource deallocation. */
-    for (;;) {
-        rc = nn_sem_wait (&self->termsem);
-        if (rc == -EINTR)
-            continue;
-        errnum_assert (rc == 0, -rc);
-        break;
-    }
+    nn_sem_wait (&self->termsem);
 
     /*  Also, wait for all holds on the socket to be released.  */
-    for (;;) {
-        rc = nn_sem_wait (&self->relesem);
-        if (rc == -EINTR)
-            continue;
-        errnum_assert (rc == 0, -rc);
-        break;
-    }
+    nn_ctx_wait_til_released (&self->ctx);
 
     /*  Threads that posted the semaphore(s) can still have the ctx locked
         for a short while processing their final events. Waiting to acquire the
         lock here one last time ensures the socket has fully completed its
         shutdown sequence. */
-    nn_ctx_enter (&self->ctx);
-    nn_assert (nn_queue_empty (&self->ctx.events));
-    nn_assert (nn_queue_empty (&self->ctx.eventsto));
-    nn_ctx_leave (&self->ctx);
 
     /*  We are now certain that no other threads reference resources held by
         the socket. */
@@ -768,10 +741,14 @@ static void nn_sock_onleave (struct nn_ctx *self)
 
     sock = nn_cont (self, struct nn_sock, ctx);
 
-    /*  If nn_close() was already called there's no point in adjusting the
-        snd/rcv file descriptors. */
-    if (sock->state != NN_SOCK_STATE_ACTIVE)
+    /*  Return early if no endpoints remain to be signalled. */
+    if (sock->state == NN_SOCK_STATE_FINI || sock->state == NN_SOCK_STATE_STOPPING) {
+        nn_assert (nn_list_empty (&sock->eps));
+        nn_assert (nn_list_empty (&sock->sdeps));
         return;
+    }
+
+    nn_assert (sock->state == NN_SOCK_STATE_ACTIVE || sock->state == NN_SOCK_STATE_STOPPING_EPS);
 
     /*  Check whether socket is readable and/or writable at the moment. */
     events = sock->sockbase->vfptr->events (sock->sockbase);
@@ -837,185 +814,6 @@ static struct nn_optset *nn_sock_optset (struct nn_sock *self, int id)
     return self->optsets [index];
 }
 
-static void nn_sock_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr)
-{
-    struct nn_sock *sock;
-    struct nn_list_item *it;
-    struct nn_ep *ep;
-
-    sock = nn_cont (self, struct nn_sock, fsm);
-
-    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
-        nn_assert (sock->state == NN_SOCK_STATE_ACTIVE);
-
-        /*  Close sndfd and rcvfd. This should make any current
-            select/poll using SNDFD and/or RCVFD exit. */
-        if (!(sock->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)) {
-            nn_efd_stop (&sock->rcvfd);
-        }
-        if (!(sock->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)) {
-            nn_efd_stop (&sock->sndfd);
-        }
-
-        /*  Ask all the associated endpoints to stop. */
-        it = nn_list_begin (&sock->eps);
-        while (it != nn_list_end (&sock->eps)) {
-            ep = nn_cont (it, struct nn_ep, item);
-            it = nn_list_next (&sock->eps, it);
-            nn_list_erase (&sock->eps, &ep->item);
-            nn_list_insert (&sock->sdeps, &ep->item,
-                nn_list_end (&sock->sdeps));
-            nn_ep_stop (ep);
-
-        }
-        sock->state = NN_SOCK_STATE_STOPPING_EPS;
-        goto finish2;
-    }
-    if (sock->state == NN_SOCK_STATE_STOPPING_EPS) {
-
-        if (!(src == NN_SOCK_SRC_EP && type == NN_EP_STOPPED)) {
-            /*  If we got here waiting for EPs to teardown, but src is
-                not an EP, then it isn't safe for us to do anything,
-                because we just need to wait for the EPs to finish
-                up their thing.  Just bail. */
-            return;
-        }
-        /*  Endpoint is stopped. Now we can safely deallocate it. */
-        ep = (struct nn_ep*) srcptr;
-        nn_list_erase (&sock->sdeps, &ep->item);
-        nn_ep_term (ep);
-        nn_free (ep);
-
-finish2:
-        /*  If all the endpoints are deallocated, we can start stopping
-            protocol-specific part of the socket. If there' no stop function
-            we can consider it stopped straight away. */
-        if (!nn_list_empty (&sock->sdeps))
-            return;
-        nn_assert (nn_list_empty (&sock->eps));
-        sock->state = NN_SOCK_STATE_STOPPING;
-        if (!sock->sockbase->vfptr->stop)
-            goto finish1;
-        sock->sockbase->vfptr->stop (sock->sockbase);
-        return;
-    }
-    if (sock->state == NN_SOCK_STATE_STOPPING) {
-
-        /*  We get here when the deallocation of the socket was delayed by the
-            specific socket type. */
-        nn_assert (src == NN_FSM_ACTION && type == NN_SOCK_ACTION_STOPPED);
-
-finish1:
-        /*  Protocol-specific part of the socket is stopped.
-            We can safely deallocate it. */
-        sock->sockbase->vfptr->destroy (sock->sockbase);
-        sock->state = NN_SOCK_STATE_FINI;
-
-        /*  Close the event FDs entirely. */
-        if (!(sock->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)) {
-            nn_efd_term (&sock->rcvfd);
-        }
-        if (!(sock->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)) {
-            nn_efd_term (&sock->sndfd);
-        }
-
-        /*  Now we can unblock the application thread blocked in
-            the nn_close() call. */
-        nn_sem_post (&sock->termsem);
-
-        return;
-    }
-
-    nn_fsm_bad_state(sock->state, src, type);
-}
-
-static void nn_sock_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr)
-{
-    struct nn_sock *sock;
-    struct nn_ep *ep;
-
-    sock = nn_cont (self, struct nn_sock, fsm);
-
-    switch (sock->state) {
-
-/******************************************************************************/
-/*  INIT state.                                                               */
-/******************************************************************************/
-    case NN_SOCK_STATE_INIT:
-        switch (src) {
-
-        case NN_FSM_ACTION:
-            switch (type) {
-            case NN_FSM_START:
-                sock->state = NN_SOCK_STATE_ACTIVE;
-                return;
-            default:
-                nn_fsm_bad_action (sock->state, src, type);
-            }
-
-        default:
-            nn_fsm_bad_source (sock->state, src, type);
-        }
-
-/******************************************************************************/
-/*  ACTIVE state.                                                             */
-/******************************************************************************/
-    case NN_SOCK_STATE_ACTIVE:
-        switch (src) {
-
-        case NN_FSM_ACTION:
-            switch (type) {
-            default:
-                nn_fsm_bad_action (sock->state, src, type);
-            }
-
-        case NN_SOCK_SRC_EP:
-            switch (type) {
-            case NN_EP_STOPPED:
-
-                /*  This happens when an endpoint is closed using
-                    nn_shutdown() function. */
-                ep = (struct nn_ep*) srcptr;
-                nn_list_erase (&sock->sdeps, &ep->item);
-                nn_ep_term (ep);
-                nn_free (ep);
-                return;
-
-            default:
-                nn_fsm_bad_action (sock->state, src, type);
-            }
-
-        default:
-
-            /*  The assumption is that all the other events come from pipes. */
-            switch (type) {
-            case NN_PIPE_IN:
-                sock->sockbase->vfptr->in (sock->sockbase,
-                    (struct nn_pipe*) srcptr);
-                return;
-            case NN_PIPE_OUT:
-                sock->sockbase->vfptr->out (sock->sockbase,
-                    (struct nn_pipe*) srcptr);
-                return;
-            default:
-                nn_fsm_bad_action (sock->state, src, type);
-            }
-        }
-
-/******************************************************************************/
-/*  Invalid state.                                                            */
-/******************************************************************************/
-    default:
-        nn_fsm_bad_state (sock->state, src, type);
-    }
-}
-
-/******************************************************************************/
-/*  State machine actions.                                                    */
-/******************************************************************************/
-
 void nn_sock_report_error (struct nn_sock *self, struct nn_ep *ep, int errnum)
 {
     if (!nn_global_print_errors())
@@ -1036,111 +834,294 @@ void nn_sock_report_error (struct nn_sock *self, struct nn_ep *ep, int errnum)
 void nn_sock_stat_increment (struct nn_sock *self, int name, int64_t increment)
 {
     switch (name) {
-        case NN_STAT_ESTABLISHED_CONNECTIONS:
-            nn_assert (increment > 0);
-            self->statistics.established_connections += increment;
-            break;
-        case NN_STAT_ACCEPTED_CONNECTIONS:
-            nn_assert (increment > 0);
-            self->statistics.accepted_connections += increment;
-            break;
-        case NN_STAT_DROPPED_CONNECTIONS:
-            nn_assert (increment > 0);
-            self->statistics.dropped_connections += increment;
-            break;
-        case NN_STAT_BROKEN_CONNECTIONS:
-            nn_assert (increment > 0);
-            self->statistics.broken_connections += increment;
-            break;
-        case NN_STAT_CONNECT_ERRORS:
-            nn_assert (increment > 0);
-            self->statistics.connect_errors += increment;
-            break;
-        case NN_STAT_BIND_ERRORS:
-            nn_assert (increment > 0);
-            self->statistics.bind_errors += increment;
-            break;
-        case NN_STAT_ACCEPT_ERRORS:
-            nn_assert (increment > 0);
-            self->statistics.accept_errors += increment;
-            break;
-        case NN_STAT_MESSAGES_SENT:
-            nn_assert (increment > 0);
-            self->statistics.messages_sent += increment;
-            break;
-        case NN_STAT_MESSAGES_RECEIVED:
-            nn_assert (increment > 0);
-            self->statistics.messages_received += increment;
-            break;
-        case NN_STAT_BYTES_SENT:
-            nn_assert (increment >= 0);
-            self->statistics.bytes_sent += increment;
-            break;
-        case NN_STAT_BYTES_RECEIVED:
-            nn_assert (increment >= 0);
-            self->statistics.bytes_received += increment;
-            break;
+    case NN_STAT_ESTABLISHED_CONNECTIONS:
+        nn_assert (increment > 0);
+        self->statistics.established_connections += increment;
+        break;
+    case NN_STAT_ACCEPTED_CONNECTIONS:
+        nn_assert (increment > 0);
+        self->statistics.accepted_connections += increment;
+        break;
+    case NN_STAT_DROPPED_CONNECTIONS:
+        nn_assert (increment > 0);
+        self->statistics.dropped_connections += increment;
+        break;
+    case NN_STAT_BROKEN_CONNECTIONS:
+        nn_assert (increment > 0);
+        self->statistics.broken_connections += increment;
+        break;
+    case NN_STAT_CONNECT_ERRORS:
+        nn_assert (increment > 0);
+        self->statistics.connect_errors += increment;
+        break;
+    case NN_STAT_BIND_ERRORS:
+        nn_assert (increment > 0);
+        self->statistics.bind_errors += increment;
+        break;
+    case NN_STAT_ACCEPT_ERRORS:
+        nn_assert (increment > 0);
+        self->statistics.accept_errors += increment;
+        break;
+    case NN_STAT_MESSAGES_SENT:
+        nn_assert (increment > 0);
+        self->statistics.messages_sent += increment;
+        break;
+    case NN_STAT_MESSAGES_RECEIVED:
+        nn_assert (increment > 0);
+        self->statistics.messages_received += increment;
+        break;
+    case NN_STAT_BYTES_SENT:
+        nn_assert (increment >= 0);
+        self->statistics.bytes_sent += increment;
+        break;
+    case NN_STAT_BYTES_RECEIVED:
+        nn_assert (increment >= 0);
+        self->statistics.bytes_received += increment;
+        break;
 
-        case NN_STAT_CURRENT_CONNECTIONS:
-            nn_assert (increment > 0 ||
-                self->statistics.current_connections >= -increment);
-            nn_assert(increment < INT_MAX && increment > -INT_MAX);
-            self->statistics.current_connections += (int) increment;
-            break;
-        case NN_STAT_INPROGRESS_CONNECTIONS:
-            nn_assert (increment > 0 ||
-                self->statistics.inprogress_connections >= -increment);
-            nn_assert(increment < INT_MAX && increment > -INT_MAX);
-            self->statistics.inprogress_connections += (int) increment;
-            break;
-        case NN_STAT_CURRENT_EP_ERRORS:
-            nn_assert (increment > 0 ||
-                self->statistics.current_ep_errors >= -increment);
-            nn_assert(increment < INT_MAX && increment > -INT_MAX);
-            self->statistics.current_ep_errors += (int) increment;
-            break;
-        default:
-            nn_assert_unreachable ("Unexpected statistic name.");
-            break;
+    case NN_STAT_CURRENT_CONNECTIONS:
+        nn_assert (increment > 0 ||
+            self->statistics.current_connections >= -increment);
+        nn_assert(increment < INT_MAX && increment > -INT_MAX);
+        self->statistics.current_connections += (int) increment;
+        break;
+    case NN_STAT_INPROGRESS_CONNECTIONS:
+        nn_assert (increment > 0 ||
+            self->statistics.inprogress_connections >= -increment);
+        nn_assert(increment < INT_MAX && increment > -INT_MAX);
+        self->statistics.inprogress_connections += (int) increment;
+        break;
+    case NN_STAT_CURRENT_EP_ERRORS:
+        nn_assert (increment > 0 ||
+            self->statistics.current_ep_errors >= -increment);
+        nn_assert(increment < INT_MAX && increment > -INT_MAX);
+        self->statistics.current_ep_errors += (int) increment;
+        break;
+    default:
+        nn_assert_unreachable ("Unexpected statistic name.");
+        break;
     }
 }
 
 void nn_sock_statistic_set (struct nn_sock *self, int name, int value)
 {
     switch (name) {
-        case NN_STAT_CURRENT_SND_PRIORITY:
-            nn_assert ((value > 0 && value <= 16) || value == -1);
-            self->statistics.current_snd_priority = value;
-            break;
-        case NN_STAT_CURRENT_RCV_PRIORITY:
-            nn_assert ((value > 0 && value <= 16) || value == -1);
-            self->statistics.current_rcv_priority = value;
-            break;
-        default:
-            nn_assert_unreachable ("Unexpected statistic name.");
-            break;
+    case NN_STAT_CURRENT_SND_PRIORITY:
+        nn_assert ((value > 0 && value <= 16) || value == -1);
+        self->statistics.current_snd_priority = value;
+        break;
+    case NN_STAT_CURRENT_RCV_PRIORITY:
+        nn_assert ((value > 0 && value <= 16) || value == -1);
+        self->statistics.current_rcv_priority = value;
+        break;
+    default:
+        nn_assert_unreachable ("Unexpected statistic name.");
+        break;
     }
 }
 
 int nn_sock_hold (struct nn_sock *self)
 {
+    int rc;
+
     switch (self->state) {
     case NN_SOCK_STATE_ACTIVE:
     case NN_SOCK_STATE_INIT:
-        self->holds++;
-        return 0;
+        nn_ctx_enter (&self->ctx);
+        rc = nn_ctx_hold (&self->ctx);
+        nn_ctx_leave (&self->ctx);
+        break;
     case NN_SOCK_STATE_STOPPING:
     case NN_SOCK_STATE_STOPPING_EPS:
     case NN_SOCK_STATE_FINI:
+        rc = -EBADF;
+        break;
     default:
-        return -EBADF;
+        nn_assert_unreachable ("Unexpected socket state.");
+        break;
     }
+
+    return rc;
 }
 
-void nn_sock_rele (struct nn_sock *self)
+void nn_sock_release (struct nn_sock *self)
 {
-    self->holds--;
-    if (self->holds == 0) {
-        nn_sem_post (&self->relesem);
+    nn_ctx_release (&self->ctx);
+}
+
+static void nn_sock_handler (struct nn_fsm *myfsm, int src, int type,
+    void *srcptr)
+{
+    struct nn_list_item *it;
+    struct nn_sock *self;
+    struct nn_ep *ep;
+
+    self = nn_cont (myfsm, struct nn_sock, fsm);
+
+    NN_FSM_JOB (NN_SOCK_STATE_INIT, NN_FSM_ACTION, NN_FSM_START) {
+        self->state = NN_SOCK_STATE_ACTIVE;
+        return;
     }
+
+    NN_FSM_JOB (NN_SOCK_STATE_ACTIVE, NN_FSM_ACTION, NN_FSM_STOP) {
+        /*  Close sndfd and rcvfd. This should make any current
+            select/poll using SNDFD and/or RCVFD exit. */
+        if (!(self->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)) {
+            nn_efd_stop (&self->rcvfd);
+        }
+        if (!(self->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)) {
+            nn_efd_stop (&self->sndfd);
+        }
+
+        /*  Ask all the associated endpoints to stop. */
+        it = nn_list_begin (&self->eps);
+        while (it != nn_list_end (&self->eps)) {
+            ep = nn_cont (it, struct nn_ep, item);
+            it = nn_list_next (&self->eps, it);
+            nn_list_erase (&self->eps, &ep->item);
+            nn_list_insert (&self->sdeps, &ep->item,
+                nn_list_end (&self->sdeps));
+            nn_ep_stop (ep);
+        }
+
+
+        /*  If all the endpoints are deallocated, we can start stopping
+            protocol-specific part of the socket. If there' no stop function
+            we can consider it stopped straight away. */
+        if (!nn_list_empty (&self->sdeps)) {
+            self->state = NN_SOCK_STATE_STOPPING_EPS;
+            return;
+        }
+
+        nn_assert (nn_list_empty (&self->eps));
+        if (!self->sockbase->vfptr->stop) {
+            /*  Protocol-specific part of the socket is stopped.
+                We can safely deallocate it. */
+            self->sockbase->vfptr->destroy (self->sockbase);
+            self->state = NN_SOCK_STATE_FINI;
+
+            /*  Close the event FDs entirely. */
+            if (!(self->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)) {
+                nn_efd_term (&self->rcvfd);
+            }
+            if (!(self->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)) {
+                nn_efd_term (&self->sndfd);
+            }
+
+            /*  Now we can unblock the application thread blocked in
+                the nn_close() call. */
+            nn_sem_post (&self->termsem);
+
+            return;
+
+        }
+        self->state = NN_SOCK_STATE_STOPPING;
+        self->sockbase->vfptr->stop (self->sockbase);
+        return;
+    }
+
+    NN_FSM_JOB (NN_SOCK_STATE_STOPPING_EPS, NN_SOCK_SRC_EP, NN_EP_STOPPED) {
+        /*  Endpoint is stopped. Now we can safely deallocate it. */
+        ep = (struct nn_ep*) srcptr;
+        nn_list_erase (&self->sdeps, &ep->item);
+        nn_ep_term (ep);
+        nn_free (ep);
+
+        /*  If all the endpoints are deallocated, we can start stopping
+            protocol-specific part of the socket. If there' no stop function
+            we can consider it stopped straight away. */
+        if (!nn_list_empty (&self->sdeps))
+            return;
+        nn_assert (nn_list_empty (&self->eps));
+        if (!self->sockbase->vfptr->stop) {
+            /*  Protocol-specific part of the socket is stopped.
+                We can safely deallocate it. */
+            self->sockbase->vfptr->destroy (self->sockbase);
+            self->state = NN_SOCK_STATE_FINI;
+
+            /*  Close the event FDs entirely. */
+            if (!(self->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)) {
+                nn_efd_term (&self->rcvfd);
+            }
+            if (!(self->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)) {
+                nn_efd_term (&self->sndfd);
+            }
+
+            /*  Now we can unblock the application thread blocked in
+                the nn_close() call. */
+            nn_sem_post (&self->termsem);
+
+            return;
+        }
+        self->state = NN_SOCK_STATE_STOPPING;
+        self->sockbase->vfptr->stop (self->sockbase);
+        return;
+
+    }
+
+    /*  We get here when the deallocation of the socket was delayed by the
+        specific socket type. */
+    NN_FSM_JOB (NN_SOCK_STATE_STOPPING, NN_FSM_ACTION, NN_SOCK_ACTION_STOPPED) {
+
+        /*  Protocol-specific part of the socket is stopped.
+            We can safely deallocate it. */
+        self->sockbase->vfptr->destroy (self->sockbase);
+        self->state = NN_SOCK_STATE_FINI;
+
+        /*  Close the event FDs entirely. */
+        if (!(self->socktype->flags & NN_SOCKTYPE_FLAG_NORECV)) {
+            nn_efd_term (&self->rcvfd);
+        }
+        if (!(self->socktype->flags & NN_SOCKTYPE_FLAG_NOSEND)) {
+            nn_efd_term (&self->sndfd);
+        }
+
+        /*  Now we can unblock the application thread blocked in
+        the nn_close() call. */
+        nn_sem_post (&self->termsem);
+
+        return;
+    }
+
+    NN_FSM_JOB (NN_SOCK_STATE_ACTIVE, NN_SOCK_SRC_EP, NN_EP_STOPPED) {
+        /*  This happens when an endpoint is closed using nn_shutdown() function. */
+        ep = (struct nn_ep*) srcptr;
+        nn_list_erase (&self->sdeps, &ep->item);
+        nn_ep_term (ep);
+        nn_free (ep);
+        return;
+    }
+
+    NN_FSM_JOB (NN_SOCK_STATE_ACTIVE, NN_PIPE_SRC, NN_PIPE_IN) {
+        self->sockbase->vfptr->in (self->sockbase, (struct nn_pipe*) srcptr);
+        return;
+    }
+
+    NN_FSM_JOB (NN_SOCK_STATE_ACTIVE, NN_PIPE_SRC, NN_PIPE_OUT) {
+        self->sockbase->vfptr->out (self->sockbase, (struct nn_pipe*) srcptr);
+        return;
+    }
+
+
+
+
+    ////////////////////experimental
+    NN_FSM_JOB (NN_SOCK_STATE_STOPPING_EPS, NN_PIPE_SRC, NN_PIPE_IN) {
+
+        //nn_assert_unreachable ("JRD - does this always interrupt inproc deadlock on shutdown?");
+
+        self->sockbase->vfptr->in (self->sockbase, (struct nn_pipe*) srcptr);
+        return;
+    }
+
+    NN_FSM_JOB (NN_SOCK_STATE_STOPPING_EPS, NN_PIPE_SRC, NN_PIPE_OUT) {
+
+        //nn_assert_unreachable ("JRD - does this always interrupt inproc deadlock on shutdown?");
+
+        self->sockbase->vfptr->out (self->sockbase, (struct nn_pipe*) srcptr);
+        return;
+    }
+    ////////////////////experimental
+    
+    nn_fsm_bad_state (self->state, src, type);
 }

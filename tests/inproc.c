@@ -33,7 +33,6 @@ int main (int argc, char *argv [])
     unsigned char *data;
     char buf [256];
     void *control;
-    uint64_t stat;
     int bufsz;
     int timeo;
     int time;
@@ -120,26 +119,32 @@ int main (int argc, char *argv [])
     test_close (sc);
     test_close (sb);
 
-#if 0
     /*  Test whether connection rejection is handled decently. */
     sb = test_socket (AF_SP, NN_PAIR);
     test_bind (sb, addr);
     s1 = test_socket (AF_SP, NN_PAIR);
-    stat = nn_get_statistic (s1, NN_STAT_BROKEN_CONNECTIONS);
-    nn_assert (stat == 0);
+    nn_assert_stat_value (sb, NN_STAT_ACCEPT_ERRORS, 0);
+    nn_assert_stat_value (sb, NN_STAT_BROKEN_CONNECTIONS, 0);
+    nn_assert_stat_value (s1, NN_STAT_BROKEN_CONNECTIONS, 0);
     test_connect (s1, addr);
     time = test_wait_for_stat (s1, NN_STAT_CURRENT_CONNECTIONS, 1, 2000);
     nn_assert (time >= 0);
     s2 = test_socket (AF_SP, NN_PAIR);
-    stat = nn_get_statistic (s2, NN_STAT_BROKEN_CONNECTIONS);
-    nn_assert (stat == 0);
+    nn_assert_stat_value (s2, NN_STAT_CONNECT_ERRORS, 0);
+    nn_assert_stat_value (s2, NN_STAT_INPROGRESS_CONNECTIONS, 0);
+    nn_assert_stat_value (s2, NN_STAT_CURRENT_CONNECTIONS, 0);
     test_connect (s2, addr);
-    time = test_wait_for_stat (s2, NN_STAT_BROKEN_CONNECTIONS, 1, 1000);
+    time = test_wait_for_stat (sb, NN_STAT_ACCEPT_ERRORS, 1, 1000);
     nn_assert (time >= 0);
+    time = test_wait_for_stat (sb, NN_STAT_BROKEN_CONNECTIONS, 1, 1000);
+    nn_assert (time >= 0);
+    time = test_wait_for_stat (s2, NN_STAT_CONNECT_ERRORS, 1, 1000);
+    nn_assert (time >= 0);
+    nn_assert_stat_value (s2, NN_STAT_INPROGRESS_CONNECTIONS, 1);
+    nn_assert_stat_value (s2, NN_STAT_CURRENT_CONNECTIONS, 0);
     test_close (s2);
     test_close (s1);
     test_close (sb);
-#endif
 
     /* Check whether SP message header is transferred correctly. */
     sb = test_socket (AF_SP_RAW, NN_REP);
@@ -185,10 +190,12 @@ int main (int argc, char *argv [])
     s1 = test_socket (AF_SP, NN_BUS);
     test_connect (s1, addr);
 
-    /* Close bound socket, leaving connected sockets connect. */
+    /* Close bound socket, leaving connected sockets in a persistent state
+        ready to re-establish the connection. */
     test_close (sb);
 
-    /* Rebind a new socket to the address to which our connected sockets are listening. */
+    /*  Rebind a new socket to the address to which our connected sockets are
+        listening. */
     s2 = test_socket (AF_SP, NN_BUS);
     test_bind (s2, addr);
 
@@ -224,20 +231,16 @@ int main (int argc, char *argv [])
 
     /*  Test closing a socket waiting to connect to a non-existent peer. */
     sc = test_socket (AF_SP, NN_PAIR);
-    stat = nn_get_statistic (sc, NN_STAT_CONNECT_ERRORS);
-    nn_assert (stat == 0);
-    stat = nn_get_statistic (sc, NN_STAT_INPROGRESS_CONNECTIONS);
-    nn_assert (stat == 0);
+    nn_assert_stat_value (sc, NN_STAT_CONNECT_ERRORS, 0);
+    nn_assert_stat_value (sc, NN_STAT_INPROGRESS_CONNECTIONS, 0);
     test_connect (sc, addr);
 
     /*  inproc does not need to retry its underlying connection state machine
         unlike other lossier transports. For this reason, it does not report
         a connection error, but instead has entered a persistent "Connection
         In Progress" state. */
-    time = test_wait_for_stat (sc, NN_STAT_CONNECT_ERRORS, 1, 100);
-    nn_assert_is_error (time == -1, ETIMEDOUT);
-    stat = nn_get_statistic (sc, NN_STAT_INPROGRESS_CONNECTIONS);
-    nn_assert (stat == 1);
+    nn_assert_stat_value (sc, NN_STAT_CONNECT_ERRORS, 0);
+    nn_assert_stat_value (sc, NN_STAT_INPROGRESS_CONNECTIONS, 1);
     test_close (sc);
 
     return 0;

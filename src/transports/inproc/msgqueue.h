@@ -75,12 +75,12 @@ void nn_msgqueue_term (struct nn_msgqueue *self);
 /*  Returns 1 if there are no messages in the queue, 0 otherwise. */
 int nn_msgqueue_empty (struct nn_msgqueue *self);
 
-/*  Writes a message to the pipe. -EAGAIN is returned if the message cannot
-    be sent because the queue is full. */
-int nn_msgqueue_send (struct nn_msgqueue *self, struct nn_msg *msg);
+/*  Enqueues a message FIFO into the queue. -EAGAIN is returned if the message
+    would overflow the queue. */
+int nn_msgqueue_enqueue (struct nn_msgqueue *self, struct nn_msg *msg);
 
-/*  Reads a message from the pipe. -EAGAIN is returned if there's no message
-    to receive. */
-int nn_msgqueue_recv (struct nn_msgqueue *self, struct nn_msg *msg);
+/*  Dequeues a message FIFO from the queue. -EAGAIN is returned if there are no
+    messages in the queue. */
+int nn_msgqueue_dequeue (struct nn_msgqueue *self, struct nn_msg *msg);
 
 #endif

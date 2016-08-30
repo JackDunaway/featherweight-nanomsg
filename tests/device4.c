@@ -47,8 +47,8 @@ void device4 (NN_UNUSED void *arg)
     nn_assert_is_error (rc == -1, EBADF);
 
     /*  Clean up. */
-    test_close (devg);
-    test_close (devf);
+    test_close_termed (devg);
+    test_close_termed (devf);
 }
 
 int main (int argc, char *argv [])

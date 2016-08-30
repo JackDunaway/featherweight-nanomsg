@@ -36,8 +36,8 @@ void nn_sem_term (struct nn_sem *self);
 /*  Unlock the semaphore. */
 void nn_sem_post (struct nn_sem *self);
 
-/*  Waits till sem object becomes unlocked and locks it. */
-int nn_sem_wait (struct nn_sem *self);
+/*  Waits till sem object becomes unlocked and relocks it. */
+void nn_sem_wait (struct nn_sem *self);
 
 #if defined NN_HAVE_OSX
 

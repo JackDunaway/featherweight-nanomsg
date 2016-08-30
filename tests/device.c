@@ -48,8 +48,8 @@ void device1 (NN_UNUSED void *arg)
     nn_assert_is_error (rc == -1, EBADF);
 
     /*  Clean up. */
-    test_close (devb);
-    test_close (deva);
+    test_close_termed (devb);
+    test_close_termed (deva);
 }
 
 void device2 (NN_UNUSED void *arg)
@@ -70,8 +70,8 @@ void device2 (NN_UNUSED void *arg)
     nn_assert_is_error (rc == -1, EBADF);
 
     /*  Clean up. */
-    test_close (devd);
-    test_close (devc);
+    test_close_termed (devc);
+    test_close_termed (devd);
 }
 
 void device3 (NN_UNUSED void *arg)
@@ -89,7 +89,7 @@ void device3 (NN_UNUSED void *arg)
     nn_assert_is_error (rc == -1, EBADF);
 
     /*  Clean up. */
-    test_close (deve);
+    test_close_termed (deve);
 }
 
 int main (int argc, char *argv [])

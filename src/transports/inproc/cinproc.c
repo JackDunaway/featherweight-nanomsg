@@ -120,19 +120,23 @@ static void nn_cinproc_handler (struct nn_fsm *myfsm, int src, int type,
 {
     struct nn_cinproc *self = nn_cont (myfsm, struct nn_cinproc, fsm);
     struct nn_epbase *epb = &self->item.epbase;
+    struct nn_sinproc *sinproc;
 
+    /*  Create a local endpoint that continually attempts to maintain an
+        active connection to a remote endpoint. */
     NN_FSM_JOB (NN_CINPROC_STATE_IDLE, NN_FSM_ACTION, NN_FSM_START) {
         self->state = NN_CINPROC_STATE_DISCONNECTED;
         nn_epbase_stat_increment (epb, NN_STAT_INPROGRESS_CONNECTIONS, 1);
         return;
     }
 
+    /*  Shutdown request has been initiated locally for this persistent-connect
+        endpoint that does not have an active connection session. */
     NN_FSM_JOB (NN_CINPROC_STATE_DISCONNECTED, NN_FSM_ACTION, NN_FSM_STOP) {
 
         /*  First, unregister the endpoint from the global repository of inproc
             endpoints. This way, new connections cannot be created anymore. */
         nn_ins_disconnect (&self->item);
-
         nn_assert (nn_sinproc_isidle (&self->sinproc));
         self->state = NN_CINPROC_STATE_IDLE;
         nn_fsm_stopped_noevent (&self->fsm);
@@ -140,42 +144,30 @@ static void nn_cinproc_handler (struct nn_fsm *myfsm, int src, int type,
         return;
     }
 
-    NN_FSM_JOB (NN_CINPROC_STATE_IDLE, NN_FSM_ACTION, NN_FSM_STOP) {
-
-        /*  First, unregister the endpoint from the global repository of inproc
-            endpoints. This way, new connections cannot be created anymore. */
-        nn_ins_disconnect (&self->item);
-
-        /*  Stop the existing session. */
-        nn_assert (!nn_sinproc_isidle (&self->sinproc));
-        nn_sinproc_stop (&self->sinproc);
-
-        self->state = NN_CINPROC_STATE_STOPPING;
-        return;
-    }
-
+    /*  Shutdown request has been initiated locally for this persistent-connect
+        endpoint and its currently-active connection session. */
     NN_FSM_JOB (NN_CINPROC_STATE_ACTIVE, NN_FSM_ACTION, NN_FSM_STOP) {
 
         /*  First, unregister the endpoint from the global repository of inproc
             endpoints. This way, new connections cannot be created anymore. */
         nn_ins_disconnect (&self->item);
-
-        /*  Stop the existing session. */
         nn_assert (!nn_sinproc_isidle (&self->sinproc));
+        self->state = NN_CINPROC_STATE_STOPPING;
         nn_sinproc_stop (&self->sinproc);
 
-        self->state = NN_CINPROC_STATE_STOPPING;
         return;
     }
 
+    /*  Confirmation that the owned connection session shut down cleanly. */
     NN_FSM_JOB (NN_CINPROC_STATE_STOPPING, NN_CINPROC_SRC_SINPROC, NN_SINPROC_STOPPED) {
-
         self->state = NN_CINPROC_STATE_IDLE;
         nn_fsm_stopped_noevent (&self->fsm);
         nn_epbase_stopped (&self->item.epbase);
         return;
     }
 
+    /*  A bound remote peer was immediately available when this endpoint
+        initially tried to connect. */
     NN_FSM_JOB (NN_CINPROC_STATE_DISCONNECTED, NN_FSM_ACTION, NN_CINPROC_ACTION_CONNECT) {
         self->state = NN_CINPROC_STATE_ACTIVE;
         nn_epbase_stat_increment (epb, NN_STAT_INPROGRESS_CONNECTIONS, -1);
@@ -183,17 +175,33 @@ static void nn_cinproc_handler (struct nn_fsm *myfsm, int src, int type,
         return;
     }
 
-    NN_FSM_JOB (NN_CINPROC_STATE_DISCONNECTED, NN_SINPROC_SRC_PEER, NN_SINPROC_CONNECT) {
-        struct nn_sinproc *sinproc = (struct nn_sinproc*) srcptr;
-        nn_sinproc_accept (&self->sinproc, sinproc);
+    /*  A bound peer has become available and has synchronously requested this
+        connecting endpoint to establish (or re-establish) the connection. */
+    NN_FSM_JOB (NN_CINPROC_STATE_DISCONNECTED, NN_SINPROC_SRC_PEER, NN_SINPROC_CONNECTED) {
+        sinproc = (struct nn_sinproc*) srcptr;
+        nn_sinproc_accept (&self->sinproc, &sinproc->fsm);
         self->state = NN_CINPROC_STATE_ACTIVE;
         nn_epbase_stat_increment (epb, NN_STAT_INPROGRESS_CONNECTIONS, -1);
         nn_epbase_stat_increment (epb, NN_STAT_ESTABLISHED_CONNECTIONS, 1);
         return;
     }
 
-    NN_FSM_JOB (NN_CINPROC_STATE_ACTIVE, NN_CINPROC_SRC_SINPROC, NN_SINPROC_DISCONNECT) {
+    /*  The remote endpoint has disconnected. */
+    NN_FSM_JOB (NN_CINPROC_STATE_ACTIVE, NN_CINPROC_SRC_SINPROC, NN_SINPROC_DISCONNECTED) {
+        nn_assert (!nn_sinproc_isidle (&self->sinproc));
         self->state = NN_CINPROC_STATE_DISCONNECTED;
+        nn_epbase_stat_increment (epb, NN_STAT_BROKEN_CONNECTIONS, 1);
+        nn_epbase_stat_increment (epb, NN_STAT_INPROGRESS_CONNECTIONS, 1);
+        nn_sinproc_init (&self->sinproc, NN_CINPROC_SRC_SINPROC, epb, &self->fsm);
+        return;
+    }
+
+    /*  Immediately after connection, the remote peer rejected this peer and
+        forcibly closed the connection. */
+    NN_FSM_JOB (NN_CINPROC_STATE_ACTIVE, NN_CINPROC_SRC_SINPROC, NN_SINPROC_CONNECT_ERROR) {
+        nn_assert (nn_sinproc_isidle (&self->sinproc));
+        self->state = NN_CINPROC_STATE_DISCONNECTED;
+        nn_epbase_stat_increment (epb, NN_STAT_CONNECT_ERRORS, 1);
         nn_epbase_stat_increment (epb, NN_STAT_INPROGRESS_CONNECTIONS, 1);
         nn_sinproc_init (&self->sinproc, NN_CINPROC_SRC_SINPROC, epb, &self->fsm);
         return;

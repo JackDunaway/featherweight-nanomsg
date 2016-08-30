@@ -45,7 +45,7 @@ static void worker (void *arg)
     nn_clear_errno ();
     rc = nn_recv (s, buf, sizeof (buf), 0);
     nn_assert_is_error (rc == -1, EBADF);
-    test_close (s);
+    test_close_termed (s);
 }
 
 int main (int argc, char *argv [])

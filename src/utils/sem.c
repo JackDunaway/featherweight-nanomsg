@@ -60,7 +60,7 @@ void nn_sem_post (struct nn_sem *self)
     errnum_assert (rc == 0, rc);
 }
 
-int nn_sem_wait (struct nn_sem *self)
+void nn_sem_wait (struct nn_sem *self)
 {
     int rc;
 
@@ -69,25 +69,26 @@ int nn_sem_wait (struct nn_sem *self)
         detail of pthread_cond_wait() in Darwin kernel: It exits if signal is
         caught. Note that this behaviour is not mandated by POSIX
         and may break with future versions of Darwin. */
-    rc = pthread_mutex_lock (&self->mutex);
-    errnum_assert (rc == 0, rc);
-    if (self->signaled) {
+    while (1) {
+        rc = pthread_mutex_lock (&self->mutex);
+        errnum_assert (rc == 0, rc);
+        if (self->signaled) {
+            rc = pthread_mutex_unlock (&self->mutex);
+            errnum_assert (rc == 0, rc);
+            return;
+        }
+        rc = pthread_cond_wait (&self->cond, &self->mutex);
+        errnum_assert (rc == 0, rc);
+        if (!self->signaled) {
+            rc = pthread_mutex_unlock (&self->mutex);
+            errnum_assert (rc == 0, rc);
+            continue;
+        }
+        self->signaled = 0;
         rc = pthread_mutex_unlock (&self->mutex);
         errnum_assert (rc == 0, rc);
-        return 0;
+        return;
     }
-    rc = pthread_cond_wait (&self->cond, &self->mutex);
-    errnum_assert (rc == 0, rc);
-    if (!self->signaled) {
-        rc = pthread_mutex_unlock (&self->mutex);
-        errnum_assert (rc == 0, rc);
-        return -EINTR;
-    }
-    self->signaled = 0;
-    rc = pthread_mutex_unlock (&self->mutex);
-    errnum_assert (rc == 0, rc);
-
-    return 0;
 }
 
 #elif defined NN_HAVE_WINDOWS
@@ -114,14 +115,12 @@ void nn_sem_post (struct nn_sem *self)
     nn_assert_win (brc);
 }
 
-int nn_sem_wait (struct nn_sem *self)
+void nn_sem_wait (struct nn_sem *self)
 {
     DWORD rc;
 
     rc = WaitForSingleObject (self->h, INFINITE);
     nn_assert_win (rc == WAIT_OBJECT_0);
-
-    return 0;
 }
 
 #elif defined NN_HAVE_SEMAPHORE
@@ -150,15 +149,17 @@ void nn_sem_post (struct nn_sem *self)
     errno_assert (rc == 0);
 }
 
-int nn_sem_wait (struct nn_sem *self)
+void nn_sem_wait (struct nn_sem *self)
 {
     int rc;
 
-    rc = sem_wait (&self->sem);
-    if (rc < 0 && errno == EINTR)
-        return -EINTR;
-    errno_assert (rc == 0);
-    return 0;
+    while (1) {
+        rc = sem_wait (&self->sem);
+        if (rc < 0 && errno == EINTR)
+            continue;
+        errno_assert (rc == 0);
+        return;
+    }
 }
 
 #else

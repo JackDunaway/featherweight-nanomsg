@@ -27,12 +27,8 @@
 
 /*  Base class for state machines. */
 
-struct nn_ctx;
-struct nn_fsm;
-struct nn_worker;
-
 struct nn_fsm_event {
-    struct nn_fsm *fsm;
+    struct nn_fsm *dest;
     int src;
     void *srcptr;
     int type;
@@ -53,10 +49,10 @@ void nn_fsm_event_process (struct nn_fsm_event *self);
 #define NN_FSM_START -2
 #define NN_FSM_STOP -3
 
-
+/*  Macro to define finite states and associated jobs that are valid for the
+    given state space. */
 #define NN_FSM_JOB(mystate, jobsrc, jobtype) \
     if (self->state == (mystate) && src == (jobsrc) && type == (jobtype))
-
 
 /*  Virtual function to be implemented by the derived class to handle the
     incoming events. */
@@ -85,6 +81,7 @@ void nn_fsm_init (struct nn_fsm *self, nn_fsm_fn fn,
     nn_fsm_fn shutdown_fn,
     int src, void *srcptr, struct nn_fsm *owner);
 void nn_fsm_term (struct nn_fsm *self);
+void nn_fsm_term_early (struct nn_fsm *self);
 
 int nn_fsm_isidle (struct nn_fsm *self);
 void nn_fsm_start (struct nn_fsm *self);
@@ -95,8 +92,6 @@ void nn_fsm_stopped_noevent (struct nn_fsm *self);
 /*  Replaces current owner of the fsm by the owner speicified by 'owner'
     parameter. The parameter will hold the old owner after the call. */
 void nn_fsm_swap_owner (struct nn_fsm *self, struct nn_fsm_owner *owner);
-
-struct nn_worker *nn_fsm_choose_worker (struct nn_fsm *self);
 
 /*  Using this function state machine can trigger an action on itself. */
 void nn_fsm_action (struct nn_fsm *self, int type);

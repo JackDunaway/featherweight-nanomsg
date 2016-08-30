@@ -32,40 +32,58 @@
 #include "../utils/win.h"
 #include "../utils/thread.h"
 
+#define NN_WORKER_OP_DONE 1
+#define NN_WORKER_OP_ERROR 2
+
+#define NN_WORKER_OP_STATE_IDLE 1
+#define NN_WORKER_OP_STATE_ACCEPTING 2
+#define NN_WORKER_OP_STATE_CONNECTING 3
+#define NN_WORKER_OP_STATE_SENDING 4
+#define NN_WORKER_OP_STATE_RECEIVING 5
+
+#define NN_WORKER_TIMER_TIMEOUT 1
+
+#define NN_WORKER_TASK_EXECUTE 1
+
+struct nn_worker_timer {
+    struct nn_fsm *owner;
+    struct nn_timerset_hndl hndl;
+};
+
 struct nn_worker_task {
     int src;
     struct nn_fsm *owner;
 };
 
-#define NN_WORKER_OP_DONE 1
-#define NN_WORKER_OP_ERROR 2
-
 struct nn_worker_op {
     int src;
     struct nn_fsm *owner;
     int state;
+    size_t *pending_sz;
+    size_t *pending_count;
+    int success;
 
     /*  This structure is to be used by the user, not nn_worker_op itself.
         Actual usage is specific to the asynchronous operation in question. */
     OVERLAPPED olpd;
 };
 
-void nn_worker_op_init (struct nn_worker_op *self, int src,
-    struct nn_fsm *owner);
-void nn_worker_op_term (struct nn_worker_op *self);
-
-/*  Call this function when asynchronous operation is started.
-    If 'zeroiserror' is set to 1, zero bytes transferred will be treated
-    as an error. */
-void nn_worker_op_start (struct nn_worker_op *self, int zeroiserror);
-
-int nn_worker_op_isidle (struct nn_worker_op *self);
-
 struct nn_worker {
     HANDLE cp;
     struct nn_timerset timerset;
     struct nn_thread thread;
 };
+
+struct nn_worker *nn_worker_choose (struct nn_fsm *fsm);
+
+void nn_worker_op_init (struct nn_worker_op *self, int src,
+    struct nn_fsm *owner);
+void nn_worker_op_term (struct nn_worker_op *self);
+
+/*  Call this function when asynchronous operation is started. */
+void nn_worker_op_start (struct nn_worker_op *self, int state);
+
+int nn_worker_op_isidle (struct nn_worker_op *self);
 
 void nn_worker_register_iocp (struct nn_fsm *fsm, HANDLE h);
 
@@ -88,10 +106,6 @@ struct nn_worker_fd {
     struct nn_poller_hndl hndl;
 };
 
-void nn_worker_fd_init (struct nn_worker_fd *self, int src,
-    struct nn_fsm *owner);
-void nn_worker_fd_term (struct nn_worker_fd *self);
-
 struct nn_worker_task {
     int src;
     struct nn_fsm *owner;
@@ -109,6 +123,10 @@ struct nn_worker {
     struct nn_thread thread;
 };
 
+void nn_worker_fd_init (struct nn_worker_fd *self, int src,
+    struct nn_fsm *owner);
+void nn_worker_fd_term (struct nn_worker_fd *self);
+
 void nn_worker_add_fd (struct nn_worker *self, int s, struct nn_worker_fd *fd);
 void nn_worker_rm_fd(struct nn_worker *self, struct nn_worker_fd *fd);
 void nn_worker_set_in (struct nn_worker *self, struct nn_worker_fd *fd);
@@ -117,27 +135,13 @@ void nn_worker_set_out (struct nn_worker *self, struct nn_worker_fd *fd);
 void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd);
 #endif
 
-#define NN_WORKER_TIMER_TIMEOUT 1
-
-struct nn_worker_timer {
-    struct nn_fsm *owner;
-    struct nn_timerset_hndl hndl;
-};
-
-void nn_worker_timer_init (struct nn_worker_timer *self,
-    struct nn_fsm *owner);
+void nn_worker_timer_init (struct nn_worker_timer *self, struct nn_fsm *owner);
 void nn_worker_timer_term (struct nn_worker_timer *self);
 int nn_worker_timer_isactive (struct nn_worker_timer *self);
-
-#define NN_WORKER_TASK_EXECUTE 1
-
-struct nn_worker_task;
 
 void nn_worker_task_init (struct nn_worker_task *self, int src,
     struct nn_fsm *owner);
 void nn_worker_task_term (struct nn_worker_task *self);
-
-struct nn_worker;
 
 int nn_worker_init (struct nn_worker *self);
 void nn_worker_term (struct nn_worker *self);

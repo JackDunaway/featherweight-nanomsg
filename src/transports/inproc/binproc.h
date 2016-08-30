@@ -31,8 +31,6 @@
 
 #include "../../utils/list.h"
 
-struct nn_cinproc;
-
 struct nn_binproc {
 
     /*  The state machine. */

@@ -32,13 +32,13 @@
 #include "../../utils/msg.h"
 #include "../../utils/list.h"
 
-#define NN_SINPROC_CONNECT 1
-#define NN_SINPROC_READY 2
-#define NN_SINPROC_ACCEPTED 3
-#define NN_SINPROC_SENT 4
-#define NN_SINPROC_RECEIVED 5
-#define NN_SINPROC_DISCONNECT 66
-#define NN_SINPROC_STOPPED 7
+#define NN_SINPROC_CONNECTED 1
+#define NN_SINPROC_ACCEPTED 2
+#define NN_SINPROC_ESTABLISHED 3
+#define NN_SINPROC_DISCONNECTED 4
+#define NN_SINPROC_STOPPED 5
+#define NN_SINPROC_ACCEPT_ERROR 6
+#define NN_SINPROC_CONNECT_ERROR 7
 
 /*  We use a random value here to prevent accidental clashes with the peer's
     internal source IDs. */
@@ -68,10 +68,10 @@ struct nn_sinproc {
         it to its msgqueue. */
     struct nn_msg msg;
 
-    /*  Outbound events. I.e. event sent by this sinproc to the peer sinproc. */
+    /*  Outbound events sent by this sinproc to the peer sinproc. */
     struct nn_fsm_event event_connect;
 
-    /*  Inbound events. I.e. events sent by the peer sinproc to this inproc. */
+    /*  Inbound events sent by the peer sinproc to this inproc. */
     struct nn_fsm_event event_sent;
     struct nn_fsm_event event_received;
     struct nn_fsm_event event_disconnect;
@@ -88,7 +88,7 @@ int nn_sinproc_isidle (struct nn_sinproc *self);
 
 /*  Connect and accept are two different ways to start the state machine. */
 void nn_sinproc_connect (struct nn_sinproc *self, struct nn_fsm *peer);
-void nn_sinproc_accept (struct nn_sinproc *self, struct nn_sinproc *peer);
+void nn_sinproc_accept (struct nn_sinproc *self, struct nn_fsm *peer);
 void nn_sinproc_stop (struct nn_sinproc *self);
 
 #endif

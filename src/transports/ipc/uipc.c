@@ -202,18 +202,22 @@ void nn_uipc_accept (struct nn_uipc *self, struct nn_uipc *listener)
         listener->asock = self;
 
         /*  Asynchronous accept. */
-        nn_worker_op_start (&listener->in, 0);
+        listener->in.pending_sz = NULL;
+        listener->in.pending_count = NULL;
+        nn_worker_op_start (&listener->in, NN_WORKER_OP_STATE_ACCEPTING);
 
         return;
     }
 
     /*  Immediate success. */
-    nn_assert (err == ERROR_PIPE_CONNECTED || err == ERROR_SUCCESS);
+    if (err == ERROR_PIPE_CONNECTED || err == ERROR_SUCCESS) {
+        nn_fsm_action (&listener->fsm, NN_USOCK_ACTION_DONE);
+        nn_fsm_action (&self->fsm, NN_USOCK_ACTION_DONE);
 
-    nn_fsm_action (&listener->fsm, NN_USOCK_ACTION_DONE);
-    nn_fsm_action (&self->fsm, NN_USOCK_ACTION_DONE);
+        return;
+    }
 
-    return;
+    nn_assert_unreachable ("TODO: determine cases when this can fail.");
 }
 
 void nn_uipc_connect (struct nn_uipc *self, const struct sockaddr *addr,
@@ -301,7 +305,9 @@ void nn_uipc_send (struct nn_uipc *self, const struct nn_iovec *iov,
 
     /*  Success. */
     if (err == ERROR_SUCCESS || err == ERROR_IO_PENDING) {
-        nn_worker_op_start (&self->out, 0);
+        self->out.pending_sz = NULL;
+        self->out.pending_count = NULL;
+        nn_worker_op_start (&self->out, NN_WORKER_OP_STATE_SENDING);
         return;
     }
 
@@ -328,7 +334,9 @@ void nn_uipc_recv (struct nn_uipc *self, void *buf, size_t len)
 
     /*  Success. */
     if (err == ERROR_SUCCESS || err == ERROR_IO_PENDING) {
-        nn_worker_op_start (&self->in, 1);
+        self->in.pending_sz = NULL;
+        self->in.pending_count = NULL;
+        nn_worker_op_start (&self->in, NN_WORKER_OP_STATE_RECEIVING);
         return;
     }
 
@@ -834,7 +842,7 @@ void nn_uipc_init (struct nn_uipc *self, int src, struct nn_fsm *owner)
     self->state = NN_USOCK_STATE_IDLE;
 
     /*  Choose a worker thread to handle this socket. */
-    self->worker = nn_fsm_choose_worker (&self->fsm);
+    self->worker = nn_worker_choose (&self->fsm);
 
     /*  Actual file descriptor will be generated during 'start' step. */
     self->s = -1;

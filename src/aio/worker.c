@@ -21,21 +21,14 @@
 */
 
 #include "worker.h"
-
 #include "ctx.h"
 
-#include "../utils/err.h"
 #include "../utils/cont.h"
+#include "../utils/err.h"
 
 #if defined NN_HAVE_WINDOWS
 
-#include "ctx.h"
-
 #define NN_WORKER_MAX_EVENTS 32
-
-#define NN_WORKER_OP_STATE_IDLE 1
-#define NN_WORKER_OP_STATE_ACTIVE 2
-#define NN_WORKER_OP_STATE_ACTIVE_ZEROISERROR 3
 
 /*  The value of this variable is irrelevant. It's used only as a placeholder
     for the address that is used as the 'stop' event ID. */
@@ -43,6 +36,11 @@ const int nn_worker_stop = 0;
 
 /*  Private functions. */
 static void nn_worker_routine (void *arg);
+
+struct nn_worker *nn_worker_choose (struct nn_fsm *fsm)
+{
+    return nn_pool_choose_worker (fsm->ctx->pool);
+}
 
 void nn_worker_task_init (struct nn_worker_task *self, int src,
     struct nn_fsm *owner)
@@ -68,11 +66,10 @@ void nn_worker_op_term (struct nn_worker_op *self)
     nn_assert_state (self, NN_WORKER_OP_STATE_IDLE);
 }
 
-void nn_worker_op_start (struct nn_worker_op *self, int zeroiserror)
+void nn_worker_op_start (struct nn_worker_op *self, int state)
 {
     nn_assert_state (self, NN_WORKER_OP_STATE_IDLE);
-    self->state = zeroiserror ? NN_WORKER_OP_STATE_ACTIVE_ZEROISERROR :
-        NN_WORKER_OP_STATE_ACTIVE;
+    self->state = state;
 }
 
 int nn_worker_op_isidle (struct nn_worker_op *self)
@@ -132,7 +129,7 @@ void nn_worker_register_iocp (struct nn_fsm *fsm, HANDLE h)
     HANDLE cp;
     struct nn_worker *worker;
 
-    worker = nn_fsm_choose_worker (fsm);
+    worker = nn_worker_choose (fsm);
 
     cp = CreateIoCompletionPort (h, worker->cp, (ULONG_PTR) NULL, 0);
     nn_assert_win (cp == worker->cp);
@@ -140,17 +137,19 @@ void nn_worker_register_iocp (struct nn_fsm *fsm, HANDLE h)
 
 static void nn_worker_routine (void *arg)
 {
-    int rc;
-    BOOL brc;
-    struct nn_worker *self;
-    int timeout;
-    ULONG count;
-    ULONG i;
+    OVERLAPPED_ENTRY entries [NN_WORKER_MAX_EVENTS];
+    OVERLAPPED_ENTRY *item;
     struct nn_timerset_hndl *thndl;
     struct nn_worker_timer *timer;
     struct nn_worker_task *task;
     struct nn_worker_op *op;
-    OVERLAPPED_ENTRY entries [NN_WORKER_MAX_EVENTS];
+    struct nn_worker *self;
+    size_t bytes;
+    int timeout;
+    ULONG count;
+    ULONG i;
+    BOOL brc;
+    int rc;
 
     self = (struct nn_worker*) arg;
 
@@ -170,25 +169,26 @@ static void nn_worker_routine (void *arg)
 
         /*  Compute the time interval till next timer expiration. */
         timeout = nn_timerset_timeout (&self->timerset);
+        timeout = timeout < 0 ? INFINITE : timeout;
 
         /*  Wait for new events and/or timeouts. */
         brc = GetQueuedCompletionStatusEx (self->cp, entries,
-            NN_WORKER_MAX_EVENTS, &count, timeout < 0 ? INFINITE : timeout,
-            FALSE);
+            NN_WORKER_MAX_EVENTS, &count, timeout, FALSE);
         if (!brc && GetLastError () == WAIT_TIMEOUT)
             continue;
         nn_assert_win (brc);
 
         for (i = 0; i != count; ++i) {
 
-            /*  Process I/O completion events. */
-            if (entries [i].lpOverlapped != NULL) {
-                op = nn_cont (entries [i].lpOverlapped, struct nn_worker_op, olpd);
+            item = &entries [i];
 
+            /*  Process I/O completion events. */
+            if (item->lpOverlapped != NULL) {
+                op = nn_cont (item->lpOverlapped, struct nn_worker_op, olpd);
                 /*  The 'Internal' field is actually an NTSTATUS. Report
                     success and error. Ignore warnings and informational
-                    messages.*/
-                rc = entries [i].Internal & 0xc0000000;
+                    messages. */
+                rc = item->Internal & 0xc0000000;
                 switch (rc) {
                 case 0x00000000:
                     rc = NN_WORKER_OP_DONE;
@@ -199,14 +199,43 @@ static void nn_worker_routine (void *arg)
                 default:
                     continue;
                 }
+                bytes = item->dwNumberOfBytesTransferred;
 
                 /*  Raise the completion event. */
                 nn_ctx_enter (op->owner->ctx);
-                nn_assert (op->state != NN_WORKER_OP_STATE_IDLE);
-                if (rc != NN_WORKER_OP_ERROR &&
-                    op->state == NN_WORKER_OP_STATE_ACTIVE_ZEROISERROR &&
-                    entries [i].dwNumberOfBytesTransferred == 0)
-                    rc = NN_WORKER_OP_ERROR;
+                switch (op->state) {
+
+                case NN_WORKER_OP_STATE_IDLE:
+                    nn_assert_unreachable ("Impossible code path.");
+                    break;
+
+                case NN_WORKER_OP_STATE_ACCEPTING:
+                case NN_WORKER_OP_STATE_CONNECTING:
+                    nn_assert (op->pending_sz == NULL);
+                    nn_assert (op->pending_count == NULL);
+                    break;
+
+                case NN_WORKER_OP_STATE_SENDING:
+                case NN_WORKER_OP_STATE_RECEIVING:
+                    if (bytes == 0) {
+                        rc = NN_WORKER_OP_ERROR;
+                        break;
+                    }
+                    nn_assert (bytes > 0);
+                    if (op->pending_sz) {
+                        nn_assert (*op->pending_sz >= bytes);
+                        *op->pending_sz -= bytes;
+                    }
+                    if (op->pending_count) {
+                        nn_assert (*op->pending_count > 0);
+                        --*op->pending_count;
+                    }
+                    break;
+
+                default:
+                    nn_assert_unreachable ("Unknown state.");
+                    break;
+                }
                 op->state = NN_WORKER_OP_STATE_IDLE;
                 nn_fsm_feed (op->owner, op->src, rc, op);
                 nn_ctx_leave (op->owner->ctx);
@@ -215,14 +244,13 @@ static void nn_worker_routine (void *arg)
             }
 
             /*  Worker thread shutdown is requested. */
-            if (entries [i].lpCompletionKey == (ULONG_PTR) &nn_worker_stop)
+            if (item->lpCompletionKey == (ULONG_PTR) &nn_worker_stop)
                 return;
 
             /*  Process tasks. */
-            task = (struct nn_worker_task*) entries [i].lpCompletionKey;
+            task = (struct nn_worker_task*) item->lpCompletionKey;
             nn_ctx_enter (task->owner->ctx);
-            nn_fsm_feed (task->owner, task->src,
-                NN_WORKER_TASK_EXECUTE, task);
+            nn_fsm_feed (task->owner, task->src, NN_WORKER_TASK_EXECUTE, task);
             nn_ctx_leave (task->owner->ctx);
         }
     }

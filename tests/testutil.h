@@ -66,6 +66,7 @@ static void nn_connect_expect_fail_ (char *file, int line, int sock,
     char *address, int expectederr);
 static void nn_connect_expect_fail_ (char *file, int line, int sock,
     char *address, int expectederr);
+static void nn_close_termed_ (char *file, int line, int sock);
 static void nn_recv_expect_timeo_ (char *file, int line, int sock, int timeo);
 static int nn_wait_for_stat_ (char *file, int line, int sock,
     int statistic, uint64_t goal, int timeout, char *name);
@@ -117,6 +118,11 @@ static const NN_TEST_ALL_TRANSPORTS [] = {NN_INPROC, NN_IPC, NN_TCP, NN_WS};
 /*  Convenience macro that wraps `nn_close()` in a test harness. */
 #define test_close(s) nn_close_ (__FILE__, __LINE__, (s))
 
+/*  Convenience macro for testing `nn_close()` on a socket where `nn_term()`
+    was called in a concurrent thread, meaning there is a race as to which
+    call succeeds. */
+#define test_close_termed(s) nn_close_termed_ (__FILE__, __LINE__, (s))
+
 /*  Convenience macro for testing `nn_connect()` expected failure modes. */
 #define test_connect_fail(s, addr, expectederr) \
     nn_connect_expect_fail_ (__FILE__, __LINE__, (s), (addr), (expectederr))
@@ -156,7 +162,6 @@ static const NN_TEST_ALL_TRANSPORTS [] = {NN_INPROC, NN_IPC, NN_TCP, NN_WS};
 
 /*  Gets the scalability protocol of a socket. */
 #define test_get_socket_sp(s) nn_test_get_socket_sp (__FILE__, __LINE__, (s))
-
 
 /*  Convenience macro that parses command line argument into the beginning of
     the port range assigned by the test runner to the test instance. */
@@ -254,13 +259,29 @@ static int NN_UNUSED nn_close_ (char *file, int line, int sock)
 
     nn_clear_errno ();
     rc = nn_close (sock);
-    if ((rc != 0) && (errno != EBADF && errno != ETERM)) {
+    if (rc != 0) {
         fprintf (stderr, "Failed to close socket: %s [%d]\n(%s:%d)\n",
             nn_err_strerror (errno), (int) errno, file, line);
         nn_err_abort ();
     }
 
     return rc;
+}
+
+static void NN_UNUSED nn_close_termed_ (char *file, int line, int sock)
+{
+    int rc;
+
+    nn_clear_errno ();
+    rc = nn_close (sock);
+
+    /*  This `nn_close()` just won the race, or ... */
+    if (rc == 0) {
+        return;
+    }
+
+    /*  ... the concurrent `nn_term()` just won the race. */
+    nn_assert_is_error (rc == -1, EBADF);
 }
 
 static void NN_UNUSED nn_send_ (char *file, int line, int sock, char *data)

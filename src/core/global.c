@@ -512,8 +512,8 @@ int nn_close (int s)
 
     /*  We have to drop both the hold we just acquired, as well as
         the original hold, in order for nn_sock_term to complete. */
-    nn_sock_rele (sock);
-    nn_sock_rele (sock);
+    nn_sock_release (sock);
+    nn_sock_release (sock);
     nn_mutex_unlock (&self.lock);
 
     /*  Now clean up.  The termination routine below will block until
@@ -555,21 +555,21 @@ int nn_setsockopt (int s, int level, int option, const void *optval,
     }
 
     if (!optval && optvallen) {
-        rc = -EFAULT;
-        goto fail;
+        nn_global_rele_socket (sock);
+        errno = EFAULT;
+        return -1;
     }
 
     rc = nn_sock_setopt (sock, level, option, optval, optvallen);
-    if (rc < 0)
-        goto fail;
+    if (rc < 0) {
+        nn_global_rele_socket (sock);
+        errno = -rc;
+        return -1;
+    }
+
     errnum_assert (rc == 0, -rc);
     nn_global_rele_socket (sock);
     return 0;
-
-fail:
-    nn_global_rele_socket (sock);
-    errno = -rc;
-    return -1;
 }
 
 int nn_getsockopt (int s, int level, int option, void *optval,
@@ -585,21 +585,21 @@ int nn_getsockopt (int s, int level, int option, void *optval,
     }
 
     if (!optval && optvallen) {
-        rc = -EFAULT;
-        goto fail;
+        nn_global_rele_socket (sock);
+        errno = EFAULT;
+        return -1;
     }
 
     rc = nn_sock_getopt (sock, level, option, optval, optvallen);
-    if (rc < 0)
-        goto fail;
+    if (rc < 0) {
+        nn_global_rele_socket (sock);
+        errno = -rc;
+        return -1;
+    }
+
     errnum_assert (rc == 0, -rc);
     nn_global_rele_socket (sock);
     return 0;
-
-fail:
-    nn_global_rele_socket (sock);
-    errno = -rc;
-    return -1;
 }
 
 int nn_bind (int s, const char *addr)
@@ -721,20 +721,23 @@ int nn_sendmsg (int s, const struct nn_msghdr *msghdr, int flags)
     }
 
     if (!msghdr) {
-        rc = -EINVAL;
-        goto fail;
+        nn_global_rele_socket (sock);
+        errno = EINVAL;
+        return -1;
     }
 
     if (msghdr->msg_iovlen < 0) {
-        rc = -EMSGSIZE;
-        goto fail;
+        nn_global_rele_socket (sock);
+        errno = EMSGSIZE;
+        return -1;
     }
 
     if (msghdr->msg_iovlen == 1 && msghdr->msg_iov [0].iov_len == NN_MSG) {
         chunk = *(void**) msghdr->msg_iov [0].iov_base;
         if (chunk == NULL) {
-            rc = -EFAULT;
-            goto fail;
+            nn_global_rele_socket (sock);
+            errno = EFAULT;
+            return -1;
         }
         sz = nn_chunk_size (chunk);
         nn_msg_init_chunk (&msg, chunk);
@@ -747,16 +750,19 @@ int nn_sendmsg (int s, const struct nn_msghdr *msghdr, int flags)
         for (i = 0; i != msghdr->msg_iovlen; ++i) {
             iov = &msghdr->msg_iov [i];
             if (iov->iov_len == NN_MSG) {
-               rc = -EINVAL;
-               goto fail;
+                nn_global_rele_socket (sock);
+                errno = EINVAL;
+                return -1;
             }
             if (!iov->iov_base && iov->iov_len) {
-                rc = -EFAULT;
-                goto fail;
+                nn_global_rele_socket (sock);
+                errno = EFAULT;
+                return -1;
             }
             if (sz + iov->iov_len < sz) {
-                rc = -EINVAL;
-                goto fail;
+                nn_global_rele_socket (sock);
+                errno = EINVAL;
+                return -1;
             }
             sz += iov->iov_len;
         }
@@ -823,7 +829,9 @@ int nn_sendmsg (int s, const struct nn_msghdr *msghdr, int flags)
             nn_chunkref_init (&msg.body, 0);
 
         nn_msg_term (&msg);
-        goto fail;
+        nn_global_rele_socket (sock);
+        errno = -rc;
+        return -1;
     }
 
     /*  Adjust the statistics. */
@@ -833,12 +841,6 @@ int nn_sendmsg (int s, const struct nn_msghdr *msghdr, int flags)
     nn_global_rele_socket (sock);
 
     return (int) sz;
-
-fail:
-    nn_global_rele_socket (sock);
-
-    errno = -rc;
-    return -1;
 }
 
 int nn_recvmsg (int s, struct nn_msghdr *msghdr, int flags)
@@ -865,19 +867,23 @@ int nn_recvmsg (int s, struct nn_msghdr *msghdr, int flags)
     }
 
     if (!msghdr) {
-        rc = -EINVAL;
-        goto fail;
+        nn_global_rele_socket (sock);
+        errno = EINVAL;
+        return -1;
     }
 
     if (msghdr->msg_iovlen < 0) {
-        rc = -EMSGSIZE;
-        goto fail;
+        nn_global_rele_socket (sock);
+        errno = EMSGSIZE;
+        return -1;
     }
 
     /*  Get a message. */
     rc = nn_sock_recv (sock, &msg, flags);
     if (rc < 0) {
-        goto fail;
+        nn_global_rele_socket (sock);
+        errno = -rc;
+        return -1;
     }
 
     if (msghdr->msg_iovlen == 1 && msghdr->msg_iov [0].iov_len == NN_MSG) {
@@ -894,8 +900,9 @@ int nn_recvmsg (int s, struct nn_msghdr *msghdr, int flags)
             iov = &msghdr->msg_iov [i];
             if (iov->iov_len == NN_MSG) {
                 nn_msg_term (&msg);
-                rc = -EINVAL;
-                goto fail;
+                nn_global_rele_socket (sock);
+                errno = EINVAL;
+                return -1;
             }
             if (iov->iov_len > sz) {
                 memcpy (iov->iov_base, data, sz);
@@ -966,12 +973,6 @@ int nn_recvmsg (int s, struct nn_msghdr *msghdr, int flags)
     nn_global_rele_socket (sock);
 
     return (int) sz;
-
-fail:
-    nn_global_rele_socket (sock);
-
-    errno = -rc;
-    return -1;
 }
 
 uint64_t nn_get_statistic (int s, int statistic)
@@ -1006,7 +1007,7 @@ uint64_t nn_get_statistic (int s, int statistic)
         val = sock->statistics.bind_errors;
         break;
     case NN_STAT_ACCEPT_ERRORS:
-        val = sock->statistics.bind_errors;
+        val = sock->statistics.accept_errors;
         break;
     case NN_STAT_MESSAGES_SENT:
         val = sock->statistics.messages_sent;
@@ -1154,40 +1155,46 @@ int nn_global_print_errors ()
     return self.print_errors;
 }
 
-/*  Get the socket structure for a socket id.  This must be called under
-    the global lock (self.lock.)  The socket itself will not be freed
+/*  Get the socket structure for a socket id. This must be called under
+    the global lock (self.lock). The socket itself will not be freed
     while the hold is active. */
-int nn_global_hold_socket_locked(struct nn_sock **sockp, int s)
+int nn_global_hold_socket_locked (struct nn_sock **sockp, int s)
 {
     struct nn_sock *sock;
+    int rc;
 
-    if (s < 0 || s >= NN_MAX_SOCKETS || self.socks == NULL)
+    if (s < 0 || s >= NN_MAX_SOCKETS || self.socks == NULL) {
         return -EBADF;
+    }
 
-    sock = self.socks[s];
+    sock = self.socks [s];
     if (sock == NULL) {
         return -EBADF;
     }
-
-    if (nn_sock_hold (sock) != 0) {
-        return -EBADF;
+    
+    rc = nn_sock_hold (sock);
+    if (rc == 0) {
+        *sockp = sock;
     }
-    *sockp = sock;
-    return 0;
-}
+    else {
+        nn_assert (rc == -EBADF);
+    }
 
-int nn_global_hold_socket(struct nn_sock **sockp, int s)
-{
-    int rc;
-    nn_mutex_lock(&self.lock);
-    rc = nn_global_hold_socket_locked(sockp, s);
-    nn_mutex_unlock(&self.lock);
     return rc;
 }
 
-void nn_global_rele_socket(struct nn_sock *sock)
+int nn_global_hold_socket (struct nn_sock **sockp, int s)
 {
-    nn_mutex_lock(&self.lock);
-    nn_sock_rele(sock);
-    nn_mutex_unlock(&self.lock);
+    int rc;
+    nn_mutex_lock (&self.lock);
+    rc = nn_global_hold_socket_locked (sockp, s);
+    nn_mutex_unlock (&self.lock);
+    return rc;
+}
+
+void nn_global_rele_socket (struct nn_sock *sock)
+{
+    nn_mutex_lock (&self.lock);
+    nn_sock_release (sock);
+    nn_mutex_unlock (&self.lock);
 }

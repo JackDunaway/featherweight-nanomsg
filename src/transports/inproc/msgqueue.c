@@ -52,9 +52,9 @@ void nn_msgqueue_term (struct nn_msgqueue *self)
     int rc;
     struct nn_msg msg;
 
-    /*  Deallocate messages in the pipe. */
+    /*  Deallocate all messages in the queue. */
     while (1) {
-        rc = nn_msgqueue_recv (self, &msg);
+        rc = nn_msgqueue_dequeue (self, &msg);
         if (rc == -EAGAIN)
             break;
         errnum_assert (rc >= 0, -rc);
@@ -76,7 +76,7 @@ int nn_msgqueue_empty (struct nn_msgqueue *self)
     return self->count == 0 ? 1 : 0;
 }
 
-int nn_msgqueue_send (struct nn_msgqueue *self, struct nn_msg *msg)
+int nn_msgqueue_enqueue (struct nn_msgqueue *self, struct nn_msg *msg)
 {
     size_t msgsz;
 
@@ -113,7 +113,7 @@ int nn_msgqueue_send (struct nn_msgqueue *self, struct nn_msg *msg)
     return 0;
 }
 
-int nn_msgqueue_recv (struct nn_msgqueue *self, struct nn_msg *msg)
+int nn_msgqueue_dequeue (struct nn_msgqueue *self, struct nn_msg *msg)
 {
     struct nn_msgqueue_chunk *o;
 

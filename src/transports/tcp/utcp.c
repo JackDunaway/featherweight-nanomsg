@@ -86,6 +86,12 @@ void nn_utcp_init (struct nn_utcp *self, int src, struct nn_fsm *owner)
     /*  No accepting is going on at the moment. */
     self->asock = NULL;
     self->ainfo = NULL;
+
+    /*  Initialize I/O statistics that govern flow control. */
+    self->recv_pending_sz = 0;
+    self->send_pending_sz = 0;
+    self->recv_pending_count = 0;
+    self->send_pending_count = 0;
 }
 
 void nn_utcp_term (struct nn_utcp *self)
@@ -152,6 +158,13 @@ int nn_utcp_setsockopt (struct nn_utcp *self, int level, int optname,
         self->state == NN_USOCK_STATE_ACCEPTED);
 
     nn_assert (optlen < INT_MAX);
+
+    if (level == SOL_SOCKET && optname == SO_SNDBUF) {
+        
+    }
+
+        //nn_utcp_setsockopt (&self->usock, SOL_SOCKET, SO_SNDBUF,
+        //    &val, sizeof (val));
 
     rc = setsockopt (self->s, level, optname, (char*) optval, (int) optlen);
     if (rc == SOCKET_ERROR)
@@ -238,18 +251,22 @@ void nn_utcp_accept (struct nn_utcp *self, struct nn_utcp *listener)
         listener->asock = self;
 
         /*  Asynchronous accept. */
-        nn_worker_op_start (&listener->in, 0);
+        listener->in.pending_sz = NULL;
+        listener->in.pending_count = NULL;
+        nn_worker_op_start (&listener->in, NN_WORKER_OP_STATE_ACCEPTING);
 
         return;
     }
 
     /*  Immediate success. */
-    nn_assert (err == ERROR_SUCCESS);
+    if (err == ERROR_SUCCESS) {
+        nn_fsm_action (&listener->fsm, NN_USOCK_ACTION_DONE);
+        nn_fsm_action (&self->fsm, NN_USOCK_ACTION_DONE);
 
-    nn_fsm_action (&listener->fsm, NN_USOCK_ACTION_DONE);
-    nn_fsm_action (&self->fsm, NN_USOCK_ACTION_DONE);
+        return;
+    }
 
-    return;
+    nn_assert_unreachable ("TODO: determine cases when this can fail.");
 }
 
 void nn_utcp_connect (struct nn_utcp *self, const struct sockaddr *addr,
@@ -285,7 +302,9 @@ void nn_utcp_connect (struct nn_utcp *self, const struct sockaddr *addr,
 
     /*  Most likely return path is asynchronous connect. */
     if (err == WSA_IO_PENDING) {
-        nn_worker_op_start (&self->out, 0);
+        self->out.pending_sz = NULL;
+        self->out.pending_count = NULL;
+        nn_worker_op_start (&self->out, NN_WORKER_OP_STATE_CONNECTING);
         return;
     }
 
@@ -326,14 +345,23 @@ void nn_utcp_send (struct nn_utcp *self, const struct nn_iovec *iov,
     rc = WSASend (self->s, wbuf, iovcnt, NULL, 0, &self->out.olpd, NULL);
     err = (rc == 0) ? ERROR_SUCCESS : WSAGetLastError ();
 
-    /*  Success. */
-    if (err == ERROR_SUCCESS || err == WSA_IO_PENDING) {
+    /*  Immediate success. */
+    if (err == ERROR_SUCCESS) {
+        self->out.pending_sz = NULL;
+        self->out.pending_count = NULL;
+        self->out.success = 1;
+        nn_worker_op_start (&self->out, NN_WORKER_OP_STATE_SENDING);
+        return;
+    }
 
-        /// testing
-        nn_assert (err == ERROR_SUCCESS);
-
-
-        nn_worker_op_start (&self->out, 0);
+    /*  Async send. */
+    if (err == WSA_IO_PENDING) {
+        self->send_pending_sz += len;
+        self->out.pending_sz = &self->send_pending_sz;
+        ++self->send_pending_count;
+        self->out.pending_count = &self->send_pending_count;
+        self->out.success = 0;
+        nn_worker_op_start (&self->out, NN_WORKER_OP_STATE_SENDING);
         return;
     }
 
@@ -363,12 +391,25 @@ void nn_utcp_recv (struct nn_utcp *self, void *buf, size_t len)
     rc = WSARecv (self->s, &wbuf, 1, NULL, &wflags, &self->in.olpd, NULL);
     err = (rc == 0) ? ERROR_SUCCESS : WSAGetLastError ();
 
-    /*  Success. */
+    /*  Immediate success. */
     if (err == ERROR_SUCCESS || err == WSA_IO_PENDING) {
-        nn_worker_op_start (&self->in, 1);
+        self->in.pending_sz = NULL;
+        self->in.pending_count = NULL;
+        self->in.success = 1;
+        nn_worker_op_start (&self->in, NN_WORKER_OP_STATE_RECEIVING);
         return;
     }
 
+    /*  Async send. */
+    if (err == WSA_IO_PENDING) {
+        self->recv_pending_sz += len;
+        self->in.pending_sz = &self->recv_pending_sz;
+        ++self->recv_pending_count;
+        self->in.pending_count = &self->recv_pending_count;
+        self->in.success = 0;
+        nn_worker_op_start (&self->in, NN_WORKER_OP_STATE_RECEIVING);
+        return;
+    }
     /*  Set of expected errors. */
     nn_assert (err == WSAECONNABORTED || err == WSAECONNRESET ||
         err == WSAEDISCON || err == WSAENETDOWN || err == WSAENETRESET ||
@@ -846,7 +887,7 @@ void nn_utcp_init (struct nn_utcp *self, int src, struct nn_fsm *owner)
     self->state = NN_USOCK_STATE_IDLE;
 
     /*  Choose a worker thread to handle this socket. */
-    self->worker = nn_fsm_choose_worker (&self->fsm);
+    self->worker = nn_worker_choose (self->fsm);
 
     /*  Actual file descriptor will be generated during 'start' step. */
     self->s = -1;

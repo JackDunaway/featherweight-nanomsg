@@ -34,16 +34,17 @@
 #define addr_a "inproc://a"
 
 int sc;
+struct nn_sem ready;
 
 void routine1 (NN_UNUSED void *arg)
 {
-   nn_sleep (10);
+   nn_sem_post (&ready);
    test_send (sc, "ABC");
 }
 
 void routine2 (NN_UNUSED void *arg)
 {
-   nn_sleep (10);
+   nn_sem_post (&ready);
    nn_term ();
 }
 
@@ -191,7 +192,9 @@ int main (int argc, char *argv [])
     nn_assert (rc == 0);
 
     /*  Check signalling from a different thread. */
+    nn_sem_init (&ready);
     nn_thread_init (&thread, routine1, NULL);
+    nn_sem_wait (&ready);
     rc = getevents (sb, NN_IN, 1000);
     nn_assert (rc == NN_IN);
     test_recv (sb, "ABC");
@@ -199,14 +202,16 @@ int main (int argc, char *argv [])
 
     /*  Check terminating the library from a different thread. */
     nn_thread_init (&thread, routine2, NULL);
+    nn_sem_wait (&ready);
     nn_clear_errno ();
     rc = nn_recv (sb, buf, sizeof (buf), 0);
     nn_assert_is_error (rc == -1, EBADF);
     nn_thread_term (&thread);
+    nn_sem_term (&ready);
 
     /*  Clean up. */
-    test_close (sc);
-    test_close (sb);
+    test_close_termed (sc);
+    test_close_termed (sb);
 
     return 0;
 }

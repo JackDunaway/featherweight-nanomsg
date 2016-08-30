@@ -50,7 +50,7 @@ void nn_pipebase_init (struct nn_pipebase *self,
 {
     nn_assert (epbase->ep->sock);
 
-    nn_fsm_init (&self->fsm, NULL, NULL, 0, self, &epbase->ep->sock->fsm);
+    nn_fsm_init (&self->fsm, NULL, NULL, NN_PIPE_SRC, self, &epbase->ep->sock->fsm);
     self->vfptr = vfptr;
     self->state = NN_PIPEBASE_STATE_IDLE;
     self->instate = NN_PIPEBASE_INSTATE_DEACTIVATED;

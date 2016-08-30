@@ -52,7 +52,7 @@ void nn_timer_init (struct nn_timer *self, int src, struct nn_fsm *owner)
     nn_worker_task_init (&self->stop_task, NN_TIMER_SRC_STOP_TASK, &self->fsm);
     nn_worker_timer_init (&self->wtimer, &self->fsm);
     nn_fsm_event_init (&self->done);
-    self->worker = nn_fsm_choose_worker (&self->fsm);
+    self->worker = nn_worker_choose (&self->fsm);
     self->timeout = -1;
 }
 

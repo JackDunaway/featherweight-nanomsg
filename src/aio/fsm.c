@@ -33,15 +33,19 @@
 
 void nn_fsm_event_init (struct nn_fsm_event *self)
 {
-    self->fsm = NULL;
     self->src = -1;
-    self->srcptr = NULL;
     self->type = -1;
+    self->dest = NULL;
+    self->srcptr = NULL;
     nn_queue_item_init (&self->item);
 }
 
 void nn_fsm_event_term (struct nn_fsm_event *self)
 {
+    nn_assert (self->src == -1);
+    nn_assert (self->type == -1);
+    nn_assert (self->dest == NULL);
+    nn_assert (self->srcptr == NULL);
     nn_queue_item_term (&self->item);
 }
 
@@ -54,16 +58,19 @@ void nn_fsm_event_process (struct nn_fsm_event *self)
 {
     int src;
     int type;
+    struct nn_fsm *dest;
     void *srcptr;
 
     src = self->src;
     type = self->type;
+    dest = self->dest;
     srcptr = self->srcptr;
     self->src = -1;
     self->type = -1;
+    self->dest = NULL;
     self->srcptr = NULL;
 
-    nn_fsm_feed (self->fsm, src, type, srcptr);
+    nn_fsm_feed (dest, src, type, srcptr);
 }
 
 void nn_fsm_feed (struct nn_fsm *self, int src, int type, void *srcptr)
@@ -105,6 +112,12 @@ void nn_fsm_init (struct nn_fsm *self, nn_fsm_fn fn,
 void nn_fsm_term (struct nn_fsm *self)
 {
     nn_assert (nn_fsm_isidle (self));
+    nn_fsm_event_term (&self->stopped);
+}
+
+void nn_fsm_term_early (struct nn_fsm *self)
+{
+    nn_assert_state (self, NN_FSM_STATE_ACTIVE);
     nn_fsm_event_term (&self->stopped);
 }
 
@@ -157,11 +170,6 @@ void nn_fsm_swap_owner (struct nn_fsm *self, struct nn_fsm_owner *owner)
     owner->fsm = oldowner;
 }
 
-struct nn_worker *nn_fsm_choose_worker (struct nn_fsm *self)
-{
-    return nn_ctx_choose_worker (self->ctx);
-}
-
 void nn_fsm_action (struct nn_fsm *self, int type)
 {
     nn_assert (type > 0);
@@ -170,7 +178,7 @@ void nn_fsm_action (struct nn_fsm *self, int type)
 
 void nn_fsm_raise (struct nn_fsm *self, struct nn_fsm_event *event, int type)
 {
-    event->fsm = self->owner;
+    event->dest = self->owner;
     event->src = self->src;
     event->srcptr = self->srcptr;
     event->type = type;
@@ -180,7 +188,7 @@ void nn_fsm_raise (struct nn_fsm *self, struct nn_fsm_event *event, int type)
 void nn_fsm_raiseto (struct nn_fsm *self, struct nn_fsm *dst,
     struct nn_fsm_event *event, int src, int type, void *srcptr)
 {
-    event->fsm = dst;
+    event->dest = dst;
     event->src = src;
     event->srcptr = srcptr;
     event->type = type;

@@ -57,7 +57,6 @@ struct nn_sock
     struct nn_efd sndfd;
     struct nn_efd rcvfd;
     struct nn_sem termsem;
-    struct nn_sem relesem;
 
     /*  List of all endpoints associated with the socket. */
     struct nn_list eps;
@@ -67,9 +66,6 @@ struct nn_sock
 
     /*  Next endpoint ID to assign to a new endpoint. */
     int eid;
-
-    /*  Count of active holds against the socket. */
-    int holds;
 
     /*  Socket-level socket options. */
     int linger;
@@ -133,13 +129,6 @@ struct nn_sock
 
     /*  The socket name for statistics  */
     char socket_name[64];
-
-    /* Win32 Security Attribute */
-    void * sec_attr;
-    size_t sec_attr_size;
-    int outbuffersz;
-    int inbuffersz;
-
 };
 
 /*  Initialise the socket. */
@@ -199,7 +188,7 @@ void nn_sock_statistic_set (struct nn_sock *self, int name, int value);
 
 /*  Holds and releases. */
 int nn_sock_hold (struct nn_sock *self);
-void nn_sock_rele (struct nn_sock *self);
+void nn_sock_release (struct nn_sock *self);
 
 #endif
 

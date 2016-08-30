@@ -199,27 +199,27 @@ int main (int argc, char *argv [])
 
     /*  Test immediate, async shutdown behavior for all SP topologies
         across all transports. */
-    //for (j = 0; j != NN_TEST_ALL_SP_LEN; ++j) {
-    //    protocol = NN_TEST_ALL_SP [j];
-    //    shutdown_immediate_test (NN_INPROC, protocol);
-    //    shutdown_immediate_test (NN_IPC, protocol);
-    //    shutdown_immediate_test (NN_TCP, protocol);
-    //    shutdown_immediate_test (NN_WS, protocol);
-    //}
+    for (j = 0; j != NN_TEST_ALL_SP_LEN; ++j) {
+        protocol = NN_TEST_ALL_SP [j];
+        shutdown_immediate_test (NN_INPROC, protocol);
+        shutdown_immediate_test (NN_IPC, protocol);
+        shutdown_immediate_test (NN_TCP, protocol);
+        shutdown_immediate_test (NN_WS, protocol);
+    }
 
     /*  Stress test shutdown behavior for all transport types. */
     for (i = 0; i != TEST_REPETITIONS; ++i) {
 
-        //shutdown_during_connect (NN_INPROC, port);
-        //shutdown_during_connect (NN_IPC, port);
-        //shutdown_during_connect (NN_TCP, port);
-        //shutdown_during_connect (NN_WS, port);
+        shutdown_during_connect (NN_INPROC, port);
+        shutdown_during_connect (NN_IPC, port);
+        shutdown_during_connect (NN_TCP, port);
+        shutdown_during_connect (NN_WS, port);
 
-        /*  TODO: this can deadlock due `nn_fsm_raiseto()` */
         shutdown_race_test (NN_INPROC, port);
+        /*  Failing on Windows on resource-constrained system. */
         //shutdown_race_test (NN_IPC, port);
-        //shutdown_race_test (NN_TCP, port);
-        //shutdown_race_test (NN_WS, port);
+        shutdown_race_test (NN_TCP, port);
+        shutdown_race_test (NN_WS, port);
     }
 
     return 0;

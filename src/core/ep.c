@@ -41,15 +41,13 @@
 /*  Private functions. */
 static void nn_ep_handler (struct nn_fsm *self, int src, int type,
     void *srcptr);
-static void nn_ep_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr);
 
 int nn_ep_init (struct nn_ep *self, int src, struct nn_sock *sock, int eid,
     struct nn_transport *transport, int bind, const char *addr)
 {
     int rc;
 
-    nn_fsm_init (&self->fsm, nn_ep_handler, nn_ep_shutdown,
+    nn_fsm_init (&self->fsm, nn_ep_handler, nn_ep_handler,
         src, self, &sock->fsm);
     self->state = NN_EP_STATE_IDLE;
 
@@ -58,7 +56,7 @@ int nn_ep_init (struct nn_ep *self, int src, struct nn_sock *sock, int eid,
     self->eid = eid;
     self->last_errno = 0;
     nn_list_item_init (&self->item);
-    memcpy (&self->options, &sock->ep_template, sizeof(struct nn_ep_options));
+    memcpy (&self->options, &sock->ep_template, sizeof (struct nn_ep_options));
 
     /*  Store the textual form of the address. */
     nn_assert (strlen (addr) <= NN_SOCKADDR_MAX);
@@ -102,11 +100,13 @@ void nn_ep_stop (struct nn_ep *self)
 void nn_ep_stopped (struct nn_ep *self)
 {
     /*  TODO: Do the following in a more sane way. */
-    self->fsm.stopped.fsm = &self->fsm;
+    self->fsm.stopped.dest = &self->fsm;
     self->fsm.stopped.src = NN_FSM_ACTION;
     self->fsm.stopped.srcptr = NULL;
     self->fsm.stopped.type = NN_EP_ACTION_STOPPED;
     nn_ctx_raise (self->fsm.ctx, &self->fsm.stopped);
+    //self->state = NN_EP_STATE_IDLE;
+    //nn_fsm_stopped (&self->fsm, NN_EP_STOPPED);
 }
 
 struct nn_ctx *nn_ep_getctx (struct nn_ep *self)
@@ -133,75 +133,6 @@ int nn_ep_ispeer (struct nn_ep *self, int socktype)
     return nn_sock_ispeer (self->sock, socktype);
 }
 
-
-static void nn_ep_shutdown (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
-{
-    struct nn_ep *ep;
-
-    ep = nn_cont (self, struct nn_ep, fsm);
-
-    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
-        ep->epbase->vfptr->stop (ep->epbase);
-        ep->state = NN_EP_STATE_STOPPING;
-        return;
-    }
-    if (ep->state == NN_EP_STATE_STOPPING) {
-        if (src != NN_FSM_ACTION || type != NN_EP_ACTION_STOPPED)
-            return;
-        ep->state = NN_EP_STATE_IDLE;
-        nn_fsm_stopped (&ep->fsm, NN_EP_STOPPED);
-        return;
-    }
-
-    nn_fsm_bad_state (ep->state, src, type);
-}
-
-
-static void nn_ep_handler (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
-{
-    struct nn_ep *ep;
-
-    ep = nn_cont (self, struct nn_ep, fsm);
-
-    switch (ep->state) {
-
-/******************************************************************************/
-/*  IDLE state.                                                               */
-/******************************************************************************/
-    case NN_EP_STATE_IDLE:
-        switch (src) {
-
-        case NN_FSM_ACTION:
-            switch (type) {
-            case NN_FSM_START:
-                ep->state = NN_EP_STATE_ACTIVE;
-                return;
-            default:
-                nn_fsm_bad_action (ep->state, src, type);
-            }
-
-        default:
-            nn_fsm_bad_source (ep->state, src, type);
-        }
-
-/******************************************************************************/
-/*  ACTIVE state.                                                             */
-/*  We don't expect any events in this state. The only thing that can be done */
-/*  is closing the endpoint.                                                  */
-/******************************************************************************/
-    case NN_EP_STATE_ACTIVE:
-        nn_fsm_bad_source (ep->state, src, type);
-
-/******************************************************************************/
-/*  Invalid state.                                                            */
-/******************************************************************************/
-    default:
-        nn_fsm_bad_state (ep->state, src, type);
-    }
-}
-
 void nn_ep_set_error(struct nn_ep *self, int errnum)
 {
     if (self->last_errno == errnum)
@@ -226,4 +157,29 @@ void nn_ep_clear_error (struct nn_ep *self)
 void nn_ep_stat_increment (struct nn_ep *self, int name, int increment)
 {
     nn_sock_stat_increment (self->sock, name, increment);
+}
+
+static void nn_ep_handler (struct nn_fsm *myfsm, int src, int type,
+    NN_UNUSED void *srcptr)
+{
+    struct nn_ep *self = nn_cont (myfsm, struct nn_ep, fsm);
+
+    NN_FSM_JOB (NN_EP_STATE_IDLE, NN_FSM_ACTION, NN_FSM_START) {
+        self->state = NN_EP_STATE_ACTIVE;
+        return;
+    }
+
+    NN_FSM_JOB (NN_EP_STATE_ACTIVE, NN_FSM_ACTION, NN_FSM_STOP) {
+        self->epbase->vfptr->stop (self->epbase);
+        self->state = NN_EP_STATE_STOPPING;
+        return;
+    }
+
+    NN_FSM_JOB (NN_EP_STATE_STOPPING, NN_FSM_ACTION, NN_EP_ACTION_STOPPED) {
+        self->state = NN_EP_STATE_IDLE;
+        nn_fsm_stopped (&self->fsm, NN_EP_STOPPED);
+        return;
+    }
+
+    nn_fsm_bad_state (self->state, src, type);
 }

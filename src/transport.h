@@ -36,7 +36,6 @@
 /*  This is the API between the nanomsg core and individual transports. */
 
 struct nn_sock;
-struct nn_cp;
 
 /******************************************************************************/
 /*  Container for transport-specific socket options.                          */

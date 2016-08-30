@@ -54,6 +54,17 @@ struct nn_utcp {
     struct nn_worker_op in;
     struct nn_worker_op out;
 
+    /*  Size of pending I/O operations. Windows IOCP does not readily support
+        TCP pushback without tracking pending requests at this layer, since
+        operations such as WSASend and WSARecv will continue to happily return
+        WSA_IO_PENDING rather than EAGAIN once the SNDBUF/RCVBUF is full. */
+    size_t send_pending_sz;
+    size_t recv_pending_sz;
+
+    /*  Number of pending I/O operations. */
+    size_t send_pending_count;
+    size_t recv_pending_count;
+
     /*  When accepting new socket, they have to be created with same
         type as the listening socket. Thus, in listening socket we
         have to store its exact type. */

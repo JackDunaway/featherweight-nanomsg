@@ -54,6 +54,8 @@ struct nn_ctx;
 #define NN_PIPE_IN 33987
 #define NN_PIPE_OUT 33988
 
+#define NN_PIPE_SRC 897
+
 struct nn_pipe;
 
 /*  Associates opaque pointer to protocol-specific data with the pipe. */
