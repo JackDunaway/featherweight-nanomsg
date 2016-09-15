@@ -59,7 +59,7 @@ void nn_dist_rm (struct nn_dist *self, struct nn_dist_data *data)
 void nn_dist_out (struct nn_dist *self, struct nn_dist_data *data)
 {
     ++self->count;
-    nn_list_insert (&self->pipes, &data->item, nn_list_end (&self->pipes));
+    nn_list_insert_at_end (&self->pipes, &data->item);
 }
 
 int nn_dist_send (struct nn_dist *self, struct nn_msg *msg,

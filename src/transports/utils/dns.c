@@ -110,14 +110,12 @@ int nn_dns_check_hostname (const char *name, size_t namelen)
 
 /*  Private functions. */
 static void nn_dns_notify (union sigval);
-static void nn_dns_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr);
-static void nn_dns_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr);
+static void nn_dns_handler (struct nn_fsm *self, int type, void *srcptr);
+static void nn_dns_shutdown (struct nn_fsm *self, int type, void *srcptr);
 
-void nn_dns_init (struct nn_dns *self, int src, struct nn_fsm *owner)
+void nn_dns_init (struct nn_dns *self, struct nn_fsm *owner)
 {
-    nn_fsm_init (&self->fsm, nn_dns_handler, nn_dns_shutdown, src, self, owner);
+    nn_fsm_init (&self->fsm, nn_dns_handler, nn_dns_shutdown, self, owner);
     self->state = NN_DNS_STATE_IDLE;
     nn_fsm_event_init (&self->done);
 }
@@ -208,11 +206,11 @@ static void nn_dns_notify (union sigval sval)
     nn_ctx_enter (self->fsm.ctx);
     rc = gai_error (&self->gcb);
     if (rc == EAI_CANCELED) {
-        nn_fsm_action (&self->fsm, NN_DNS_ACTION_CANCELLED);
+        nn_fsm_do_now (&self->fsm, NN_DNS_ACTION_CANCELLED);
     }
     else if (rc != 0) {
         self->result->error = EINVAL;
-        nn_fsm_action (&self->fsm, NN_DNS_ACTION_DONE);
+        nn_fsm_do_now (&self->fsm, NN_DNS_ACTION_DONE);
     }
     else {
         self->result->error = 0;
@@ -221,19 +219,19 @@ static void nn_dns_notify (union sigval sval)
         memcpy (&self->result->addr, self->gcb.ar_result->ai_addr,
             self->gcb.ar_result->ai_addrlen);
         self->result->addrlen = (size_t) self->gcb.ar_result->ai_addrlen;
-        freeaddrinfo(self->gcb.ar_result);
-        nn_fsm_action (&self->fsm, NN_DNS_ACTION_DONE);
+        freeaddrinfo (self->gcb.ar_result);
+        nn_fsm_do_now (&self->fsm, NN_DNS_ACTION_DONE);
     }
     nn_ctx_leave (self->fsm.ctx);
 }
 
-static void nn_dns_shutdown (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_dns_shutdown (struct nn_fsm *self, int type, void *srcptr)
 {
     int rc;
     struct nn_dns *dns;
 
     dns = nn_cont (self, struct nn_dns, fsm);
+    nn_assert (srcptr == NULL);
 
     if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
         if (dns->state == NN_DNS_STATE_RESOLVING) {
@@ -263,15 +261,15 @@ static void nn_dns_shutdown (struct nn_fsm *self, int src, int type,
         return;
     }
 
-    nn_fsm_bad_state (dns->state, src, type);
+    nn_assert_unreachable_fsm (dns->state, src, type);
 }
 
-static void nn_dns_handler (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_dns_handler (struct nn_fsm *self, int type, void *srcptr)
 {
     struct nn_dns *dns;
 
     dns = nn_cont (self, struct nn_dns, fsm);
+    nn_assert (srcptr == NULL);
 
     switch (dns->state) {
 /******************************************************************************/
@@ -290,10 +288,10 @@ static void nn_dns_handler (struct nn_fsm *self, int src, int type,
                 dns->state = NN_DNS_STATE_DONE;
                 return;
             default:
-                nn_fsm_bad_action (dns->state, src, type);
+                nn_assert_unreachable_fsm (dns->state, src, type);
             }
         default:
-            nn_fsm_bad_source (dns->state, src, type);
+            nn_assert_unreachable_fsm (dns->state, src, type);
         }
 
 /******************************************************************************/
@@ -308,23 +306,23 @@ static void nn_dns_handler (struct nn_fsm *self, int src, int type,
                 dns->state = NN_DNS_STATE_DONE;
                 return;
             default:
-                nn_fsm_bad_action (dns->state, src, type);
+                nn_assert_unreachable_fsm (dns->state, src, type);
             }
         default:
-            nn_fsm_bad_source (dns->state, src, type);
+            nn_assert_unreachable_fsm (dns->state, src, type);
         }
 
 /******************************************************************************/
 /*  DONE state.                                                               */
 /******************************************************************************/
     case NN_DNS_STATE_DONE:
-        nn_fsm_bad_source (dns->state, src, type);
+        nn_assert_unreachable_fsm (dns->state, src, type);
 
 /******************************************************************************/
 /*  Invalid state.                                                            */
 /******************************************************************************/
     default:
-        nn_fsm_bad_state (dns->state, src, type);
+        nn_assert_unreachable_fsm (dns->state, src, type);
     }
 }
 
@@ -348,15 +346,12 @@ static void nn_dns_handler (struct nn_fsm *self, int src, int type,
 #define NN_DNS_STATE_DONE 2
 
 /*  Private functions. */
-static void nn_dns_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr);
-static void nn_dns_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr);
+static void nn_dns_handler (struct nn_fsm *self, int type, void *srcptr);
+static void nn_dns_shutdown (struct nn_fsm *self, int type, void *srcptr);
 
-void nn_dns_init (struct nn_dns *self, int src, struct nn_fsm *owner)
+void nn_dns_init (struct nn_dns *self, struct nn_fsm *owner)
 {
-    nn_fsm_init (&self->fsm, nn_dns_handler, nn_dns_shutdown,
-        src, self, owner);
+    nn_fsm_init (&self->fsm, nn_dns_handler, nn_dns_shutdown, self, owner);
     self->state = NN_DNS_STATE_IDLE;
     nn_fsm_event_init (&self->done);
 }
@@ -380,7 +375,6 @@ void nn_dns_start (struct nn_dns *self, const char *addr, size_t addrlen,
     int rc;
     struct addrinfo query;
     struct addrinfo *reply;
-    char hostname [NN_SOCKADDR_MAX];
 
     nn_assert_state (self, NN_DNS_STATE_IDLE);
 
@@ -407,13 +401,13 @@ void nn_dns_start (struct nn_dns *self, const char *addr, size_t addrlen,
         query.ai_flags = AI_V4MAPPED;
 #endif
     }
-    nn_assert (sizeof (hostname) > addrlen);
+    nn_assert (sizeof (self->hostname) > addrlen);
     query.ai_socktype = SOCK_STREAM;
-    memcpy (hostname, addr, addrlen);
-    hostname [addrlen] = 0;
+    memcpy (self->hostname, addr, addrlen);
+    self->hostname [addrlen] = 0;
 
     /*  Perform the DNS lookup itself. */
-    self->result->error = getaddrinfo (hostname, NULL, &query, &reply);
+    self->result->error = getaddrinfo (self->hostname, NULL, &query, &reply);
     if (self->result->error) {
         nn_fsm_start (&self->fsm);
         return;
@@ -435,58 +429,54 @@ void nn_dns_stop (struct nn_dns *self)
     nn_fsm_stop (&self->fsm);
 }
 
-static void nn_dns_shutdown (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_dns_shutdown (struct nn_fsm *self, int type, void *srcptr)
 {
     struct nn_dns *dns;
 
     dns = nn_cont (self, struct nn_dns, fsm);
-    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
+    nn_assert (srcptr == NULL);
+
+    if (type == NN_FSM_STOP) {
         nn_fsm_stopped (&dns->fsm, NN_DNS_STOPPED);
         dns->state = NN_DNS_STATE_IDLE;
         return;
     }
 
-    nn_fsm_bad_state(dns->state, src, type);
+    nn_assert_unreachable_fsm (dns->state, type);
 }
 
-static void nn_dns_handler (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_dns_handler (struct nn_fsm *self, int type, void *srcptr)
 {
     struct nn_dns *dns;
 
     dns = nn_cont (self, struct nn_dns, fsm);
+    nn_assert (srcptr == NULL);
 
     switch (dns->state) {
 /******************************************************************************/
 /*  IDLE state.                                                               */
 /******************************************************************************/
     case NN_DNS_STATE_IDLE:
-        switch (src) {
-        case NN_FSM_ACTION:
-            switch (type) {
-            case NN_FSM_START:
-                nn_fsm_raise (&dns->fsm, &dns->done, NN_DNS_DONE);
-                dns->state = NN_DNS_STATE_DONE;
-                return;
-            default:
-                nn_fsm_bad_action (dns->state, src, type);
-            }
+        switch (type) {
+        case NN_FSM_START:
+            nn_fsm_raise (&dns->fsm, &dns->done, NN_DNS_DONE);
+            dns->state = NN_DNS_STATE_DONE;
+            return;
         default:
-            nn_fsm_bad_source (dns->state, src, type);
+            nn_assert_unreachable_fsm (dns->state, type);
         }
 
 /******************************************************************************/
 /*  DONE state.                                                               */
 /******************************************************************************/
     case NN_DNS_STATE_DONE:
-        nn_fsm_bad_source (dns->state, src, type);
+        nn_assert_unreachable_fsm (dns->state, type);
 
 /******************************************************************************/
 /*  Invalid state.                                                            */
 /******************************************************************************/
     default:
-        nn_fsm_bad_state (dns->state, src, type);
+        nn_assert_unreachable_fsm (dns->state, type);
     }
 }
 #endif

@@ -110,13 +110,13 @@ void nn_priolist_activate (struct nn_priolist *self,
     /*  If there are already some elements in this slot, current pipe is not
         going to change. */
     if (!nn_list_empty (&slot->pipes)) {
-        nn_list_insert (&slot->pipes, &data->item, nn_list_end (&slot->pipes));
+        nn_list_insert_at_end (&slot->pipes, &data->item);
         return;
     }
 
     /*  Add first pipe into the slot. If there are no pipes in priolist at all
         this slot becomes current. */
-    nn_list_insert (&slot->pipes, &data->item, nn_list_end (&slot->pipes));
+    nn_list_insert_at_end (&slot->pipes, &data->item);
     slot->current = data;
     if (self->current == -1) {
         self->current = data->priority;

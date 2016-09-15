@@ -50,7 +50,7 @@ void nn_pipebase_init (struct nn_pipebase *self,
 {
     nn_assert (epbase->ep->sock);
 
-    nn_fsm_init (&self->fsm, NULL, NULL, NN_PIPE_SRC, self, &epbase->ep->sock->fsm);
+    nn_fsm_init (&self->fsm, NULL, NULL, self, &epbase->ep->sock->fsm);
     self->vfptr = vfptr;
     self->state = NN_PIPEBASE_STATE_IDLE;
     self->instate = NN_PIPEBASE_INSTATE_DEACTIVATED;
@@ -85,8 +85,9 @@ int nn_pipebase_start (struct nn_pipebase *self)
         self->state = NN_PIPEBASE_STATE_FAILED;
         return rc;
     }
-    if (self->sock)
-        nn_fsm_raise (&self->fsm, &self->out, NN_PIPE_OUT);
+    if (self->sock) {
+        nn_fsm_raise (&self->fsm, &self->out, NN_EVENT_PIPE_OUTGOING);
+    }
 
     return 0;
 }
@@ -107,7 +108,7 @@ void nn_pipebase_received (struct nn_pipebase *self)
     nn_assert (self->instate == NN_PIPEBASE_INSTATE_ASYNC);
     self->instate = NN_PIPEBASE_INSTATE_IDLE;
     if (self->sock)
-        nn_fsm_raise (&self->fsm, &self->in, NN_PIPE_IN);
+        nn_fsm_raise (&self->fsm, &self->in, NN_EVENT_PIPE_INCOMING);
 }
 
 void nn_pipebase_sent (struct nn_pipebase *self)
@@ -118,8 +119,9 @@ void nn_pipebase_sent (struct nn_pipebase *self)
     }
     nn_assert (self->outstate == NN_PIPEBASE_OUTSTATE_ASYNC);
     self->outstate = NN_PIPEBASE_OUTSTATE_IDLE;
-    if (self->sock)
-        nn_fsm_raise (&self->fsm, &self->out, NN_PIPE_OUT);
+    if (self->sock) {
+        nn_fsm_raise (&self->fsm, &self->out, NN_EVENT_PIPE_OUTGOING);
+    }
 }
 
 void nn_pipebase_getopt (struct nn_pipebase *self, int level, int option,

@@ -39,16 +39,15 @@
 #define NN_EP_ACTION_STOPPED 1
 
 /*  Private functions. */
-static void nn_ep_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr);
+static void nn_ep_handler (struct nn_fsm *self, int type, void *srcptr);
 
-int nn_ep_init (struct nn_ep *self, int src, struct nn_sock *sock, int eid,
+int nn_ep_init (struct nn_ep *self, struct nn_sock *sock, int eid,
     struct nn_transport *transport, int bind, const char *addr)
 {
     int rc;
 
     nn_fsm_init (&self->fsm, nn_ep_handler, nn_ep_handler,
-        src, self, &sock->fsm);
+        self, &sock->fsm);
     self->state = NN_EP_STATE_IDLE;
 
     self->epbase = NULL;
@@ -101,12 +100,9 @@ void nn_ep_stopped (struct nn_ep *self)
 {
     /*  TODO: Do the following in a more sane way. */
     self->fsm.stopped.dest = &self->fsm;
-    self->fsm.stopped.src = NN_FSM_ACTION;
-    self->fsm.stopped.srcptr = NULL;
+    //self->fsm.stopped.srcptr = NULL;
     self->fsm.stopped.type = NN_EP_ACTION_STOPPED;
     nn_ctx_raise (self->fsm.ctx, &self->fsm.stopped);
-    //self->state = NN_EP_STATE_IDLE;
-    //nn_fsm_stopped (&self->fsm, NN_EP_STOPPED);
 }
 
 struct nn_ctx *nn_ep_getctx (struct nn_ep *self)
@@ -159,27 +155,28 @@ void nn_ep_stat_increment (struct nn_ep *self, int name, int increment)
     nn_sock_stat_increment (self->sock, name, increment);
 }
 
-static void nn_ep_handler (struct nn_fsm *myfsm, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_ep_handler (struct nn_fsm *myfsm, int type, void *srcptr)
 {
     struct nn_ep *self = nn_cont (myfsm, struct nn_ep, fsm);
+    nn_assert (srcptr == NULL);
 
-    NN_FSM_JOB (NN_EP_STATE_IDLE, NN_FSM_ACTION, NN_FSM_START) {
+    switch (self->state | type) {
+
+    case (NN_EP_STATE_IDLE | NN_FSM_START):
         self->state = NN_EP_STATE_ACTIVE;
         return;
-    }
 
-    NN_FSM_JOB (NN_EP_STATE_ACTIVE, NN_FSM_ACTION, NN_FSM_STOP) {
+    case (NN_EP_STATE_ACTIVE | NN_FSM_STOP):
         self->epbase->vfptr->stop (self->epbase);
         self->state = NN_EP_STATE_STOPPING;
         return;
-    }
 
-    NN_FSM_JOB (NN_EP_STATE_STOPPING, NN_FSM_ACTION, NN_EP_ACTION_STOPPED) {
+    case (NN_EP_STATE_STOPPING | NN_EP_ACTION_STOPPED):
         self->state = NN_EP_STATE_IDLE;
-        nn_fsm_stopped (&self->fsm, NN_EP_STOPPED);
+        nn_fsm_stopped (&self->fsm, NN_EVENT_EP_STOPPED);
         return;
-    }
 
-    nn_fsm_bad_state (self->state, src, type);
+    default:
+        nn_assert_unreachable_fsm (self->state, type);
+    }
 }

@@ -31,7 +31,7 @@
 #include "ep.h"
 
 #include "../aio/pool.h"
-#include "../aio/timer.h"
+#include "../aio/worker.h"
 
 #include "../utils/err.h"
 #include "../utils/alloc.h"
@@ -98,8 +98,6 @@ CT_ASSERT (NN_MAX_SOCKETS <= 0x10000);
 #define NN_CTX_FLAG_TERMED 1
 #define NN_CTX_FLAG_TERMING 2
 #define NN_CTX_FLAG_TERM (NN_CTX_FLAG_TERMED | NN_CTX_FLAG_TERMING)
-
-#define NN_GLOBAL_SRC_STAT_TIMER 1
 
 #define NN_GLOBAL_STATE_IDLE           1
 #define NN_GLOBAL_STATE_ACTIVE         2
@@ -1068,14 +1066,12 @@ static void nn_global_add_transport (struct nn_transport *transport)
 {
     if (transport->init)
         transport->init ();
-    nn_list_insert (&self.transports, &transport->item,
-        nn_list_end (&self.transports));
+    nn_list_insert_at_end (&self.transports, &transport->item);
 }
 
 static void nn_global_add_socktype (struct nn_socktype *socktype)
 {
-    nn_list_insert (&self.socktypes, &socktype->item,
-        nn_list_end (&self.socktypes));
+    nn_list_insert_at_end (&self.socktypes, &socktype->item);
 }
 
 static int nn_global_create_ep (struct nn_sock *sock, const char *addr,

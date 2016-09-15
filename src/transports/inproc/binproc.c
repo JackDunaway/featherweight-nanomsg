@@ -30,11 +30,9 @@
 #include "../../utils/cont.h"
 #include "../../utils/alloc.h"
 
-#define NN_BINPROC_STATE_IDLE 1
-#define NN_BINPROC_STATE_ACTIVE 2
-#define NN_BINPROC_STATE_STOPPING 3
-
-#define NN_BINPROC_SRC_SINPROC 61
+#define NN_FSTATE_BINPROC_IDLE 0x0001
+#define NN_FSTATE_BINPROC_ACTIVE 0x0002
+#define NN_FSTATE_BINPROC_STOPPING 0x0003
 
 /*  Implementation of nn_epbase interface. */
 static void nn_binproc_stop (struct nn_epbase *self);
@@ -45,11 +43,9 @@ static const struct nn_epbase_vfptr nn_binproc_vfptr = {
 };
 
 /*  Private functions. */
-static void nn_binproc_handler (struct nn_fsm *myfsm, int src, int type,
-    void *srcptr);
+static void nn_binproc_handler (struct nn_fsm *myfsm, int type, void *srcptr);
 static void nn_binproc_connect (struct nn_ins_item *self,
     struct nn_ins_item *peer);
-
 
 int nn_binproc_create (void *hint, struct nn_epbase **epbase)
 {
@@ -62,7 +58,7 @@ int nn_binproc_create (void *hint, struct nn_epbase **epbase)
     nn_ins_item_init (&self->item, &nn_binproc_vfptr, hint);
     nn_fsm_init_root (&self->fsm, nn_binproc_handler, nn_binproc_handler,
         nn_epbase_getctx (&self->item.epbase));
-    self->state = NN_BINPROC_STATE_IDLE;
+    self->state = NN_FSTATE_BINPROC_IDLE;
     nn_list_init (&self->sinprocs);
 
     /*  Start the state machine. */
@@ -122,54 +118,29 @@ static void nn_binproc_connect (struct nn_ins_item *self,
     binproc = nn_cont (self, struct nn_binproc, item);
     cinproc = nn_cont (peer, struct nn_cinproc, item);
 
-    nn_assert_state (binproc, NN_BINPROC_STATE_ACTIVE);
+    nn_assert_state (binproc, NN_FSTATE_BINPROC_ACTIVE);
 
     sinproc = nn_alloc (sizeof (struct nn_sinproc), "sinproc");
     nn_assert_alloc (sinproc);
-    nn_sinproc_init (sinproc, NN_BINPROC_SRC_SINPROC,
-        &binproc->item.epbase, &binproc->fsm);
-    nn_list_insert (&binproc->sinprocs, &sinproc->item,
-        nn_list_end (&binproc->sinprocs));
+    nn_sinproc_init (sinproc, &binproc->item.epbase, &binproc->fsm);
+    nn_list_insert_at_end (&binproc->sinprocs, &sinproc->item);
     nn_sinproc_connect (sinproc, &cinproc->fsm);
 
     nn_epbase_stat_increment (&binproc->item.epbase,
         NN_STAT_ACCEPTED_CONNECTIONS, 1);
 }
 
-static void nn_binproc_handler (struct nn_fsm *myfsm, int src, int type,
-    void *srcptr)
+static void nn_binproc_handler (struct nn_fsm *myfsm, int type, void *srcptr)
 {
     struct nn_binproc *self = nn_cont (myfsm, struct nn_binproc, fsm);
     struct nn_sinproc *peer;
     struct nn_sinproc *sinproc;
     struct nn_list_item *it;
 
-    /*  asdf. */
-    NN_FSM_JOB (NN_BINPROC_STATE_IDLE, NN_FSM_ACTION, NN_FSM_STOP) {
-
-
-
-
-
-        nn_assert_unreachable ("JRD - do we hit this?");
-
-
-
-
-        /*  First, unregister the endpoint from the global repository of inproc
-            endpoints. This way, new connections cannot be created anymore. */
-        nn_ins_unbind (&self->item);
-
-        /*  An idle bound endpoint should have no sessions. */
-        nn_assert (nn_list_empty (&self->sinprocs));
-
-        nn_fsm_stopped_noevent (&self->fsm);
-        nn_epbase_stopped (&self->item.epbase);
-        return;
-    }
+    switch (self->state | type) {
 
     /*  Shutdown request has been initiated locally for this bound endpoint. */
-    NN_FSM_JOB (NN_BINPROC_STATE_ACTIVE, NN_FSM_ACTION, NN_FSM_STOP) {
+    case (NN_FSTATE_BINPROC_ACTIVE | NN_FSM_STOP):
 
         /*  First, unregister the endpoint from the global repository of inproc
             endpoints. This way, new connections cannot be created anymore. */
@@ -177,14 +148,14 @@ static void nn_binproc_handler (struct nn_fsm *myfsm, int src, int type,
 
         /*  If there are no active sessions, return early. */
         if (nn_list_empty (&self->sinprocs)) {
-            self->state = NN_BINPROC_STATE_IDLE;
+            self->state = NN_FSTATE_BINPROC_IDLE;
             nn_fsm_stopped_noevent (&self->fsm);
             nn_epbase_stopped (&self->item.epbase);
             return;
         }
 
         /*  Command the existing sessions to begin disconnecting. */
-        self->state = NN_BINPROC_STATE_STOPPING;
+        self->state = NN_FSTATE_BINPROC_STOPPING;
         for (it = nn_list_begin (&self->sinprocs);
             it != nn_list_end (&self->sinprocs);
             it = nn_list_next (&self->sinprocs, it)) {
@@ -193,10 +164,9 @@ static void nn_binproc_handler (struct nn_fsm *myfsm, int src, int type,
         }
 
         return;
-    }
 
     /*  One of this binproc's owned connection sessions has been terminated. */
-    NN_FSM_JOB (NN_BINPROC_STATE_STOPPING, NN_BINPROC_SRC_SINPROC, NN_SINPROC_STOPPED) {
+    case (NN_FSTATE_BINPROC_STOPPING | NN_SINPROC_STOPPED):
         sinproc = (struct nn_sinproc*) srcptr;
         //nn_list_erase (&self->sinprocs, &sinproc->item);
         //nn_sinproc_term (sinproc);
@@ -207,36 +177,31 @@ static void nn_binproc_handler (struct nn_fsm *myfsm, int src, int type,
         if (!nn_list_empty (&self->sinprocs)) {
             return;
         }
-        self->state = NN_BINPROC_STATE_IDLE;
+        self->state = NN_FSTATE_BINPROC_IDLE;
         nn_fsm_stopped_noevent (&self->fsm);
         nn_epbase_stopped (&self->item.epbase);
         return;
-    }
 
 
     /*  Create a local endpoint that continually listens for remote peer
         connection requests. */
-    NN_FSM_JOB (NN_BINPROC_STATE_IDLE, NN_FSM_ACTION, NN_FSM_START) {
-        self->state = NN_BINPROC_STATE_ACTIVE;
+    case (NN_FSTATE_BINPROC_IDLE | NN_FSM_START):
+        self->state = NN_FSTATE_BINPROC_ACTIVE;
         return;
-    }
 
     /*  A remote connecting endpoint has initiated a connection request. */
-    NN_FSM_JOB (NN_BINPROC_STATE_ACTIVE, NN_SINPROC_SRC_PEER, NN_SINPROC_CONNECTED) {
+    case (NN_FSTATE_BINPROC_ACTIVE | NN_SINPROC_CONNECTED):
         peer = (struct nn_sinproc*) srcptr;
         sinproc = nn_alloc (sizeof (struct nn_sinproc), "sinproc");
         nn_assert_alloc (sinproc);
-        nn_sinproc_init (sinproc, NN_BINPROC_SRC_SINPROC,
-            &self->item.epbase, &self->fsm);
-        nn_list_insert (&self->sinprocs, &sinproc->item,
-            nn_list_end (&self->sinprocs));
+        nn_sinproc_init (sinproc, &self->item.epbase, &self->fsm);
+        nn_list_insert_at_end (&self->sinprocs, &sinproc->item);
         nn_sinproc_accept (sinproc, &peer->fsm);
         return;
-    }
 
     /*  One of this binproc's owned connection sessions has been
         disconnected. */
-    NN_FSM_JOB (NN_BINPROC_STATE_ACTIVE, NN_BINPROC_SRC_SINPROC, NN_SINPROC_DISCONNECTED) {
+    case (NN_FSTATE_BINPROC_ACTIVE | NN_SINPROC_DISCONNECTED):
         nn_epbase_stat_increment (&self->item.epbase,
             NN_STAT_BROKEN_CONNECTIONS, 1);
 
@@ -245,12 +210,11 @@ static void nn_binproc_handler (struct nn_fsm *myfsm, int src, int type,
         //nn_binproc_destroy_session (self, sinproc);
 
         return;
-    }
 
     /*  Immediately after accepting, the remote peer failed the protocol
         negotiation, and our local sinproc session forcibly closed the
         connection. */
-    NN_FSM_JOB (NN_BINPROC_STATE_ACTIVE, NN_BINPROC_SRC_SINPROC, NN_SINPROC_ACCEPT_ERROR) {
+    case (NN_FSTATE_BINPROC_ACTIVE | NN_SINPROC_ACCEPT_ERROR):
         nn_epbase_stat_increment (&self->item.epbase,
             NN_STAT_ACCEPT_ERRORS, 1);
 
@@ -259,8 +223,9 @@ static void nn_binproc_handler (struct nn_fsm *myfsm, int src, int type,
         //nn_binproc_destroy_session (self, sinproc);
 
         return;
-    }
 
-    nn_fsm_bad_state (self->state, src, type);
+    default:
+        nn_assert_unreachable_fsm (self->state, type);
+    }
 }
 

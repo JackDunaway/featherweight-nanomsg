@@ -122,10 +122,12 @@ static int nn_xpair_events (struct nn_sockbase *self)
     xpair = nn_cont (self, struct nn_xpair, sockbase);
 
     events = 0;
-    if (nn_excl_can_recv (&xpair->excl))
+    if (nn_excl_can_recv (&xpair->excl)) {
         events |= NN_SOCKBASE_EVENT_IN;
-    if (nn_excl_can_send (&xpair->excl))
+    }
+    if (nn_excl_can_send (&xpair->excl)) {
         events |= NN_SOCKBASE_EVENT_OUT;
+    }
     return events;
 }
 

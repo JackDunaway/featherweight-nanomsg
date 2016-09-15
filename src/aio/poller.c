@@ -405,7 +405,7 @@ int nn_poller_event (struct nn_poller *self, int *event,
     else if (self->events [self->index].filter == EVFILT_READ)
         *event = NN_POLLER_IN;
     else
-        nn_assert (0);
+        nn_assert_unreachable ("Unexpected poller event.");
     ++self->index;
 
     return 0;
@@ -592,5 +592,9 @@ int nn_poller_event (struct nn_poller *self, int *event,
 }
 
 #else
-    #error
+
+#if !defined(NN_USE_WINSOCK)
+#error
+#endif
+
 #endif

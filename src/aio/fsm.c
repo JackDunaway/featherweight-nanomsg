@@ -27,25 +27,27 @@
 
 #include <stddef.h>
 
+/*  Sentinel value that represents an uninitialized, unspecified, or
+    invalid event type value. */
+#define NN_FSM_INVALID_EVENT 0xDEAD0000
+
 #define NN_FSM_STATE_IDLE 1
 #define NN_FSM_STATE_ACTIVE 2
 #define NN_FSM_STATE_STOPPING 3
 
 void nn_fsm_event_init (struct nn_fsm_event *self)
 {
-    self->src = -1;
-    self->type = -1;
+    self->type = NN_FSM_INVALID_EVENT;
     self->dest = NULL;
-    self->srcptr = NULL;
+    //self->srcptr = NULL;
     nn_queue_item_init (&self->item);
 }
 
 void nn_fsm_event_term (struct nn_fsm_event *self)
 {
-    nn_assert (self->src == -1);
-    nn_assert (self->type == -1);
+    nn_assert (self->type == NN_FSM_INVALID_EVENT);
     nn_assert (self->dest == NULL);
-    nn_assert (self->srcptr == NULL);
+    //nn_assert (self->srcptr == NULL);
     nn_queue_item_term (&self->item);
 }
 
@@ -56,54 +58,49 @@ int nn_fsm_event_active (struct nn_fsm_event *self)
 
 void nn_fsm_event_process (struct nn_fsm_event *self)
 {
-    int src;
     int type;
     struct nn_fsm *dest;
-    void *srcptr;
+    //void *srcptr;
 
-    src = self->src;
     type = self->type;
     dest = self->dest;
-    srcptr = self->srcptr;
-    self->src = -1;
-    self->type = -1;
+    //srcptr = self->srcptr;
+    self->type = NN_FSM_INVALID_EVENT;
     self->dest = NULL;
-    self->srcptr = NULL;
+    //self->srcptr = NULL;
 
-    nn_fsm_feed (dest, src, type, srcptr);
+    nn_fsm_feed (dest, type, NULL);
 }
 
-void nn_fsm_feed (struct nn_fsm *self, int src, int type, void *srcptr)
+void nn_fsm_feed (struct nn_fsm *self, int type, void *srcptr)
 {
     if (self->state != NN_FSM_STATE_STOPPING) {
-        self->fn (self, src, type, srcptr);
+        self->handler (self, type, srcptr);
     }
     else {
-        self->shutdown_fn (self, src, type, srcptr);
+        self->shutdown_fn (self, type, srcptr);
     }
 }
 
-void nn_fsm_init_root (struct nn_fsm *self, nn_fsm_fn fn,
+void nn_fsm_init_root (struct nn_fsm *self, nn_fsm_fn handler,
     nn_fsm_fn shutdown_fn, struct nn_ctx *ctx)
 {
-    self->fn = fn;
+    self->handler = handler;
     self->shutdown_fn = shutdown_fn;
     self->state = NN_FSM_STATE_IDLE;
-    self->src = -1;
-    self->srcptr = NULL;
+    //self->srcptr = NULL;
     self->owner = NULL;
     self->ctx = ctx;
     nn_fsm_event_init (&self->stopped);
 }
 
-void nn_fsm_init (struct nn_fsm *self, nn_fsm_fn fn,
-    nn_fsm_fn shutdown_fn, int src, void *srcptr, struct nn_fsm *owner)
+void nn_fsm_init (struct nn_fsm *self, nn_fsm_fn handler,
+    nn_fsm_fn shutdown_fn, void *srcptr, struct nn_fsm *owner)
 {
-    self->fn = fn;
+    self->handler = handler;
     self->shutdown_fn = shutdown_fn;
     self->state = NN_FSM_STATE_IDLE;
-    self->src = src;
-    self->srcptr = srcptr;
+    //self->srcptr = srcptr;
     self->owner = owner;
     self->ctx = owner->ctx;
     nn_fsm_event_init (&self->stopped);
@@ -124,7 +121,7 @@ void nn_fsm_term_early (struct nn_fsm *self)
 void nn_fsm_start (struct nn_fsm *self)
 {
     nn_assert (nn_fsm_isidle (self));
-    self->fn (self, NN_FSM_ACTION, NN_FSM_START, NULL);
+    self->handler (self, NN_FSM_START, NULL);
     self->state = NN_FSM_STATE_ACTIVE;
 }
 
@@ -141,7 +138,7 @@ void nn_fsm_stop (struct nn_fsm *self)
         return;
 
     self->state = NN_FSM_STATE_STOPPING;
-    self->shutdown_fn (self, NN_FSM_ACTION, NN_FSM_STOP, NULL);
+    self->shutdown_fn (self, NN_FSM_STOP, NULL);
 }
 
 void nn_fsm_stopped (struct nn_fsm *self, int type)
@@ -157,40 +154,34 @@ void nn_fsm_stopped_noevent (struct nn_fsm *self)
     self->state = NN_FSM_STATE_IDLE;
 }
 
-void nn_fsm_swap_owner (struct nn_fsm *self, struct nn_fsm_owner *owner)
+void nn_fsm_swap_owner (struct nn_fsm *self, struct nn_fsm *newowner)
 {
-    int oldsrc;
     struct nn_fsm *oldowner;
 
-    oldsrc = self->src;
     oldowner = self->owner;
-    self->src = owner->src;
-    self->owner = owner->fsm;
-    owner->src = oldsrc;
-    owner->fsm = oldowner;
+    self->owner = newowner;
+    newowner = oldowner;
 }
 
-void nn_fsm_action (struct nn_fsm *self, int type)
+void nn_fsm_do_now (struct nn_fsm *self, int type)
 {
     nn_assert (type > 0);
-    nn_fsm_feed (self, NN_FSM_ACTION, type, NULL);
+    nn_fsm_feed (self, type, NULL);
 }
 
 void nn_fsm_raise (struct nn_fsm *self, struct nn_fsm_event *event, int type)
 {
     event->dest = self->owner;
-    event->src = self->src;
-    event->srcptr = self->srcptr;
+    //event->srcptr = self->srcptr;
     event->type = type;
     nn_ctx_raise (self->ctx, event);
 }
 
 void nn_fsm_raiseto (struct nn_fsm *self, struct nn_fsm *dst,
-    struct nn_fsm_event *event, int src, int type, void *srcptr)
+    struct nn_fsm_event *event, int type, void *srcptr)
 {
     event->dest = dst;
-    event->src = src;
-    event->srcptr = srcptr;
+    //event->srcptr = srcptr;
     event->type = type;
     nn_ctx_raiseto (self->ctx, event);
 }

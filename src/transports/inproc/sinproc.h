@@ -32,17 +32,13 @@
 #include "../../utils/msg.h"
 #include "../../utils/list.h"
 
-#define NN_SINPROC_CONNECTED 1
-#define NN_SINPROC_ACCEPTED 2
-#define NN_SINPROC_ESTABLISHED 3
-#define NN_SINPROC_DISCONNECTED 4
-#define NN_SINPROC_STOPPED 5
-#define NN_SINPROC_ACCEPT_ERROR 6
-#define NN_SINPROC_CONNECT_ERROR 7
-
-/*  We use a random value here to prevent accidental clashes with the peer's
-    internal source IDs. */
-#define NN_SINPROC_SRC_PEER 27713
+#define NN_SINPROC_CONNECTED 0x01010000
+#define NN_SINPROC_ACCEPTED 0x01020000
+#define NN_SINPROC_ESTABLISHED 0x01030000
+#define NN_SINPROC_DISCONNECTED 0x01040000
+#define NN_SINPROC_STOPPED 0x01050000
+#define NN_SINPROC_ACCEPT_ERROR 0x01060000
+#define NN_SINPROC_CONNECT_ERROR 0x01070000
 
 struct nn_sinproc {
 
@@ -81,8 +77,8 @@ struct nn_sinproc {
     struct nn_list_item item;
 };
 
-void nn_sinproc_init (struct nn_sinproc *self, int src,
-    struct nn_epbase *epbase, struct nn_fsm *owner);
+void nn_sinproc_init (struct nn_sinproc *self, struct nn_epbase *epbase,
+    struct nn_fsm *owner);
 void nn_sinproc_term (struct nn_sinproc *self);
 int nn_sinproc_isidle (struct nn_sinproc *self);
 

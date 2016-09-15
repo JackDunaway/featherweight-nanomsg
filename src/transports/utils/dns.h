@@ -23,6 +23,8 @@
 #ifndef NN_DNS_INCLUDED
 #define NN_DNS_INCLUDED
 
+#include "../../nn.h"
+
 #include "../../aio/fsm.h"
 
 #include <stddef.h>
@@ -38,8 +40,6 @@ int nn_dns_check_hostname (const char *name, size_t namelen);
 #if defined NN_HAVE_GETADDRINFO_A && !defined NN_DISABLE_GETADDRINFO_A
 #include <netdb.h>
 
-#include "../../nn.h"
-
 #if defined NN_HAVE_WINDOWS
 #include "../../utils/win.h"
 #else
@@ -49,12 +49,11 @@ int nn_dns_check_hostname (const char *name, size_t namelen);
 struct nn_dns {
     struct nn_fsm fsm;
     int state;
-    int error;
+    struct nn_dns_result *result;
+    struct nn_fsm_event done;
     char hostname [NN_SOCKADDR_MAX];
     struct addrinfo request;
     struct gaicb gcb;
-    struct nn_dns_result *result;
-    struct nn_fsm_event done;
 };
 #else
 #if defined NN_HAVE_WINDOWS
@@ -68,6 +67,7 @@ struct nn_dns {
     int state;
     struct nn_dns_result *result;
     struct nn_fsm_event done;
+    char hostname [NN_SOCKADDR_MAX];
 };
 #endif
 
@@ -77,12 +77,13 @@ struct nn_dns_result {
     size_t addrlen;
 };
 
-void nn_dns_init (struct nn_dns *self, int src, struct nn_fsm *owner);
+void nn_dns_init (struct nn_dns *self, struct nn_fsm *owner);
 void nn_dns_term (struct nn_dns *self);
 
 int nn_dns_isidle (struct nn_dns *self);
-void nn_dns_start (struct nn_dns *self, const char *addr, size_t addrlen,
-    int ipv4only, struct nn_dns_result *result);
+void nn_dns_start (struct nn_dns *self, const char *addr,
+    size_t addrlen, int ipv4only,
+    struct nn_dns_result *result);
 void nn_dns_stop (struct nn_dns *self);
 
 #endif

@@ -39,6 +39,4 @@ struct sockaddr_un {
     char sun_path [sizeof (struct sockaddr_storage) - sizeof (short)];
 };
 
-#define ssize_t int
-
 #endif

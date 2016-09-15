@@ -63,10 +63,14 @@ struct nn_list_item *nn_list_prev (struct nn_list *self,
 struct nn_list_item *nn_list_next (struct nn_list *self,
     struct nn_list_item *it);
 
-/*  Adds the item to the list before the item pointed to by 'it'. Priot to
-    insertion item should not be part of any list. */
+/*  Adds the item to the list before the item pointed to by 'it'. Prior to
+    insertion, item should not be part of any list. */
 void nn_list_insert (struct nn_list *self, struct nn_list_item *item,
     struct nn_list_item *it);
+
+/*  Adds an item to the end of the list. Prior to insertion item, should not be
+    part of any list. */
+void nn_list_insert_at_end (struct nn_list *self, struct nn_list_item *item);
 
 /*  Removes the item from the list and returns pointer to the next item in the
     list. Item must be part of the list. */

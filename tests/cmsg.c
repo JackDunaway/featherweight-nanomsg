@@ -40,7 +40,7 @@ int main (int argc, char *argv [])
     int rep;
     int req;
 
-    test_build_addr (addr, "tcp", "127.0.0.1", get_test_port (argc, argv));
+    test_get_transport_addr (addr, NN_IPC, get_test_port (argc, argv));
     
     rep = test_socket (AF_SP_RAW, NN_REP);
     test_bind (rep, addr);

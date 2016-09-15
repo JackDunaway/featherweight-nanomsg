@@ -55,8 +55,9 @@ struct nn_list_item *nn_list_begin (struct nn_list *self)
     return self->first;
 }
 
-struct nn_list_item *nn_list_end (NN_UNUSED struct nn_list *self)
+struct nn_list_item *nn_list_end (struct nn_list *self)
 {
+    nn_assert (self);
     return NULL;
 }
 
@@ -69,9 +70,10 @@ struct nn_list_item *nn_list_prev (struct nn_list *self,
     return it->prev;
 }
 
-struct nn_list_item *nn_list_next (NN_UNUSED struct nn_list *self,
+struct nn_list_item *nn_list_next (struct nn_list *self,
     struct nn_list_item *it)
 {
+    nn_assert (self);
     nn_assert (it->next != NN_LIST_NOTINLIST);
     return it->next;
 }
@@ -91,6 +93,11 @@ void nn_list_insert (struct nn_list *self, struct nn_list_item *item,
         self->first = item;
     if (!it)
         self->last = item;
+}
+
+void nn_list_insert_at_end (struct nn_list *self, struct nn_list_item *item)
+{
+    nn_list_insert (self, item, nn_list_end (self));
 }
 
 struct nn_list_item *nn_list_erase (struct nn_list *self,

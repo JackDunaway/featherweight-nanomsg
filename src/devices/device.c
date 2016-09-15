@@ -112,7 +112,7 @@ int nn_device_entry (struct nn_device_recipe *device, int s1, int s2,
     if (rc < 0) {
         if (nn_errno () != ENOPROTOOPT)
             return -1;
-        s1rcv = -1;
+        s1rcv = NN_INVALID_FD;
     } else {
         nn_assert (rc == 0);
         nn_assert (opsz == sizeof (s1rcv));
@@ -123,7 +123,7 @@ int nn_device_entry (struct nn_device_recipe *device, int s1, int s2,
     if (rc < 0) {
         if (nn_errno () != ENOPROTOOPT)
             return -1;
-        s1snd = -1;
+        s1snd = NN_INVALID_FD;
     } else {
         nn_assert (rc == 0);
         nn_assert (opsz == sizeof (s1snd));
@@ -134,7 +134,7 @@ int nn_device_entry (struct nn_device_recipe *device, int s1, int s2,
     if (rc < 0) {
         if (nn_errno () != ENOPROTOOPT)
             return -1;
-        s2rcv = -1;
+        s2rcv = NN_INVALID_FD;
     } else {
         nn_assert (rc == 0);
         nn_assert (opsz == sizeof (s2rcv));
@@ -145,7 +145,7 @@ int nn_device_entry (struct nn_device_recipe *device, int s1, int s2,
     if (rc < 0) {
         if (nn_errno () != ENOPROTOOPT)
             return -1;
-        s2snd = -1;
+        s2snd = NN_INVALID_FD;
     } else {
         nn_assert (rc == 0);
         nn_assert (opsz == sizeof (s2snd));
@@ -153,19 +153,19 @@ int nn_device_entry (struct nn_device_recipe *device, int s1, int s2,
     }
     if (device->required_checks & NN_CHECK_SOCKET_DIRECTIONALITY) {
         /*  Check the directionality of the sockets. */
-        if (s1rcv != -1 && s2snd == -1) {
+        if (s1rcv != NN_INVALID_FD && s2snd == NN_INVALID_FD) {
             errno = EINVAL;
             return -1;
         }
-        if (s1snd != -1 && s2rcv == -1) {
+        if (s1snd != NN_INVALID_FD && s2rcv == NN_INVALID_FD) {
             errno = EINVAL;
             return -1;
         }
-        if (s2rcv != -1 && s1snd == -1) {
+        if (s2rcv != NN_INVALID_FD && s1snd == NN_INVALID_FD) {
             errno = EINVAL;
             return -1;
         }
-        if (s2snd != -1 && s1rcv == -1) {
+        if (s2snd != NN_INVALID_FD && s1rcv == NN_INVALID_FD) {
             errno = EINVAL;
             return -1;
         }
@@ -173,18 +173,24 @@ int nn_device_entry (struct nn_device_recipe *device, int s1, int s2,
 
     /*  Two-directional device. */
     if (device->required_checks & NN_CHECK_ALLOW_BIDIRECTIONAL) {
-        if (s1rcv != -1 && s1snd != -1 && s2rcv != -1 && s2snd != -1)
+        if (s1rcv != NN_INVALID_FD && s1snd != NN_INVALID_FD &&
+            s2rcv != NN_INVALID_FD && s2snd != NN_INVALID_FD) {
             return nn_device_twoway (device, s1, s2);
+        }
     }
 
     if (device->required_checks & NN_CHECK_ALLOW_UNIDIRECTIONAL) {
         /*  Single-directional device passing messages from s1 to s2. */
-        if (s1rcv != -1 && s1snd == -1 && s2rcv == -1 && s2snd != -1)
+        if (s1rcv != NN_INVALID_FD && s1snd == NN_INVALID_FD &&
+            s2rcv == NN_INVALID_FD && s2snd != NN_INVALID_FD) {
             return nn_device_oneway (device, s1, s2);
+        }
 
         /*  Single-directional device passing messages from s2 to s1. */
-        if (s1rcv == -1 && s1snd != -1 && s2rcv != -1 && s2snd == -1)
+        if (s1rcv == NN_INVALID_FD && s1snd != NN_INVALID_FD &&
+            s2rcv != NN_INVALID_FD && s2snd == NN_INVALID_FD) {
             return nn_device_oneway (device, s2, s1);
+        }
     }
 
     nn_assert_unreachable ("Return case should have already been satisfied.");

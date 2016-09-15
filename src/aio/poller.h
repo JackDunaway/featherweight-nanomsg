@@ -127,9 +127,18 @@ struct nn_poller {
 };
 
 #else
-    #error
+
+/*  The target must be Windows. The reason this file is even included on
+    Windows targets, rather than being excluded at the build generation phase,
+    is as an attempt to avoid out-of-sight-out-of-mind cross-platform
+    differences that could arise by development on individual platforms. */
+#if !defined(NN_USE_WINSOCK)
+#error
 #endif
 
+#endif
+
+#if !defined(NN_USE_WINSOCK)
 int nn_poller_init (struct nn_poller *self);
 void nn_poller_term (struct nn_poller *self);
 void nn_poller_add (struct nn_poller *self, int fd,
@@ -142,5 +151,6 @@ void nn_poller_reset_out (struct nn_poller *self, struct nn_poller_hndl *hndl);
 int nn_poller_wait (struct nn_poller *self, int timeout);
 int nn_poller_event (struct nn_poller *self, int *event,
     struct nn_poller_hndl **hndl);
+#endif
 
 #endif

@@ -25,10 +25,7 @@
 #include "ws_handshake.h"
 #include "sha1.h"
 
-#include "../tcp/utcp.h"
-
-#include "../../aio/timer.h"
-#include "../../aio/stream.h"
+#include "../stream/ustream.h"
 
 #include "../../core/sock.h"
 
@@ -90,9 +87,7 @@ const size_t NN_WS_HANDSHAKE_SP_MAP_LEN = sizeof (NN_WS_HANDSHAKE_SP_MAP) /
 #define NN_WS_HANDSHAKE_STATE_DONE 9
 #define NN_WS_HANDSHAKE_STATE_STOPPING 10
 
-/*  Subordinate srcptr objects. */
-#define NN_WS_HANDSHAKE_SRC_USOCK 1
-#define NN_WS_HANDSHAKE_SRC_TIMER 2
+/*  State machine notifications unique to the WS_HANDSHAKE object. */
 
 /*  Time allowed to complete opening handshake. */
 #ifndef NN_WS_HANDSHAKE_TIMEOUT
@@ -120,10 +115,8 @@ const size_t NN_WS_HANDSHAKE_SP_MAP_LEN = sizeof (NN_WS_HANDSHAKE_SP_MAP) /
 #define NN_WS_HANDSHAKE_RESPONSE_UNKNOWNTYPE 7
 
 /*  Private functions. */
-static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr);
-static void nn_ws_handshake_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr);
+static void nn_ws_handshake_handler (struct nn_fsm *self, int type, void *srcptr);
+static void nn_ws_handshake_shutdown (struct nn_fsm *self, int type, void *srcptr);
 static void nn_ws_handshake_leave (struct nn_ws_handshake *self, int rc);
 
 /*  WebSocket protocol support functions. */
@@ -158,18 +151,16 @@ static int nn_ws_match_value (const char* termseq, const char **subj,
 static int nn_ws_validate_value (const char* expected, const char *subj,
     size_t subj_len, int case_insensitive);
 
-void nn_ws_handshake_init (struct nn_ws_handshake *self, int src,
-    struct nn_fsm *owner)
+void nn_ws_handshake_init (struct nn_ws_handshake *self, struct nn_fsm *owner)
 {
     nn_fsm_init (&self->fsm, nn_ws_handshake_handler, nn_ws_handshake_shutdown,
-        src, self, owner);
+        self, owner);
     self->state = NN_WS_HANDSHAKE_STATE_IDLE;
-    nn_timer_init (&self->timer, NN_WS_HANDSHAKE_SRC_TIMER, &self->fsm);
+    nn_timer_init (&self->timer, self->usock->worker, &self->fsm);
     nn_fsm_event_init (&self->done);
     self->timeout = NN_WS_HANDSHAKE_TIMEOUT;
     self->usock = NULL;
-    self->usock_owner.src = -1;
-    self->usock_owner.fsm = NULL;
+    self->owner = NULL;
     self->pipebase = NULL;
 }
 
@@ -188,7 +179,7 @@ int nn_ws_handshake_isidle (struct nn_ws_handshake *self)
 }
 
 void nn_ws_handshake_start (struct nn_ws_handshake *self,
-    struct nn_utcp *usock, struct nn_pipebase *pipebase,
+    struct nn_stream *usock, struct nn_pipebase *pipebase,
     int mode, const char *resource, const char *host)
 {
     /*  It's expected this resource has been allocated during intial connect. */
@@ -196,10 +187,8 @@ void nn_ws_handshake_start (struct nn_ws_handshake *self,
         nn_assert (strlen (resource) >= 1);
 
     /*  Take ownership of the underlying socket. */
-    nn_assert (self->usock == NULL && self->usock_owner.fsm == NULL);
-    self->usock_owner.src = NN_WS_HANDSHAKE_SRC_USOCK;
-    self->usock_owner.fsm = &self->fsm;
-    nn_utcp_swap_owner (usock, &self->usock_owner);
+    nn_assert (self->usock == NULL && self->owner == NULL);
+    nn_stream_swap_owner (&usock->stream, self->owner);
     self->usock = usock;
     self->pipebase = pipebase;
     self->mode = mode;
@@ -245,15 +234,15 @@ void nn_ws_handshake_stop (struct nn_ws_handshake *self)
     nn_fsm_stop (&self->fsm);
 }
 
-static void nn_ws_handshake_shutdown (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_ws_handshake_shutdown (struct nn_fsm *self, int type, void *srcptr)
 {
     struct nn_ws_handshake *handshaker;
 
     handshaker = nn_cont (self, struct nn_ws_handshake, fsm);
+    nn_assert (srcptr == NULL);
 
-    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
-        nn_timer_stop (&handshaker->timer);
+    if (type == NN_FSM_STOP) {
+        nn_timer_cancel (&handshaker->timer);
         handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING;
     }
     if (handshaker->state == NN_WS_HANDSHAKE_STATE_STOPPING) {
@@ -264,7 +253,7 @@ static void nn_ws_handshake_shutdown (struct nn_fsm *self, int src, int type,
         return;
     }
 
-    nn_fsm_bad_state (handshaker->state, src, type);
+    nn_assert_unreachable_fsm (handshaker->state, type);
 }
 
 static int nn_ws_match_token (const char* token, const char **subj,
@@ -390,14 +379,14 @@ static int nn_ws_validate_value (const char* expected, const char *subj,
     return NN_WS_HANDSHAKE_MATCH;
 }
 
-static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_ws_handshake_handler (struct nn_fsm *self, int type, void *srcptr)
 {
     struct nn_ws_handshake *handshaker;
 
     size_t i;
 
     handshaker = nn_cont (self, struct nn_ws_handshake, fsm);
+    nn_assert (srcptr == NULL);
 
     switch (handshaker->state) {
 
@@ -405,414 +394,329 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 /*  IDLE state.                                                               */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_IDLE:
-        switch (src) {
+        switch (type) {
+        case NN_FSM_START:
+            nn_assert (handshaker->recv_pos == 0);
+            nn_assert (handshaker->recv_len >= NN_WS_HANDSHAKE_TERMSEQ_LEN);
 
-        case NN_FSM_ACTION:
-            switch (type) {
-            case NN_FSM_START:
-                nn_assert (handshaker->recv_pos == 0);
-                nn_assert (handshaker->recv_len >= NN_WS_HANDSHAKE_TERMSEQ_LEN);
+            nn_timer_start (&handshaker->timer, NN_STREAM_HANDSHAKE_TIMEDOUT,
+                handshaker->timeout);
 
-                nn_timer_start (&handshaker->timer, handshaker->timeout);
-
-                switch (handshaker->mode) {
-                case NN_WS_CLIENT:
-                    /*  Send opening handshake to server. */
-                    nn_assert (handshaker->recv_len <=
-                        sizeof (handshaker->response));
-                    handshaker->state = NN_WS_HANDSHAKE_STATE_CLIENT_SEND;
-                    nn_ws_handshake_client_request (handshaker);
-                    return;
-                case NN_WS_SERVER:
-                    /*  Begin receiving opening handshake from client. */
-                    nn_assert (handshaker->recv_len <=
-                        sizeof (handshaker->opening_hs));
-                    handshaker->state = NN_WS_HANDSHAKE_STATE_SERVER_RECV;
-                    nn_utcp_recv (handshaker->usock, handshaker->opening_hs,
-                        handshaker->recv_len);
-                    return;
-                default:
-                    nn_assert_unreachable ("Unexpected [mode] value.");
-                    return;
-                }
-
+            switch (handshaker->mode) {
+            case NN_WS_CLIENT:
+                /*  Send opening handshake to server. */
+                nn_assert (handshaker->recv_len <=
+                    sizeof (handshaker->response));
+                handshaker->state = NN_WS_HANDSHAKE_STATE_CLIENT_SEND;
+                nn_ws_handshake_client_request (handshaker);
+                return;
+            case NN_WS_SERVER:
+                /*  Begin receiving opening handshake from client. */
+                nn_assert (handshaker->recv_len <=
+                    sizeof (handshaker->opening_hs));
+                handshaker->state = NN_WS_HANDSHAKE_STATE_SERVER_RECV;
+                nn_utcp_recv (handshaker->usock, handshaker->opening_hs,
+                    handshaker->recv_len);
+                return;
             default:
-                nn_fsm_bad_action (handshaker->state, src, type);
+                nn_assert_unreachable ("Unexpected [mode] value.");
+                return;
             }
 
         default:
-            nn_fsm_bad_source (handshaker->state, src, type);
+            nn_assert_unreachable_fsm (handshaker->state, type);
         }
 
 /******************************************************************************/
 /*  SERVER_RECV state.                                                        */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_SERVER_RECV:
-        switch (src) {
+        switch (type) {
+        case NN_STREAM_RECEIVED:
+            /*  Parse bytes received thus far. */
+            switch (nn_ws_handshake_parse_client_opening (handshaker)) {
+            case NN_WS_HANDSHAKE_INVALID:
+                /*  Opening handshake parsed successfully but does not
+                    contain valid values. Respond failure to client. */
+                handshaker->state = NN_WS_HANDSHAKE_STATE_SERVER_REPLY;
+                nn_ws_handshake_server_reply (handshaker);
+                return;
+            case NN_WS_HANDSHAKE_VALID:
+                /*  Opening handshake parsed successfully, and is valid.
+                    Respond success to client. */
+                handshaker->state = NN_WS_HANDSHAKE_STATE_SERVER_REPLY;
+                nn_ws_handshake_server_reply (handshaker);
+                return;
+            case NN_WS_HANDSHAKE_RECV_MORE:
+                /*  Not enough bytes have been received to determine
+                    validity; remain in the receive state, and retrieve
+                    more bytes from client. */
+                handshaker->recv_pos += handshaker->recv_len;
 
-        case NN_WS_HANDSHAKE_SRC_USOCK:
-            switch (type) {
-            case NN_STREAM_RECEIVED:
-                /*  Parse bytes received thus far. */
-                switch (nn_ws_handshake_parse_client_opening (handshaker)) {
-                case NN_WS_HANDSHAKE_INVALID:
-                    /*  Opening handshake parsed successfully but does not
-                        contain valid values. Respond failure to client. */
-                    handshaker->state = NN_WS_HANDSHAKE_STATE_SERVER_REPLY;
+                /*  Validate the previous recv operation. */
+                nn_assert (handshaker->recv_pos <
+                    sizeof (handshaker->opening_hs));
+
+                /*  Ensure we can back-track at least the length of the
+                    termination sequence to determine how many bytes to
+                    receive on the next retry. This is an assertion, not
+                    a conditional, since under no condition is it
+                    necessary to initially receive so few bytes. */
+                nn_assert (handshaker->recv_pos >=
+                    (int) NN_WS_HANDSHAKE_TERMSEQ_LEN);
+
+                /*  We only compare if we have at least one byte to
+                    compare against.  When i drops to zero, it means
+                    we don't have any bytes to match against, and it is
+                    automatically true. */
+                for (i = NN_WS_HANDSHAKE_TERMSEQ_LEN; i > 0; i--) {
+                    if (memcmp (NN_WS_HANDSHAKE_TERMSEQ,
+                        handshaker->opening_hs + handshaker->recv_pos - i,
+                        i) == 0) {
+                        break;
+                    }
+                }
+
+                nn_assert (i < NN_WS_HANDSHAKE_TERMSEQ_LEN);
+
+                handshaker->recv_len = NN_WS_HANDSHAKE_TERMSEQ_LEN - i;
+
+                /*  In the unlikely case the client would overflow what we
+                    assumed was a sufficiently-large buffer to receive the
+                    handshake, we fail the client. */
+                if (handshaker->recv_len + handshaker->recv_pos >
+                    sizeof (handshaker->opening_hs)) {
+                    handshaker->response_code =
+                        NN_WS_HANDSHAKE_RESPONSE_TOO_BIG;
+                    handshaker->state =
+                        NN_WS_HANDSHAKE_STATE_SERVER_REPLY;
                     nn_ws_handshake_server_reply (handshaker);
-                    return;
-                case NN_WS_HANDSHAKE_VALID:
-                    /*  Opening handshake parsed successfully, and is valid.
-                        Respond success to client. */
-                    handshaker->state = NN_WS_HANDSHAKE_STATE_SERVER_REPLY;
-                    nn_ws_handshake_server_reply (handshaker);
-                    return;
-                case NN_WS_HANDSHAKE_RECV_MORE:
-                    /*  Not enough bytes have been received to determine
-                        validity; remain in the receive state, and retrieve
-                        more bytes from client. */
-                    handshaker->recv_pos += handshaker->recv_len;
-
-                    /*  Validate the previous recv operation. */
-                    nn_assert (handshaker->recv_pos <
-                        sizeof (handshaker->opening_hs));
-
-                    /*  Ensure we can back-track at least the length of the
-                        termination sequence to determine how many bytes to
-                        receive on the next retry. This is an assertion, not
-                        a conditional, since under no condition is it
-                        necessary to initially receive so few bytes. */
-                    nn_assert (handshaker->recv_pos >=
-                        (int) NN_WS_HANDSHAKE_TERMSEQ_LEN);
-
-                    /*  We only compare if we have at least one byte to
-                        compare against.  When i drops to zero, it means
-                        we don't have any bytes to match against, and it is
-                        automatically true. */
-                    for (i = NN_WS_HANDSHAKE_TERMSEQ_LEN; i > 0; i--) {
-                        if (memcmp (NN_WS_HANDSHAKE_TERMSEQ,
-                            handshaker->opening_hs + handshaker->recv_pos - i,
-                            i) == 0) {
-                            break;
-                        }
-                    }
-
-                    nn_assert (i < NN_WS_HANDSHAKE_TERMSEQ_LEN);
-
-                    handshaker->recv_len = NN_WS_HANDSHAKE_TERMSEQ_LEN - i;
-
-                    /*  In the unlikely case the client would overflow what we
-                        assumed was a sufficiently-large buffer to receive the
-                        handshake, we fail the client. */
-                    if (handshaker->recv_len + handshaker->recv_pos >
-                        sizeof (handshaker->opening_hs)) {
-                        handshaker->response_code =
-                            NN_WS_HANDSHAKE_RESPONSE_TOO_BIG;
-                        handshaker->state =
-                            NN_WS_HANDSHAKE_STATE_SERVER_REPLY;
-                        nn_ws_handshake_server_reply (handshaker);
-                    }
-                    else {
-                        handshaker->retries++;
-                        nn_utcp_recv (handshaker->usock,
-                            handshaker->opening_hs + handshaker->recv_pos,
-                            handshaker->recv_len);
-                    }
-                    return;
-                default:
-                    nn_fsm_error ("Unexpected handshake result",
-                        handshaker->state, src, type);
+                }
+                else {
+                    handshaker->retries++;
+                    nn_utcp_recv (handshaker->usock,
+                        handshaker->opening_hs + handshaker->recv_pos,
+                        handshaker->recv_len);
                 }
                 return;
-            case NN_STREAM_SHUTDOWN:
-                /*  Ignore it and wait for ERROR event. */
-                return;
-            case NN_STREAM_ERROR:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
             default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
-        case NN_WS_HANDSHAKE_SRC_TIMER:
-            switch (type) {
-            case NN_TIMER_TIMEOUT:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+                nn_assert_unreachable_fsm (handshaker->state, type);
                 return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
             }
-
+            return;
+        case NN_STREAM_SHUTDOWN:
+            /*  Ignore it and wait for ERROR event. */
+            return;
+        case NN_STREAM_ERROR:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
+        case NN_STREAM_HANDSHAKE_TIMEDOUT:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
         default:
-            nn_fsm_bad_source (handshaker->state, src, type);
+            nn_assert_unreachable_fsm (handshaker->state, type);
+            return;
         }
 
 /******************************************************************************/
 /*  SERVER_REPLY state.                                                       */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_SERVER_REPLY:
-        switch (src) {
-
-        case NN_WS_HANDSHAKE_SRC_USOCK:
-            switch (type) {
-            case NN_STREAM_SENT:
-                /*  As per RFC 6455 4.2.2, the handshake is now complete
-                    and the connection is immediately ready for send/recv. */
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE;
-            case NN_STREAM_SHUTDOWN:
-                /*  Ignore it and wait for ERROR event. */
-                return;
-            case NN_STREAM_ERROR:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
-        case NN_WS_HANDSHAKE_SRC_TIMER:
-            switch (type) {
-            case NN_TIMER_TIMEOUT:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
+        switch (type) {
+        case NN_STREAM_SENT:
+            /*  As per RFC 6455 4.2.2, the handshake is now complete
+                and the connection is immediately ready for send/recv. */
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE;
+        case NN_STREAM_SHUTDOWN:
+            /*  Ignore it and wait for ERROR event. */
+            return;
+        case NN_STREAM_ERROR:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
+        case NN_STREAM_HANDSHAKE_TIMEDOUT:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
         default:
-            nn_fsm_bad_source (handshaker->state, src, type);
+            nn_assert_unreachable_fsm (handshaker->state, type);
         }
 
 /******************************************************************************/
 /*  CLIENT_SEND state.                                                        */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_CLIENT_SEND:
-        switch (src) {
-
-        case NN_WS_HANDSHAKE_SRC_USOCK:
-            switch (type) {
-            case NN_STREAM_SENT:
-                handshaker->state = NN_WS_HANDSHAKE_STATE_CLIENT_RECV;
-                nn_utcp_recv (handshaker->usock, handshaker->response,
-                    handshaker->recv_len);
-                return;
-            case NN_STREAM_SHUTDOWN:
-                /*  Ignore it and wait for ERROR event. */
-                return;
-            case NN_STREAM_ERROR:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
-        case NN_WS_HANDSHAKE_SRC_TIMER:
-            switch (type) {
-            case NN_TIMER_TIMEOUT:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
+        switch (type) {
+        case NN_STREAM_SENT:
+            handshaker->state = NN_WS_HANDSHAKE_STATE_CLIENT_RECV;
+            nn_utcp_recv (handshaker->usock, handshaker->response,
+                handshaker->recv_len);
+            return;
+        case NN_STREAM_SHUTDOWN:
+            /*  Ignore it and wait for ERROR event. */
+            return;
+        case NN_STREAM_ERROR:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
+        case NN_STREAM_HANDSHAKE_TIMEDOUT:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
         default:
-            nn_fsm_bad_source (handshaker->state, src, type);
+            nn_assert_unreachable_fsm (handshaker->state, type);
         }
 
 /******************************************************************************/
 /*  CLIENT_RECV state.                                                        */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_CLIENT_RECV:
-        switch (src) {
+        switch (type) {
+        case NN_STREAM_RECEIVED:
+            /*  Parse bytes received thus far. */
+            switch (nn_ws_handshake_parse_server_response (handshaker)) {
+            case NN_WS_HANDSHAKE_INVALID:
+                /*  Opening handshake parsed successfully but does not
+                    contain valid values. Fail connection. */
+                    nn_timer_cancel (&handshaker->timer);
+                    handshaker->state =
+                        NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+                return;
+            case NN_WS_HANDSHAKE_VALID:
+                /*  As per RFC 6455 4.2.2, the handshake is now complete
+                    and the connection is immediately ready for send/recv. */
+                nn_timer_cancel (&handshaker->timer);
+                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE;
+                return;
+            case NN_WS_HANDSHAKE_RECV_MORE:
+                /*  Not enough bytes have been received to determine
+                    validity; remain in the receive state, and retrieve
+                    more bytes from client. */
+                handshaker->recv_pos += handshaker->recv_len;
 
-        case NN_WS_HANDSHAKE_SRC_USOCK:
-            switch (type) {
-            case NN_STREAM_RECEIVED:
-                /*  Parse bytes received thus far. */
-                switch (nn_ws_handshake_parse_server_response (handshaker)) {
-                case NN_WS_HANDSHAKE_INVALID:
-                    /*  Opening handshake parsed successfully but does not
-                        contain valid values. Fail connection. */
-                        nn_timer_stop (&handshaker->timer);
-                        handshaker->state =
-                            NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                    return;
-                case NN_WS_HANDSHAKE_VALID:
-                    /*  As per RFC 6455 4.2.2, the handshake is now complete
-                        and the connection is immediately ready for send/recv. */
-                    nn_timer_stop (&handshaker->timer);
-                    handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE;
-                    return;
-                case NN_WS_HANDSHAKE_RECV_MORE:
-                    /*  Not enough bytes have been received to determine
-                        validity; remain in the receive state, and retrieve
-                        more bytes from client. */
-                    handshaker->recv_pos += handshaker->recv_len;
+                /*  Validate the previous recv operation. */
+                nn_assert (handshaker->recv_pos <
+                    sizeof (handshaker->response));
 
-                    /*  Validate the previous recv operation. */
-                    nn_assert (handshaker->recv_pos <
-                        sizeof (handshaker->response));
+                /*  Ensure we can back-track at least the length of the
+                    termination sequence to determine how many bytes to
+                    receive on the next retry. This is an assertion, not
+                    a conditional, since under no condition is it
+                    necessary to initially receive so few bytes. */
+                nn_assert (handshaker->recv_pos >=
+                    (int) NN_WS_HANDSHAKE_TERMSEQ_LEN);
 
-                    /*  Ensure we can back-track at least the length of the
-                        termination sequence to determine how many bytes to
-                        receive on the next retry. This is an assertion, not
-                        a conditional, since under no condition is it
-                        necessary to initially receive so few bytes. */
-                    nn_assert (handshaker->recv_pos >=
-                        (int) NN_WS_HANDSHAKE_TERMSEQ_LEN);
-
-                    /*  If i goes to 0, it no need to compare. */
-                    for (i = NN_WS_HANDSHAKE_TERMSEQ_LEN; i > 0; i--) {
-                        if (memcmp (NN_WS_HANDSHAKE_TERMSEQ,
-                            handshaker->response + handshaker->recv_pos - i,
-                            i) == 0) {
-                            break;
-                        }
+                /*  If i goes to 0, it no need to compare. */
+                for (i = NN_WS_HANDSHAKE_TERMSEQ_LEN; i > 0; i--) {
+                    if (memcmp (NN_WS_HANDSHAKE_TERMSEQ,
+                        handshaker->response + handshaker->recv_pos - i,
+                        i) == 0) {
+                        break;
                     }
+                }
 
-                    nn_assert (i < NN_WS_HANDSHAKE_TERMSEQ_LEN);
+                nn_assert (i < NN_WS_HANDSHAKE_TERMSEQ_LEN);
 
-                    handshaker->recv_len = NN_WS_HANDSHAKE_TERMSEQ_LEN - i;
+                handshaker->recv_len = NN_WS_HANDSHAKE_TERMSEQ_LEN - i;
 
-                    /*  In the unlikely case the client would overflow what we
-                        assumed was a sufficiently-large buffer to receive the
-                        handshake, we fail the connection. */
-                    if (handshaker->recv_len + handshaker->recv_pos >
-                        sizeof (handshaker->response)) {
-                        nn_timer_stop (&handshaker->timer);
-                        handshaker->state =
-                            NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                    }
-                    else {
-                        handshaker->retries++;
-                        nn_utcp_recv (handshaker->usock,
-                            handshaker->response + handshaker->recv_pos,
-                            handshaker->recv_len);
-                    }
-                    return;
-                default:
-                    nn_fsm_error ("Unexpected handshake result",
-                        handshaker->state, src, type);
+                /*  In the unlikely case the client would overflow what we
+                    assumed was a sufficiently-large buffer to receive the
+                    handshake, we fail the connection. */
+                if (handshaker->recv_len + handshaker->recv_pos >
+                    sizeof (handshaker->response)) {
+                    nn_timer_cancel (&handshaker->timer);
+                    handshaker->state =
+                        NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+                }
+                else {
+                    handshaker->retries++;
+                    nn_utcp_recv (handshaker->usock,
+                        handshaker->response + handshaker->recv_pos,
+                        handshaker->recv_len);
                 }
                 return;
-            case NN_STREAM_SHUTDOWN:
-                /*  Ignore it and wait for ERROR event. */
-                return;
-            case NN_STREAM_ERROR:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
             default:
-                nn_fsm_bad_action (handshaker->state, src, type);
+                nn_assert_unreachable_fsm (handshaker->state, type);
             }
-
-        case NN_WS_HANDSHAKE_SRC_TIMER:
-            switch (type) {
-            case NN_TIMER_TIMEOUT:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
+            return;
+        case NN_STREAM_SHUTDOWN:
+            /*  Ignore it and wait for ERROR event. */
+            return;
+        case NN_STREAM_ERROR:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
+        case NN_STREAM_HANDSHAKE_TIMEDOUT:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
         default:
-            nn_fsm_bad_source (handshaker->state, src, type);
+            nn_assert_unreachable_fsm (handshaker->state, type);
         }
 
 /******************************************************************************/
 /*  HANDSHAKE_SENT state.                                                     */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_HANDSHAKE_SENT:
-        switch (src) {
-
-        case NN_WS_HANDSHAKE_SRC_USOCK:
-            switch (type) {
-            case NN_STREAM_SENT:
-                /*  As per RFC 6455 4.2.2, the handshake is now complete
-                    and the connection is immediately ready for send/recv. */
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE;
-                return;
-            case NN_STREAM_SHUTDOWN:
-                /*  Ignore it and wait for ERROR event. */
-                return;
-            case NN_STREAM_ERROR:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
-        case NN_WS_HANDSHAKE_SRC_TIMER:
-            switch (type) {
-            case NN_TIMER_TIMEOUT:
-                nn_timer_stop (&handshaker->timer);
-                handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
+        switch (type) {
+        case NN_STREAM_SENT:
+            /*  As per RFC 6455 4.2.2, the handshake is now complete
+                and the connection is immediately ready for send/recv. */
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE;
+            return;
+        case NN_STREAM_SHUTDOWN:
+            /*  Ignore it and wait for ERROR event. */
+            return;
+        case NN_STREAM_ERROR:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
+        case NN_STREAM_HANDSHAKE_TIMEDOUT:
+            nn_timer_cancel (&handshaker->timer);
+            handshaker->state = NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR;
+            return;
         default:
-            nn_fsm_bad_source (handshaker->state, src, type);
+            nn_assert_unreachable_fsm (handshaker->state, type);
         }
 
 /******************************************************************************/
 /*  STOPPING_TIMER_ERROR state.                                               */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_ERROR:
-        switch (src) {
+        switch (type) {
 
-        case NN_WS_HANDSHAKE_SRC_USOCK:
+        case NN_STREAM_SENT:
             /*  Ignore. The only circumstance the client would send bytes is
                 to notify the server it is closing the connection. Wait for the
                 socket to eventually error. */
             return;
-
-        case NN_WS_HANDSHAKE_SRC_TIMER:
-            switch (type) {
-            case NN_TIMER_STOPPED:
-                nn_ws_handshake_leave (handshaker, NN_WS_HANDSHAKE_ERROR);
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
+        case NN_EVENT_TIMER_STOPPED:
+            nn_ws_handshake_leave (handshaker, NN_WS_HANDSHAKE_ERROR);
+            return;
         default:
-            nn_fsm_bad_source (handshaker->state, src, type);
+            nn_assert_unreachable_fsm (handshaker->state, type);
         }
 
 /******************************************************************************/
 /*  STOPPING_TIMER_DONE state.                                                */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_STOPPING_TIMER_DONE:
-        switch (src) {
+        switch (type) {
 
-        case NN_WS_HANDSHAKE_SRC_USOCK:
+        case NN_STREAM_SENT:
             /*  Ignore. The only circumstance the client would send bytes is
                 to notify the server it is closing the connection. Wait for the
                 socket to eventually error. */
             return;
-
-        case NN_WS_HANDSHAKE_SRC_TIMER:
-            switch (type) {
-            case NN_TIMER_STOPPED:
-                nn_ws_handshake_leave (handshaker, NN_WS_HANDSHAKE_OK);
-                return;
-            default:
-                nn_fsm_bad_action (handshaker->state, src, type);
-            }
-
+        case NN_EVENT_TIMER_STOPPED:
+            nn_ws_handshake_leave (handshaker, NN_WS_HANDSHAKE_OK);
+            return;
         default:
-            nn_fsm_bad_source (handshaker->state, src, type);
+            nn_assert_unreachable_fsm (handshaker->state, type);
         }
 
 /******************************************************************************/
@@ -821,13 +725,13 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 /*  nothing that can be done in this state except stopping the object.        */
 /******************************************************************************/
     case NN_WS_HANDSHAKE_STATE_DONE:
-        nn_fsm_bad_source (handshaker->state, src, type);
+        nn_assert_unreachable_fsm (handshaker->state, type);
 
 /******************************************************************************/
 /*  Invalid state.                                                            */
 /******************************************************************************/
     default:
-        nn_fsm_bad_state (handshaker->state, src, type);
+        nn_assert_unreachable_fsm (handshaker->state, type);
     }
 }
 
@@ -837,10 +741,9 @@ static void nn_ws_handshake_handler (struct nn_fsm *self, int src, int type,
 
 static void nn_ws_handshake_leave (struct nn_ws_handshake *self, int rc)
 {
-    nn_utcp_swap_owner (self->usock, &self->usock_owner);
+    nn_stream_swap_owner (&self->usock->stream, self->owner);
     self->usock = NULL;
-    self->usock_owner.src = -1;
-    self->usock_owner.fsm = NULL;
+    self->owner = NULL;
     self->state = NN_WS_HANDSHAKE_STATE_DONE;
     nn_fsm_raise (&self->fsm, &self->done, rc);
 }

@@ -25,11 +25,10 @@
 #include "sws.h"
 
 #include "../tcp/utcp.h"
+#include "../stream/ustream.h"
 
 #include "../../ws.h"
 #include "../../nn.h"
-
-#include "../../aio/stream.h"
 
 #include "../../utils/alloc.h"
 #include "../../utils/err.h"
@@ -60,10 +59,6 @@
 /*  Possible states of the outbound part of the object. */
 #define NN_SWS_OUTSTATE_IDLE 1
 #define NN_SWS_OUTSTATE_SENDING 2
-
-/*  Subordinate srcptr objects. */
-#define NN_SWS_SRC_USOCK 1
-#define NN_SWS_SRC_HANDSHAKE 2
 
 /*  WebSocket opcode constants as per RFC 6455 5.2. */
 #define NN_WS_OPCODE_FRAGMENT 0x00
@@ -112,10 +107,19 @@ const struct nn_pipebase_vfptr nn_sws_pipebase_vfptr = {
 };
 
 /*  Private functions. */
-static void nn_sws_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr);
-static void nn_sws_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr);
+static void nn_sws_handler (struct nn_fsm *self, int type, void *srcptr);
+static void nn_sws_shutdown (struct nn_fsm *self, int type, void *srcptr);
+
+/*  Allocate a new message chunk, append it to message array, and return
+    pointer to its buffer. */
+void *nn_msg_chunk_new (size_t size, struct nn_list *msg_array);
+
+/*  Deallocate a message chunk and remove it from array. */
+void nn_msg_chunk_term (struct msg_chunk *it, struct nn_list *msg_array);
+
+/*  Deallocate an entire message array. */
+void nn_msg_array_term (struct nn_list *msg_array);
+
 
 /*  Ceases further I/O on the underlying socket and prepares to send a
     close handshake on the next receive. */
@@ -135,18 +139,16 @@ static void nn_sws_validate_utf8_chunk (struct nn_sws *self);
     RFC 6455 section 7. */
 static void nn_sws_acknowledge_close_handshake (struct nn_sws *self);
 
-void nn_sws_init (struct nn_sws *self, int src,
+void nn_sws_init (struct nn_sws *self,
     struct nn_epbase *epbase, struct nn_fsm *owner)
 {
     nn_fsm_init (&self->fsm, nn_sws_handler, nn_sws_shutdown,
-        src, self, owner);
+        self, owner);
     self->state = NN_SWS_STATE_IDLE;
     self->epbase = epbase;
-    nn_ws_handshake_init (&self->handshaker,
-        NN_SWS_SRC_HANDSHAKE, &self->fsm);
+    nn_ws_handshake_init (&self->handshaker, &self->fsm);
     self->usock = NULL;
-    self->usock_owner.src = -1;
-    self->usock_owner.fsm = NULL;
+    self->owner = NULL;
     nn_pipebase_init (&self->pipebase, &nn_sws_pipebase_vfptr, epbase);
     self->instate = -1;
     nn_list_init (&self->inmsg_array);
@@ -184,14 +186,12 @@ int nn_sws_isidle (struct nn_sws *self)
     return nn_fsm_isidle (&self->fsm);
 }
 
-void nn_sws_start (struct nn_sws *self, struct nn_utcp *usock, int mode,
+void nn_sws_start (struct nn_sws *self, struct nn_stream *usock, int mode,
     const char *resource, const char *host, uint8_t msg_type)
 {
     /*  Take ownership of the underlying socket. */
-    nn_assert (self->usock == NULL && self->usock_owner.fsm == NULL);
-    self->usock_owner.src = NN_SWS_SRC_USOCK;
-    self->usock_owner.fsm = &self->fsm;
-    nn_utcp_swap_owner (usock, &self->usock_owner);
+    nn_assert (self->usock == NULL && self->owner == NULL);
+    nn_stream_swap_owner (&usock->stream, self->owner);
     self->usock = usock;
     self->mode = mode;
     self->resource = resource;
@@ -218,7 +218,7 @@ void *nn_msg_chunk_new (size_t size, struct nn_list *msg_array)
     nn_chunkref_init (&self->chunk, size);
     nn_list_item_init (&self->item);
 
-    nn_list_insert (msg_array, &self->item, nn_list_end (msg_array));
+    nn_list_insert_at_end (msg_array, &self->item);
 
     return nn_chunkref_data (&self->chunk);
 }
@@ -838,14 +838,14 @@ static void nn_sws_fail_conn (struct nn_sws *self, int code, char *reason)
     return;
 }
 
-static void nn_sws_shutdown (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_sws_shutdown (struct nn_fsm *self, int type, void *srcptr)
 {
     struct nn_sws *sws;
 
     sws = nn_cont (self, struct nn_sws, fsm);
+    nn_assert (srcptr == NULL);
 
-    if (src == NN_FSM_ACTION && type == NN_FSM_STOP) {
+    if (type == NN_FSM_STOP) {
         /*  TODO: Consider sending a close code here? */
         nn_pipebase_stop (&sws->pipebase);
         nn_ws_handshake_stop (&sws->handshaker);
@@ -853,10 +853,9 @@ static void nn_sws_shutdown (struct nn_fsm *self, int src, int type,
     }
     if (sws->state == NN_SWS_STATE_STOPPING) {
         if (nn_ws_handshake_isidle (&sws->handshaker)) {
-            nn_utcp_swap_owner (sws->usock, &sws->usock_owner);
+            nn_stream_swap_owner (&sws->usock->stream, sws->owner);
             sws->usock = NULL;
-            sws->usock_owner.src = -1;
-            sws->usock_owner.fsm = NULL;
+            sws->owner = NULL;
             sws->state = NN_SWS_STATE_IDLE;
             nn_fsm_stopped (&sws->fsm, NN_SWS_RETURN_STOPPED);
             return;
@@ -864,11 +863,10 @@ static void nn_sws_shutdown (struct nn_fsm *self, int src, int type,
         return;
     }
 
-    nn_fsm_bad_state (sws->state, src, type);
+    nn_assert_unreachable_fsm (sws->state, type);
 }
 
-static void nn_sws_handler (struct nn_fsm *self, int src, int type,
-    NN_UNUSED void *srcptr)
+static void nn_sws_handler (struct nn_fsm *self, int type, void *srcptr)
 {
     struct nn_sws *sws;
     int rc;
@@ -876,6 +874,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
     size_t opt_sz = sizeof (opt);
 
     sws = nn_cont (self, struct nn_sws, fsm);
+    nn_assert (srcptr == NULL);
 
     switch (sws->state) {
 
@@ -883,490 +882,359 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
 /*  IDLE state.                                                               */
 /******************************************************************************/
     case NN_SWS_STATE_IDLE:
-        switch (src) {
-
-        case NN_FSM_ACTION:
-            switch (type) {
-            case NN_FSM_START:
-                nn_ws_handshake_start (&sws->handshaker, sws->usock,
-                    &sws->pipebase, sws->mode, sws->resource, sws->remote_host);
-                sws->state = NN_SWS_STATE_HANDSHAKE;
-                return;
-            default:
-                nn_fsm_bad_action (sws->state, src, type);
-            }
-
-        default:
-            nn_fsm_bad_source (sws->state, src, type);
-        }
+    switch (type) {
+    case NN_FSM_START:
+        nn_ws_handshake_start (&sws->handshaker, sws->usock,
+            &sws->pipebase, sws->mode, sws->resource, sws->remote_host);
+        sws->state = NN_SWS_STATE_HANDSHAKE;
+        return;
+    default:
+        nn_assert_unreachable_fsm (sws->state, type);
+    }
 
 /******************************************************************************/
 /*  HANDSHAKE state.                                                          */
 /******************************************************************************/
     case NN_SWS_STATE_HANDSHAKE:
-        switch (src) {
+        switch (type) {
+        case NN_WS_HANDSHAKE_OK:
 
-        case NN_SWS_SRC_HANDSHAKE:
-            switch (type) {
-            case NN_WS_HANDSHAKE_OK:
+            /*  Before moving to the active state stop the handshake
+                state machine. */
+            nn_ws_handshake_stop (&sws->handshaker);
+            sws->state = NN_SWS_STATE_STOPPING_HANDSHAKE;
+            return;
 
-                /*  Before moving to the active state stop the handshake
-                    state machine. */
-                nn_ws_handshake_stop (&sws->handshaker);
-                sws->state = NN_SWS_STATE_STOPPING_HANDSHAKE;
-                return;
+        case NN_WS_HANDSHAKE_ERROR:
 
-            case NN_WS_HANDSHAKE_ERROR:
-
-                /* Raise the error and move directly to the DONE state.
-                   ws_handshake object will be stopped later on. */
-                sws->state = NN_SWS_STATE_DONE;
-                nn_fsm_raise (&sws->fsm, &sws->done,
-                    NN_SWS_RETURN_CLOSE_HANDSHAKE);
-                return;
-
-            default:
-                nn_fsm_bad_action (sws->state, src, type);
-            }
+            /*  Raise the error and move directly to the DONE state.
+                ws_handshake object will be stopped later on. */
+            sws->state = NN_SWS_STATE_DONE;
+            nn_fsm_raise (&sws->fsm, &sws->done,
+                NN_SWS_RETURN_CLOSE_HANDSHAKE);
+            return;
 
         default:
-            nn_fsm_bad_source (sws->state, src, type);
+            nn_assert_unreachable_fsm (sws->state, type);
         }
 
 /******************************************************************************/
 /*  STOPPING_HANDSHAKE state.                                                 */
 /******************************************************************************/
     case NN_SWS_STATE_STOPPING_HANDSHAKE:
-        switch (src) {
-
-        case NN_SWS_SRC_HANDSHAKE:
-            switch (type) {
-            case NN_WS_HANDSHAKE_STOPPED:
-
-                 /*  Start the pipe. */
-                 rc = nn_pipebase_start (&sws->pipebase);
-                 if (rc < 0) {
-                    sws->state = NN_SWS_STATE_DONE;
-                    nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
-                    return;
-                 }
-
-                 /*  Start receiving a message in asynchronous manner. */
-                 nn_sws_recv_hdr (sws);
-
-                 /*  Mark the pipe as available for sending. */
-                 sws->outstate = NN_SWS_OUTSTATE_IDLE;
-
-                 sws->state = NN_SWS_STATE_ACTIVE;
-                 return;
-
-            default:
-                nn_fsm_bad_action (sws->state, src, type);
+        switch (type) {
+        case NN_WS_HANDSHAKE_STOPPED:
+            /*  Start the pipe. */
+            rc = nn_pipebase_start (&sws->pipebase);
+            if (rc < 0) {
+            sws->state = NN_SWS_STATE_DONE;
+            nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
+            return;
             }
 
+            /*  Start receiving a message in asynchronous manner. */
+            nn_sws_recv_hdr (sws);
+
+            /*  Mark the pipe as available for sending. */
+            sws->outstate = NN_SWS_OUTSTATE_IDLE;
+
+            sws->state = NN_SWS_STATE_ACTIVE;
+            return;
+
         default:
-            nn_fsm_bad_source (sws->state, src, type);
+            nn_assert_unreachable_fsm (sws->state, type);
         }
 
 /******************************************************************************/
 /*  ACTIVE state.                                                             */
 /******************************************************************************/
     case NN_SWS_STATE_ACTIVE:
-        switch (src) {
+        switch (type) {
+        case NN_STREAM_SENT:
 
-        case NN_SWS_SRC_USOCK:
-            switch (type) {
-            case NN_STREAM_SENT:
+            /*  The message is now fully sent. */
+            nn_assert (sws->outstate == NN_SWS_OUTSTATE_SENDING);
+            sws->outstate = NN_SWS_OUTSTATE_IDLE;
+            nn_msg_term (&sws->outmsg);
+            nn_msg_init (&sws->outmsg, 0);
+            nn_pipebase_sent (&sws->pipebase);
+            return;
 
-                /*  The message is now fully sent. */
-                nn_assert (sws->outstate == NN_SWS_OUTSTATE_SENDING);
-                sws->outstate = NN_SWS_OUTSTATE_IDLE;
-                nn_msg_term (&sws->outmsg);
-                nn_msg_init (&sws->outmsg, 0);
-                nn_pipebase_sent (&sws->pipebase);
-                return;
+        case NN_STREAM_RECEIVED:
 
-            case NN_STREAM_RECEIVED:
+            switch (sws->instate) {
+            case NN_SWS_INSTATE_RECV_HDR:
 
-                switch (sws->instate) {
-                case NN_SWS_INSTATE_RECV_HDR:
+                /*  Require RSV1, RSV2, and RSV3 bits to be unset for
+                    x-nanomsg protocol as per RFC 6455 section 5.2. */
+                if (sws->inhdr [0] & NN_SWS_FRAME_BITMASK_RSV1 ||
+                    sws->inhdr [0] & NN_SWS_FRAME_BITMASK_RSV2 ||
+                    sws->inhdr [0] & NN_SWS_FRAME_BITMASK_RSV3) {
+                    nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                        "RSV1, RSV2, and RSV3 must be unset.");
+                    return;
+                }
 
-                    /*  Require RSV1, RSV2, and RSV3 bits to be unset for
-                        x-nanomsg protocol as per RFC 6455 section 5.2. */
-                    if (sws->inhdr [0] & NN_SWS_FRAME_BITMASK_RSV1 ||
-                        sws->inhdr [0] & NN_SWS_FRAME_BITMASK_RSV2 ||
-                        sws->inhdr [0] & NN_SWS_FRAME_BITMASK_RSV3) {
-                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                            "RSV1, RSV2, and RSV3 must be unset.");
-                        return;
-                    }
+                sws->is_final_frame = sws->inhdr [0] &
+                    NN_SWS_FRAME_BITMASK_FIN;
+                sws->masked = sws->inhdr [1] &
+                    NN_SWS_FRAME_BITMASK_MASKED;
 
-                    sws->is_final_frame = sws->inhdr [0] &
-                        NN_SWS_FRAME_BITMASK_FIN;
-                    sws->masked = sws->inhdr [1] &
-                        NN_SWS_FRAME_BITMASK_MASKED;
-
-                    switch (sws->mode) {
-                    case NN_WS_SERVER:
-                        /*  Require mask bit to be set from client. */
-                        if (sws->masked) {
-                            /*  Continue receiving header for this frame. */
-                            sws->ext_hdr_len = NN_SWS_FRAME_SIZE_MASK;
-                            break;
-                        }
-                        else {
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Server expects MASK bit to be set.");
-                            return;
-                        }
-                    case NN_WS_CLIENT:
-                        /*  Require mask bit to be unset from server. */
-                        if (sws->masked) {
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Client expects MASK bit to be unset.");
-                            return;
-                        }
-                        else {
-                            /*  Continue receiving header for this frame. */
-                            sws->ext_hdr_len = 0;
-                            break;
-                        }
-                    default:
-                        nn_assert_unreachable ("Unexpected [mode] value.");
-                        return;
-                    }
-
-                    sws->opcode = sws->inhdr [0] &
-                        NN_SWS_FRAME_BITMASK_OPCODE;
-                    sws->payload_ctl = sws->inhdr [1] &
-                        NN_SWS_FRAME_BITMASK_LENGTH;
-
-                    /*  Prevent unexpected continuation frame. */
-                    if (!sws->continuing &&
-                        sws->opcode == NN_WS_OPCODE_FRAGMENT) {
-                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                            "No message to continue.");
-                        return;
-                    }
-
-                    /*  Preserve initial message opcode and RSV bits in case
-                        this is a fragmented message. */
-                    if (!sws->continuing)
-                        sws->inmsg_hdr = sws->inhdr [0] |
-                        NN_SWS_FRAME_BITMASK_FIN;
-
-                    if (sws->payload_ctl <= NN_SWS_PAYLOAD_MAX_LENGTH) {
-                        sws->ext_hdr_len += NN_SWS_FRAME_SIZE_PAYLOAD_0;
-                    }
-                    else if (sws->payload_ctl == NN_SWS_PAYLOAD_FRAME_16) {
-                        sws->ext_hdr_len += NN_SWS_FRAME_SIZE_PAYLOAD_16;
-                    }
-                    else if (sws->payload_ctl == NN_SWS_PAYLOAD_FRAME_63) {
-                        sws->ext_hdr_len += NN_SWS_FRAME_SIZE_PAYLOAD_63;
+                switch (sws->mode) {
+                case NN_WS_SERVER:
+                    /*  Require mask bit to be set from client. */
+                    if (sws->masked) {
+                        /*  Continue receiving header for this frame. */
+                        sws->ext_hdr_len = NN_SWS_FRAME_SIZE_MASK;
+                        break;
                     }
                     else {
-                        nn_assert_unreachable ("Unexpected [ext_hdr_len] value.");
-                        return;
-                    }
-
-                    switch (sws->opcode) {
-
-                    case NN_WS_OPCODE_TEXT:
-                        /*  Fall thru; TEXT and BINARY handled alike. */
-                    case NN_WS_OPCODE_BINARY:
-
-                        sws->is_control_frame = 0;
-
-                        if (sws->continuing) {
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Expected continuation frame opcode.");
-                            return;
-                        }
-
-                        if (!sws->is_final_frame)
-                            sws->continuing = 1;
-
-                        if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
-                            /*  Only a remote server could send a 2-byte msg;
-                                sanity-check that this endpoint is a client. */
-                            nn_assert (sws->mode == NN_WS_CLIENT);
-
-                            sws->inmsg_current_chunk_len = 0;
-
-                            if (sws->continuing) {
-                                /*  This frame was empty, but continue
-                                    next frame in fragmented sequence. */
-                                nn_sws_recv_hdr (sws);
-                                return;
-                            }
-                            else {
-                                /*  Special case when there is no payload,
-                                    mask, or additional frames. */
-                                sws->instate = NN_SWS_INSTATE_RECVD_CHUNKED;
-                                nn_pipebase_received (&sws->pipebase);
-                                return;
-                            }
-                            }
-                        /*  Continue to receive extended header+payload. */
-                        break;
-
-                    case NN_WS_OPCODE_FRAGMENT:
-
-                        sws->is_control_frame = 0;
-                        sws->continuing = !sws->is_final_frame;
-
-                        if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
-                            /*  Only a remote server could send a 2-byte msg;
-                                sanity-check that this endpoint is a client. */
-                            nn_assert (sws->mode == NN_WS_CLIENT);
-
-                            sws->inmsg_current_chunk_len = 0;
-
-                            if (sws->continuing) {
-                                /*  This frame was empty, but continue
-                                    next frame in fragmented sequence. */
-                                nn_sws_recv_hdr (sws);
-                                return;
-                            }
-                            else {
-                                /*  Special case when there is no payload,
-                                    mask, or additional frames. */
-                                sws->instate = NN_SWS_INSTATE_RECVD_CHUNKED;
-                                nn_pipebase_received (&sws->pipebase);
-                                return;
-                            }
-                        }
-                        /*  Continue to receive extended header+payload. */
-                        break;
-
-                    case NN_WS_OPCODE_PING:
-                        sws->is_control_frame = 1;
-                        sws->pings_received++;
-                        if (sws->payload_ctl > NN_SWS_PAYLOAD_MAX_LENGTH) {
-                            /*  As per RFC 6455 section 5.4, large payloads on
-                                control frames is not allowed, and on receipt the
-                                endpoint MUST close connection immediately. */
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Control frame payload exceeds allowable length.");
-                            return;
-                        }
-                        if (!sws->is_final_frame) {
-                            /*  As per RFC 6455 section 5.4, fragmentation of
-                                control frames is not allowed; on receipt the
-                                endpoint MUST close connection immediately. */
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Cannot fragment control message (FIN=0).");
-                            return;
-                        }
-
-                        if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
-                            /*  Special case when there is no payload,
-                                mask, or additional frames. */
-                            sws->inmsg_current_chunk_len = 0;
-                            sws->instate = NN_SWS_INSTATE_RECVD_CONTROL;
-                            nn_pipebase_received (&sws->pipebase);
-                            return;
-                        }
-                        /*  Continue to receive extended header+payload. */
-                        break;
-
-                    case NN_WS_OPCODE_PONG:
-                        sws->is_control_frame = 1;
-                        sws->pongs_received++;
-                        if (sws->payload_ctl > NN_SWS_PAYLOAD_MAX_LENGTH) {
-                            /*  As per RFC 6455 section 5.4, large payloads on
-                                control frames is not allowed, and on receipt the
-                                endpoint MUST close connection immediately. */
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Control frame payload exceeds allowable length.");
-                            return;
-                        }
-                        if (!sws->is_final_frame) {
-                            /*  As per RFC 6455 section 5.4, fragmentation of
-                                control frames is not allowed; on receipt the
-                                endpoint MUST close connection immediately. */
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Cannot fragment control message (FIN=0).");
-                            return;
-                        }
-
-                        if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
-                            /*  Special case when there is no payload,
-                                mask, or additional frames. */
-                            sws->inmsg_current_chunk_len = 0;
-                            sws->instate = NN_SWS_INSTATE_RECVD_CONTROL;
-                            nn_pipebase_received (&sws->pipebase);
-                            return;
-                        }
-                        /*  Continue to receive extended header+payload. */
-                        break;
-
-                    case NN_WS_OPCODE_CLOSE:
-                        /*  RFC 6455 section 5.5.1. */
-                        sws->is_control_frame = 1;
-                        if (!sws->is_final_frame) {
-                            /*  As per RFC 6455 section 5.4, fragmentation of
-                                control frames is not allowed; on receipt the
-                                endpoint MUST close connection immediately. */
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Cannot fragment control message (FIN=0).");
-                            return;
-                        }
-
-                        if (sws->payload_ctl > NN_SWS_PAYLOAD_MAX_LENGTH) {
-                            /*  As per RFC 6455 section 5.4, large payloads on
-                                control frames is not allowed, and on receipt the
-                                endpoint MUST close connection immediately. */
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Control frame payload exceeds allowable length.");
-                            return;
-                        }
-
-                        if (sws->payload_ctl == 1) {
-                            /*  As per RFC 6455 section 5.5.1, if a payload is
-                                to accompany a close frame, the first two bytes
-                                MUST be the close code. */
-                            nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Expected 2byte close code.");
-                            return;
-                        }
-
-                        if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
-                            /*  Special case when there is no payload,
-                                mask, or additional frames. */
-                            sws->inmsg_current_chunk_len = 0;
-                            nn_sws_acknowledge_close_handshake (sws);
-                            return;
-                        }
-                        /*  Continue to receive extended header+payload. */
-                        break;
-
-                    default:
-                        /*  Client sent an invalid opcode; as per RFC 6455
-                            section 10.7, close connection with code. */
                         nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Invalid opcode.");
+                            "Server expects MASK bit to be set.");
                         return;
+                    }
+                case NN_WS_CLIENT:
+                    /*  Require mask bit to be unset from server. */
+                    if (sws->masked) {
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Client expects MASK bit to be unset.");
+                        return;
+                    }
+                    else {
+                        /*  Continue receiving header for this frame. */
+                        sws->ext_hdr_len = 0;
+                        break;
+                    }
+                default:
+                    nn_assert_unreachable ("Unexpected [mode] value.");
+                    return;
+                }
 
+                sws->opcode = sws->inhdr [0] &
+                    NN_SWS_FRAME_BITMASK_OPCODE;
+                sws->payload_ctl = sws->inhdr [1] &
+                    NN_SWS_FRAME_BITMASK_LENGTH;
+
+                /*  Prevent unexpected continuation frame. */
+                if (!sws->continuing &&
+                    sws->opcode == NN_WS_OPCODE_FRAGMENT) {
+                    nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                        "No message to continue.");
+                    return;
+                }
+
+                /*  Preserve initial message opcode and RSV bits in case
+                    this is a fragmented message. */
+                if (!sws->continuing)
+                    sws->inmsg_hdr = sws->inhdr [0] |
+                    NN_SWS_FRAME_BITMASK_FIN;
+
+                if (sws->payload_ctl <= NN_SWS_PAYLOAD_MAX_LENGTH) {
+                    sws->ext_hdr_len += NN_SWS_FRAME_SIZE_PAYLOAD_0;
+                }
+                else if (sws->payload_ctl == NN_SWS_PAYLOAD_FRAME_16) {
+                    sws->ext_hdr_len += NN_SWS_FRAME_SIZE_PAYLOAD_16;
+                }
+                else if (sws->payload_ctl == NN_SWS_PAYLOAD_FRAME_63) {
+                    sws->ext_hdr_len += NN_SWS_FRAME_SIZE_PAYLOAD_63;
+                }
+                else {
+                    nn_assert_unreachable ("Unexpected [ext_hdr_len] value.");
+                    return;
+                }
+
+                switch (sws->opcode) {
+
+                case NN_WS_OPCODE_TEXT:
+                    /*  Fall thru; TEXT and BINARY handled alike. */
+                case NN_WS_OPCODE_BINARY:
+
+                    sws->is_control_frame = 0;
+
+                    if (sws->continuing) {
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Expected continuation frame opcode.");
+                        return;
                     }
 
-                    if (sws->ext_hdr_len == 0) {
+                    if (!sws->is_final_frame)
+                        sws->continuing = 1;
+
+                    if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
                         /*  Only a remote server could send a 2-byte msg;
                             sanity-check that this endpoint is a client. */
                         nn_assert (sws->mode == NN_WS_CLIENT);
 
-                        /*  In the case of no additional header, the payload
-                            is known to be within these bounds. */
-                        nn_assert (0 < sws->payload_ctl &&
-                            sws->payload_ctl <= NN_SWS_PAYLOAD_MAX_LENGTH);
+                        sws->inmsg_current_chunk_len = 0;
 
-                        sws->inmsg_current_chunk_len = sws->payload_ctl;
-
-                        /*  Use scatter/gather array for application messages,
-                            and a fixed-width buffer for control messages. This
-                            is convenient since control messages can be
-                            interspersed between chunked application msgs. */
-                        if (sws->is_control_frame) {
-                            sws->inmsg_current_chunk_buf = sws->inmsg_control;
-                        }
-                        else {
-                            sws->inmsg_total_size += sws->inmsg_current_chunk_len;
-                            /*  Protect non-control messages against the
-                                NN_RCVMAXSIZE threshold; control messages already
-                                have a small pre-allocated buffer, and therefore
-                                are not subject to this limit. */
-                            nn_pipebase_getopt (&sws->pipebase, NN_SOL_SOCKET,
-                                NN_RCVMAXSIZE, &opt, &opt_sz);
-                            if (opt >= 0 && sws->inmsg_total_size > (size_t) opt) {
-                                nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_TOOBIG,
-                                    "Message larger than application allows.");
-                                return;
-                            }
-                            sws->inmsg_chunks++;
-                            sws->inmsg_current_chunk_buf =
-                                nn_msg_chunk_new (sws->inmsg_current_chunk_len,
-                                &sws->inmsg_array);
-                        }
-
-                        sws->instate = NN_SWS_INSTATE_RECV_PAYLOAD;
-                        nn_utcp_recv (sws->usock, sws->inmsg_current_chunk_buf,
-                            sws->inmsg_current_chunk_len);
-                        return;
-                    }
-                    else {
-                        /*  Continue receiving the rest of the header frame. */
-                        sws->instate = NN_SWS_INSTATE_RECV_HDREXT;
-                        nn_utcp_recv (sws->usock,
-                            sws->inhdr + NN_SWS_FRAME_SIZE_INITIAL,
-                            sws->ext_hdr_len);
-                        return;
-                    }
-
-                case NN_SWS_INSTATE_RECV_HDREXT:
-                    nn_assert (sws->ext_hdr_len > 0);
-
-                    if (sws->payload_ctl <= NN_SWS_PAYLOAD_MAX_LENGTH) {
-                        sws->inmsg_current_chunk_len = sws->payload_ctl;
-                        if (sws->masked) {
-                            sws->mask = sws->inhdr + NN_SWS_FRAME_SIZE_INITIAL;
-                        }
-                        else {
-                            sws->mask = NULL;
-                        }
-                    }
-                    else if (sws->payload_ctl == NN_SWS_PAYLOAD_FRAME_16) {
-                        sws->inmsg_current_chunk_len =
-                            nn_gets (sws->inhdr + NN_SWS_FRAME_SIZE_INITIAL);
-                        if (sws->masked) {
-                            sws->mask = sws->inhdr +
-                                NN_SWS_FRAME_SIZE_INITIAL +
-                                NN_SWS_FRAME_SIZE_PAYLOAD_16;
-                        }
-                        else {
-                            sws->mask = NULL;
-                        }
-                    }
-                    else if (sws->payload_ctl == NN_SWS_PAYLOAD_FRAME_63) {
-                        sws->inmsg_current_chunk_len =
-                            (size_t) nn_getll (sws->inhdr +
-                            NN_SWS_FRAME_SIZE_INITIAL);
-                        if (sws->masked) {
-                            sws->mask = sws->inhdr +
-                                NN_SWS_FRAME_SIZE_INITIAL +
-                                NN_SWS_FRAME_SIZE_PAYLOAD_63;
-                        }
-                        else {
-                            sws->mask = NULL;
-                        }
-                    }
-                    else {
-                        /*  Client sent invalid data; as per RFC 6455,
-                            server closes the connection immediately. */
-                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
-                                "Invalid payload length.");
-                        return;
-                    }
-
-                    /*  Handle zero-length message bodies. */
-                    if (sws->inmsg_current_chunk_len == 0) {
-                        if (sws->is_final_frame) {
-                            if (sws->opcode == NN_WS_OPCODE_CLOSE) {
-                                nn_sws_acknowledge_close_handshake (sws);
-                            }
-                            else {
-                                sws->instate = (sws->is_control_frame ?
-                                    NN_SWS_INSTATE_RECVD_CONTROL :
-                                    NN_SWS_INSTATE_RECVD_CHUNKED);
-                                nn_pipebase_received (&sws->pipebase);
-                            }
-                        }
-                        else {
+                        if (sws->continuing) {
+                            /*  This frame was empty, but continue
+                                next frame in fragmented sequence. */
                             nn_sws_recv_hdr (sws);
+                            return;
                         }
+                        else {
+                            /*  Special case when there is no payload,
+                                mask, or additional frames. */
+                            sws->instate = NN_SWS_INSTATE_RECVD_CHUNKED;
+                            nn_pipebase_received (&sws->pipebase);
+                            return;
+                        }
+                        }
+                    /*  Continue to receive extended header+payload. */
+                    break;
+
+                case NN_WS_OPCODE_FRAGMENT:
+
+                    sws->is_control_frame = 0;
+                    sws->continuing = !sws->is_final_frame;
+
+                    if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
+                        /*  Only a remote server could send a 2-byte msg;
+                            sanity-check that this endpoint is a client. */
+                        nn_assert (sws->mode == NN_WS_CLIENT);
+
+                        sws->inmsg_current_chunk_len = 0;
+
+                        if (sws->continuing) {
+                            /*  This frame was empty, but continue
+                                next frame in fragmented sequence. */
+                            nn_sws_recv_hdr (sws);
+                            return;
+                        }
+                        else {
+                            /*  Special case when there is no payload,
+                                mask, or additional frames. */
+                            sws->instate = NN_SWS_INSTATE_RECVD_CHUNKED;
+                            nn_pipebase_received (&sws->pipebase);
+                            return;
+                        }
+                    }
+                    /*  Continue to receive extended header+payload. */
+                    break;
+
+                case NN_WS_OPCODE_PING:
+                    sws->is_control_frame = 1;
+                    sws->pings_received++;
+                    if (sws->payload_ctl > NN_SWS_PAYLOAD_MAX_LENGTH) {
+                        /*  As per RFC 6455 section 5.4, large payloads on
+                            control frames is not allowed, and on receipt the
+                            endpoint MUST close connection immediately. */
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Control frame payload exceeds allowable length.");
+                        return;
+                    }
+                    if (!sws->is_final_frame) {
+                        /*  As per RFC 6455 section 5.4, fragmentation of
+                            control frames is not allowed; on receipt the
+                            endpoint MUST close connection immediately. */
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Cannot fragment control message (FIN=0).");
                         return;
                     }
 
-                    nn_assert (sws->inmsg_current_chunk_len > 0);
+                    if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
+                        /*  Special case when there is no payload,
+                            mask, or additional frames. */
+                        sws->inmsg_current_chunk_len = 0;
+                        sws->instate = NN_SWS_INSTATE_RECVD_CONTROL;
+                        nn_pipebase_received (&sws->pipebase);
+                        return;
+                    }
+                    /*  Continue to receive extended header+payload. */
+                    break;
+
+                case NN_WS_OPCODE_PONG:
+                    sws->is_control_frame = 1;
+                    sws->pongs_received++;
+                    if (sws->payload_ctl > NN_SWS_PAYLOAD_MAX_LENGTH) {
+                        /*  As per RFC 6455 section 5.4, large payloads on
+                            control frames is not allowed, and on receipt the
+                            endpoint MUST close connection immediately. */
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Control frame payload exceeds allowable length.");
+                        return;
+                    }
+                    if (!sws->is_final_frame) {
+                        /*  As per RFC 6455 section 5.4, fragmentation of
+                            control frames is not allowed; on receipt the
+                            endpoint MUST close connection immediately. */
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Cannot fragment control message (FIN=0).");
+                        return;
+                    }
+
+                    if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
+                        /*  Special case when there is no payload,
+                            mask, or additional frames. */
+                        sws->inmsg_current_chunk_len = 0;
+                        sws->instate = NN_SWS_INSTATE_RECVD_CONTROL;
+                        nn_pipebase_received (&sws->pipebase);
+                        return;
+                    }
+                    /*  Continue to receive extended header+payload. */
+                    break;
+
+                case NN_WS_OPCODE_CLOSE:
+                    /*  RFC 6455 section 5.5.1. */
+                    sws->is_control_frame = 1;
+                    if (!sws->is_final_frame) {
+                        /*  As per RFC 6455 section 5.4, fragmentation of
+                            control frames is not allowed; on receipt the
+                            endpoint MUST close connection immediately. */
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Cannot fragment control message (FIN=0).");
+                        return;
+                    }
+
+                    if (sws->payload_ctl > NN_SWS_PAYLOAD_MAX_LENGTH) {
+                        /*  As per RFC 6455 section 5.4, large payloads on
+                            control frames is not allowed, and on receipt the
+                            endpoint MUST close connection immediately. */
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Control frame payload exceeds allowable length.");
+                        return;
+                    }
+
+                    if (sws->payload_ctl == 1) {
+                        /*  As per RFC 6455 section 5.5.1, if a payload is
+                            to accompany a close frame, the first two bytes
+                            MUST be the close code. */
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Expected 2byte close code.");
+                        return;
+                    }
+
+                    if (sws->ext_hdr_len == 0 && sws->payload_ctl == 0) {
+                        /*  Special case when there is no payload,
+                            mask, or additional frames. */
+                        sws->inmsg_current_chunk_len = 0;
+                        nn_sws_acknowledge_close_handshake (sws);
+                        return;
+                    }
+                    /*  Continue to receive extended header+payload. */
+                    break;
+
+                default:
+                    /*  Client sent an invalid opcode; as per RFC 6455
+                        section 10.7, close connection with code. */
+                    nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Invalid opcode.");
+                    return;
+
+                }
+
+                if (sws->ext_hdr_len == 0) {
+                    /*  Only a remote server could send a 2-byte msg;
+                        sanity-check that this endpoint is a client. */
+                    nn_assert (sws->mode == NN_WS_CLIENT);
+
+                    /*  In the case of no additional header, the payload
+                        is known to be within these bounds. */
+                    nn_assert (0 < sws->payload_ctl &&
+                        sws->payload_ctl <= NN_SWS_PAYLOAD_MAX_LENGTH);
+
+                    sws->inmsg_current_chunk_len = sws->payload_ctl;
 
                     /*  Use scatter/gather array for application messages,
                         and a fixed-width buffer for control messages. This
@@ -1385,7 +1253,7 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                             NN_RCVMAXSIZE, &opt, &opt_sz);
                         if (opt >= 0 && sws->inmsg_total_size > (size_t) opt) {
                             nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_TOOBIG,
-                                "Message size exceeds limit.");
+                                "Message larger than application allows.");
                             return;
                         }
                         sws->inmsg_chunks++;
@@ -1398,91 +1266,192 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
                     nn_utcp_recv (sws->usock, sws->inmsg_current_chunk_buf,
                         sws->inmsg_current_chunk_len);
                     return;
-
-                case NN_SWS_INSTATE_RECV_PAYLOAD:
-
-                    /*  Unmask if necessary. */
-                    if (sws->masked) {
-                        nn_sws_mask_payload (sws->inmsg_current_chunk_buf,
-                            sws->inmsg_current_chunk_len, sws->mask,
-                            NN_SWS_FRAME_SIZE_MASK, NULL);
-                    }
-
-                    switch (sws->opcode) {
-
-                    case NN_WS_OPCODE_TEXT:
-                        nn_sws_validate_utf8_chunk (sws);
-                        return;
-
-                    case NN_WS_OPCODE_BINARY:
-                        if (sws->is_final_frame) {
-                            sws->instate = NN_SWS_INSTATE_RECVD_CHUNKED;
-                            nn_pipebase_received (&sws->pipebase);
-                        }
-                        else {
-                            nn_sws_recv_hdr (sws);
-                        }
-                        return;
-
-                    case NN_WS_OPCODE_FRAGMENT:
-                        /*  Must check original opcode to see if this fragment
-                            needs UTF-8 validation. */
-                        if ((sws->inmsg_hdr & NN_SWS_FRAME_BITMASK_OPCODE) ==
-                            NN_WS_OPCODE_TEXT) {
-                            nn_sws_validate_utf8_chunk (sws);
-                        }
-                        else if (sws->is_final_frame) {
-                            sws->instate = NN_SWS_INSTATE_RECVD_CHUNKED;
-                            nn_pipebase_received (&sws->pipebase);
-                        }
-                        else {
-                            nn_sws_recv_hdr (sws);
-                        }
-                        return;
-
-                    case NN_WS_OPCODE_PING:
-                        sws->instate = NN_SWS_INSTATE_RECVD_CONTROL;
-                        nn_pipebase_received (&sws->pipebase);
-                        return;
-
-                    case NN_WS_OPCODE_PONG:
-                        sws->instate = NN_SWS_INSTATE_RECVD_CONTROL;
-                        nn_pipebase_received (&sws->pipebase);
-                        return;
-
-                    case NN_WS_OPCODE_CLOSE:
-                        nn_sws_acknowledge_close_handshake (sws);
-                        return;
-
-                    default:
-                        nn_assert_unreachable ("Unexpected [opcode] value.");
-                        return;
-                    }
-
-                default:
-                    nn_fsm_error ("Unexpected socket instate",
-                        sws->state, src, type);
+                }
+                else {
+                    /*  Continue receiving the rest of the header frame. */
+                    sws->instate = NN_SWS_INSTATE_RECV_HDREXT;
+                    nn_utcp_recv (sws->usock,
+                        sws->inhdr + NN_SWS_FRAME_SIZE_INITIAL,
+                        sws->ext_hdr_len);
+                    return;
                 }
 
-            case NN_STREAM_SHUTDOWN:
-                nn_pipebase_stop (&sws->pipebase);
-                sws->state = NN_SWS_STATE_BROKEN_CONNECTION;
+            case NN_SWS_INSTATE_RECV_HDREXT:
+                nn_assert (sws->ext_hdr_len > 0);
+
+                if (sws->payload_ctl <= NN_SWS_PAYLOAD_MAX_LENGTH) {
+                    sws->inmsg_current_chunk_len = sws->payload_ctl;
+                    if (sws->masked) {
+                        sws->mask = sws->inhdr + NN_SWS_FRAME_SIZE_INITIAL;
+                    }
+                    else {
+                        sws->mask = NULL;
+                    }
+                }
+                else if (sws->payload_ctl == NN_SWS_PAYLOAD_FRAME_16) {
+                    sws->inmsg_current_chunk_len =
+                        nn_gets (sws->inhdr + NN_SWS_FRAME_SIZE_INITIAL);
+                    if (sws->masked) {
+                        sws->mask = sws->inhdr +
+                            NN_SWS_FRAME_SIZE_INITIAL +
+                            NN_SWS_FRAME_SIZE_PAYLOAD_16;
+                    }
+                    else {
+                        sws->mask = NULL;
+                    }
+                }
+                else if (sws->payload_ctl == NN_SWS_PAYLOAD_FRAME_63) {
+                    sws->inmsg_current_chunk_len =
+                        (size_t) nn_getll (sws->inhdr +
+                        NN_SWS_FRAME_SIZE_INITIAL);
+                    if (sws->masked) {
+                        sws->mask = sws->inhdr +
+                            NN_SWS_FRAME_SIZE_INITIAL +
+                            NN_SWS_FRAME_SIZE_PAYLOAD_63;
+                    }
+                    else {
+                        sws->mask = NULL;
+                    }
+                }
+                else {
+                    /*  Client sent invalid data; as per RFC 6455,
+                        server closes the connection immediately. */
+                    nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_PROTO,
+                            "Invalid payload length.");
+                    return;
+                }
+
+                /*  Handle zero-length message bodies. */
+                if (sws->inmsg_current_chunk_len == 0) {
+                    if (sws->is_final_frame) {
+                        if (sws->opcode == NN_WS_OPCODE_CLOSE) {
+                            nn_sws_acknowledge_close_handshake (sws);
+                        }
+                        else {
+                            sws->instate = (sws->is_control_frame ?
+                                NN_SWS_INSTATE_RECVD_CONTROL :
+                                NN_SWS_INSTATE_RECVD_CHUNKED);
+                            nn_pipebase_received (&sws->pipebase);
+                        }
+                    }
+                    else {
+                        nn_sws_recv_hdr (sws);
+                    }
+                    return;
+                }
+
+                nn_assert (sws->inmsg_current_chunk_len > 0);
+
+                /*  Use scatter/gather array for application messages,
+                    and a fixed-width buffer for control messages. This
+                    is convenient since control messages can be
+                    interspersed between chunked application msgs. */
+                if (sws->is_control_frame) {
+                    sws->inmsg_current_chunk_buf = sws->inmsg_control;
+                }
+                else {
+                    sws->inmsg_total_size += sws->inmsg_current_chunk_len;
+                    /*  Protect non-control messages against the
+                        NN_RCVMAXSIZE threshold; control messages already
+                        have a small pre-allocated buffer, and therefore
+                        are not subject to this limit. */
+                    nn_pipebase_getopt (&sws->pipebase, NN_SOL_SOCKET,
+                        NN_RCVMAXSIZE, &opt, &opt_sz);
+                    if (opt >= 0 && sws->inmsg_total_size > (size_t) opt) {
+                        nn_sws_fail_conn (sws, NN_SWS_CLOSE_ERR_TOOBIG,
+                            "Message size exceeds limit.");
+                        return;
+                    }
+                    sws->inmsg_chunks++;
+                    sws->inmsg_current_chunk_buf =
+                        nn_msg_chunk_new (sws->inmsg_current_chunk_len,
+                        &sws->inmsg_array);
+                }
+
+                sws->instate = NN_SWS_INSTATE_RECV_PAYLOAD;
+                nn_utcp_recv (sws->usock, sws->inmsg_current_chunk_buf,
+                    sws->inmsg_current_chunk_len);
                 return;
 
-            case NN_STREAM_ERROR:
-                nn_pipebase_stop (&sws->pipebase);
-                sws->state = NN_SWS_STATE_DONE;
-                nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
-                return;
+            case NN_SWS_INSTATE_RECV_PAYLOAD:
+
+                /*  Unmask if necessary. */
+                if (sws->masked) {
+                    nn_sws_mask_payload (sws->inmsg_current_chunk_buf,
+                        sws->inmsg_current_chunk_len, sws->mask,
+                        NN_SWS_FRAME_SIZE_MASK, NULL);
+                }
+
+                switch (sws->opcode) {
+
+                case NN_WS_OPCODE_TEXT:
+                    nn_sws_validate_utf8_chunk (sws);
+                    return;
+
+                case NN_WS_OPCODE_BINARY:
+                    if (sws->is_final_frame) {
+                        sws->instate = NN_SWS_INSTATE_RECVD_CHUNKED;
+                        nn_pipebase_received (&sws->pipebase);
+                    }
+                    else {
+                        nn_sws_recv_hdr (sws);
+                    }
+                    return;
+
+                case NN_WS_OPCODE_FRAGMENT:
+                    /*  Must check original opcode to see if this fragment
+                        needs UTF-8 validation. */
+                    if ((sws->inmsg_hdr & NN_SWS_FRAME_BITMASK_OPCODE) ==
+                        NN_WS_OPCODE_TEXT) {
+                        nn_sws_validate_utf8_chunk (sws);
+                    }
+                    else if (sws->is_final_frame) {
+                        sws->instate = NN_SWS_INSTATE_RECVD_CHUNKED;
+                        nn_pipebase_received (&sws->pipebase);
+                    }
+                    else {
+                        nn_sws_recv_hdr (sws);
+                    }
+                    return;
+
+                case NN_WS_OPCODE_PING:
+                    sws->instate = NN_SWS_INSTATE_RECVD_CONTROL;
+                    nn_pipebase_received (&sws->pipebase);
+                    return;
+
+                case NN_WS_OPCODE_PONG:
+                    sws->instate = NN_SWS_INSTATE_RECVD_CONTROL;
+                    nn_pipebase_received (&sws->pipebase);
+                    return;
+
+                case NN_WS_OPCODE_CLOSE:
+                    nn_sws_acknowledge_close_handshake (sws);
+                    return;
+
+                default:
+                    nn_assert_unreachable ("Unexpected [opcode] value.");
+                    return;
+                }
 
             default:
-                nn_fsm_bad_action (sws->state, src, type);
+                nn_assert_unreachable ("Unexpected [instate] value.");
+                return;
             }
 
-            break;
+        case NN_STREAM_SHUTDOWN:
+            nn_pipebase_stop (&sws->pipebase);
+            sws->state = NN_SWS_STATE_BROKEN_CONNECTION;
+            return;
+
+        case NN_STREAM_ERROR:
+            nn_pipebase_stop (&sws->pipebase);
+            sws->state = NN_SWS_STATE_DONE;
+            nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
+            return;
 
         default:
-            nn_fsm_bad_source (sws->state, src, type);
+            nn_assert_unreachable_fsm (sws->state, type);
+            return;
         }
 
 /******************************************************************************/
@@ -1490,31 +1459,24 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
 /*  Wait for acknowledgement closing handshake was successfully sent.         */
 /******************************************************************************/
     case NN_SWS_STATE_CLOSING_CONNECTION:
-        switch (src) {
-
-        case NN_SWS_SRC_USOCK:
-            switch (type) {
-            case NN_STREAM_SENT:
-                /*  Wait for acknowledgement closing handshake was sent
-                    to peer. */
-                nn_assert (sws->outstate == NN_SWS_OUTSTATE_SENDING);
-                sws->outstate = NN_SWS_OUTSTATE_IDLE;
-                sws->state = NN_SWS_STATE_DONE;
-                nn_fsm_raise (&sws->fsm, &sws->done,
-                    NN_SWS_RETURN_CLOSE_HANDSHAKE);
-                return;
-            case NN_STREAM_SHUTDOWN:
-                return;
-            case NN_STREAM_ERROR:
-                sws->state = NN_SWS_STATE_DONE;
-                nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
-                return;
-            default:
-                nn_fsm_bad_action (sws->state, src, type);
-            }
-
+        switch (type) {
+        case NN_STREAM_SENT:
+            /*  Wait for acknowledgement closing handshake was sent
+                to peer. */
+            nn_assert (sws->outstate == NN_SWS_OUTSTATE_SENDING);
+            sws->outstate = NN_SWS_OUTSTATE_IDLE;
+            sws->state = NN_SWS_STATE_DONE;
+            nn_fsm_raise (&sws->fsm, &sws->done,
+                NN_SWS_RETURN_CLOSE_HANDSHAKE);
+            return;
+        case NN_STREAM_SHUTDOWN:
+            return;
+        case NN_STREAM_ERROR:
+            sws->state = NN_SWS_STATE_DONE;
+            nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
+            return;
         default:
-            nn_fsm_bad_source (sws->state, src, type);
+            nn_assert_unreachable_fsm (sws->state, type);
         }
 
 /******************************************************************************/
@@ -1523,20 +1485,13 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
 /*  usock being closed                                                        */
 /******************************************************************************/
     case NN_SWS_STATE_BROKEN_CONNECTION:
-        switch (src) {
-
-        case NN_SWS_SRC_USOCK:
-            switch (type) {
-            case NN_STREAM_ERROR:
-                sws->state = NN_SWS_STATE_DONE;
-                nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
-                return;
-            default:
-                nn_fsm_bad_action (sws->state, src, type);
-            }
-
+        switch (type) {
+        case NN_STREAM_ERROR:
+            sws->state = NN_SWS_STATE_DONE;
+            nn_fsm_raise (&sws->fsm, &sws->done, NN_SWS_RETURN_ERROR);
+            return;
         default:
-            nn_fsm_bad_source (sws->state, src, type);
+            nn_assert_unreachable_fsm (sws->state, type);
         }
 
 /******************************************************************************/
@@ -1545,12 +1500,12 @@ static void nn_sws_handler (struct nn_fsm *self, int src, int type,
 /*  this state except stopping the object.                                    */
 /******************************************************************************/
     case NN_SWS_STATE_DONE:
-        nn_fsm_bad_source (sws->state, src, type);
+        nn_assert_unreachable_fsm (sws->state, type);
 
 /******************************************************************************/
 /*  Invalid state.                                                            */
 /******************************************************************************/
     default:
-        nn_fsm_bad_state (sws->state, src, type);
+        nn_assert_unreachable_fsm (sws->state, type);
     }
 }

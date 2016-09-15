@@ -134,7 +134,7 @@ struct nn_sock
 /*  Initialise the socket. */
 int nn_sock_init (struct nn_sock *self, struct nn_socktype *socktype, int fd);
 
-/*  Called by nn_close() to stop activity on the socket.  It doesn't block. */
+/*  Called by nn_close() to stop activity on the socket. It doesn't block. */
 void nn_sock_stop (struct nn_sock *self);
 
 /*  Called by nn_close() to deallocate the socket. It's a blocking function
@@ -181,7 +181,7 @@ int nn_sock_getopt_inner (struct nn_sock *self, int level, int option,
 int nn_sock_add (struct nn_sock *self, struct nn_pipe *pipe);
 void nn_sock_rm (struct nn_sock *self, struct nn_pipe *pipe);
 
-/*  Monitoring callbacks  */
+/*  Monitoring callbacks. */
 void nn_sock_report_error (struct nn_sock *self, struct nn_ep *ep, int errnum);
 void nn_sock_stat_increment (struct nn_sock *self, int name, int64_t increment);
 void nn_sock_statistic_set (struct nn_sock *self, int name, int value);

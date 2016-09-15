@@ -100,8 +100,7 @@ int nn_ins_bind (struct nn_ins_item *item, nn_ins_fn fn)
     }
 
     /*  Insert the entry into the endpoint repository. */
-    nn_list_insert (&self.bound, &item->item,
-        nn_list_end (&self.bound));
+    nn_list_insert_at_end (&self.bound, &item->item);
 
     /*  During this process new pipes may be created. */
     for (it = nn_list_begin (&self.connected);
@@ -132,8 +131,7 @@ void nn_ins_connect (struct nn_ins_item *item, nn_ins_fn fn)
     nn_mutex_lock (&self.sync);
 
     /*  Insert the entry into the endpoint repository. */
-    nn_list_insert (&self.connected, &item->item,
-        nn_list_end (&self.connected));
+    nn_list_insert_at_end (&self.connected, &item->item);
 
     /*  During this process a pipe may be created. */
     for (it = nn_list_begin (&self.bound);

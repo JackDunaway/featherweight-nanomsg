@@ -118,6 +118,28 @@ int main (int argc, char *argv [])
     nn_assert (list.first == NULL);
     nn_assert (list.last == NULL);
 
+    /*  Inserting item at end of list. */
+    nn_list_insert_at_end (&list, &that.item);
+
+    /*  Item is now part of a list. */
+    nn_assert (nn_list_item_isinlist (&that.item));
+
+    /*  Single item does not have prev or next item. */
+    nn_assert (that.item.prev == NULL);
+    nn_assert (that.item.next == NULL);
+
+    /*  Item is both first and list item. */
+    nn_assert (list.first == &that.item);
+    nn_assert (list.last == &that.item);
+
+    /*  Removing an item. */
+    nn_list_erase (&list, &that.item);
+    nn_assert (!nn_list_item_isinlist (&that.item));
+
+    nn_assert (list.first == NULL);
+    nn_assert (list.last == NULL);
+
+
     nn_list_item_term (&that.item);
     nn_list_term (&list);
 

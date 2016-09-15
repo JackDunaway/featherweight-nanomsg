@@ -26,85 +26,78 @@
 #include "../utils/cont.h"
 #include "../utils/err.h"
 
+#define NN_WORKER_TASK_IO 0x00007100
+#define NN_WORKER_TASK_ADDTIMER 0x00007200
+#define NN_WORKER_TASK_STOP 0x00007300
+
+/*  Private functions. */
+static void nn_worker_routine (void *arg);
+void nn_worker_task_feed (struct nn_worker *self, struct nn_taskbase *task);
+
+static int nn_worker_timer_process (struct nn_worker *self)
+{
+    struct nn_timer *t;
+    uint64_t now;
+
+    /*  Iterate over all active timeouts. */
+    while (1) {
+
+        /*  If there are no active timers, then the timeout is -1 (infinite)
+            and there are no timeout events to report. */
+        if (nn_list_empty (&self->timeouts)) {
+            return NN_INFINITE_TIMEOUT;
+        }
+
+        t = nn_cont (nn_list_begin (&self->timeouts), struct nn_timer, item);
+
+
+        now = nn_clock_ms ();
+
+        /*  Return number of msec into the future the next timer expires. */
+        if (t->expiry > now) {
+            return (int) (t->expiry - now);
+        }
+
+        /*  The timer has expired; remove it from the list of active timers
+            and report the timeout notification. */
+        nn_list_erase (&self->timeouts, &t->item);
+        nn_ctx_enter (t->complete.dest->ctx);
+        nn_fsm_feed (t->complete.dest, t->complete.type, t);
+        nn_ctx_leave (t->complete.dest->ctx);
+    }
+}
+
+static int nn_worker_timer_add (struct nn_worker *self, struct nn_timer *timer)
+{
+    struct nn_timer *itt;
+    struct nn_list_item *it;
+    int first;
+
+    /*  Compute the instant when the timeout will be due. */
+    timer->expiry = nn_clock_ms () + timer->timeout;
+
+    /*  Insert it into the ordered list of timeouts. */
+    for (it = nn_list_begin (&self->timeouts);
+        it != nn_list_end (&self->timeouts);
+        it = nn_list_next (&self->timeouts, it)) {
+        itt = nn_cont (it, struct nn_timer, item);
+        if (timer->expiry < itt->expiry)
+            break;
+    }
+
+    /*  If the new timeout happens to be the first one to expire, let the user
+        know that the current waiting interval has to be changed. */
+    first = (nn_list_begin (&self->timeouts) == it) ? 1 : 0;
+    nn_list_insert (&self->timeouts, &timer->item, it);
+
+    return first;
+}
+
 #if defined NN_HAVE_WINDOWS
 
 #define NN_WORKER_MAX_EVENTS 32
 
-/*  The value of this variable is irrelevant. It's used only as a placeholder
-    for the address that is used as the 'stop' event ID. */
-const int nn_worker_stop = 0;
-
-/*  Private functions. */
-static void nn_worker_routine (void *arg);
-
-struct nn_worker *nn_worker_choose (struct nn_fsm *fsm)
-{
-    return nn_pool_choose_worker (fsm->ctx->pool);
-}
-
-void nn_worker_task_init (struct nn_worker_task *self, int src,
-    struct nn_fsm *owner)
-{
-    self->src = src;
-    self->owner = owner;
-}
-
-void nn_worker_task_term (struct nn_worker_task *self)
-{
-}
-
-void nn_worker_op_init (struct nn_worker_op *self, int src,
-    struct nn_fsm *owner)
-{
-    self->src = src;
-    self->owner = owner;
-    self->state = NN_WORKER_OP_STATE_IDLE;
-}
-
-void nn_worker_op_term (struct nn_worker_op *self)
-{
-    nn_assert_state (self, NN_WORKER_OP_STATE_IDLE);
-}
-
-void nn_worker_op_start (struct nn_worker_op *self, int state)
-{
-    nn_assert_state (self, NN_WORKER_OP_STATE_IDLE);
-    self->state = state;
-}
-
-int nn_worker_op_isidle (struct nn_worker_op *self)
-{
-    return self->state == NN_WORKER_OP_STATE_IDLE ? 1 : 0;
-}
-
-int nn_worker_init (struct nn_worker *self)
-{
-    self->cp = CreateIoCompletionPort (INVALID_HANDLE_VALUE, NULL, 0, 0);
-    nn_assert_win (self->cp);
-    nn_timerset_init (&self->timerset);
-    nn_thread_init (&self->thread, nn_worker_routine, self);
-
-    return 0;
-}
-
-void nn_worker_term (struct nn_worker *self)
-{
-    BOOL brc;
-
-    /*  Ask worker thread to terminate. */
-    brc = PostQueuedCompletionStatus (self->cp, 0,
-        (ULONG_PTR) &nn_worker_stop, NULL);
-    nn_assert_win (brc);
-
-    /*  Wait till worker thread terminates. */
-    nn_thread_term (&self->thread);
-
-    nn_timerset_term (&self->timerset);
-    brc = CloseHandle (self->cp);
-    nn_assert_win (brc);
-}
-
-void nn_worker_execute (struct nn_worker *self, struct nn_worker_task *task)
+void nn_worker_task_feed (struct nn_worker *self, struct nn_taskbase *task)
 {
     BOOL brc;
 
@@ -112,43 +105,54 @@ void nn_worker_execute (struct nn_worker *self, struct nn_worker_task *task)
     nn_assert_win (brc);
 }
 
-void nn_worker_add_timer (struct nn_worker *self, int timeout,
-    struct nn_worker_timer *timer)
+int nn_worker_init (struct nn_worker *self)
 {
-    nn_timerset_add (&((struct nn_worker*) self)->timerset, timeout,
-        &timer->hndl);
+    self->cp = CreateIoCompletionPort (INVALID_HANDLE_VALUE, NULL, 0, 0);
+    nn_assert_win (self->cp);
+    nn_list_init (&self->timeouts);
+    nn_thread_init (&self->thread, nn_worker_routine, self);
+
+    return 0;
 }
 
-void nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer)
+void nn_worker_term (struct nn_worker *self)
 {
-    nn_timerset_rm (&((struct nn_worker*) self)->timerset, &timer->hndl);
+    struct nn_taskbase stop;
+    BOOL brc;
+
+    stop.internaltype = NN_WORKER_TASK_STOP;
+
+    /*  Ask worker thread to terminate. */
+    nn_worker_task_feed (self, &stop);
+
+    /*  Wait till worker thread terminates. */
+    nn_thread_term (&self->thread);
+
+    nn_list_term (&self->timeouts);
+    brc = CloseHandle (self->cp);
+    nn_assert_win (brc);
 }
 
-void nn_worker_register_iocp (struct nn_fsm *fsm, HANDLE h)
+void nn_worker_fd_register (struct nn_worker *worker, nn_fd fd)
 {
     HANDLE cp;
-    struct nn_worker *worker;
 
-    worker = nn_worker_choose (fsm);
-
-    cp = CreateIoCompletionPort (h, worker->cp, (ULONG_PTR) NULL, 0);
+    cp = CreateIoCompletionPort (fd, worker->cp, (ULONG_PTR) NULL, 0);
     nn_assert_win (cp == worker->cp);
 }
 
 static void nn_worker_routine (void *arg)
 {
     OVERLAPPED_ENTRY entries [NN_WORKER_MAX_EVENTS];
-    OVERLAPPED_ENTRY *item;
-    struct nn_timerset_hndl *thndl;
-    struct nn_worker_timer *timer;
-    struct nn_worker_task *task;
-    struct nn_worker_op *op;
+    OVERLAPPED_ENTRY *entry;
+    struct nn_timer *timer;
+    struct nn_taskbase *task;
+    struct nn_task_io *op;
     struct nn_worker *self;
-    size_t bytes;
-    int timeout;
-    ULONG count;
+    ULONG numentries;
     ULONG i;
     BOOL brc;
+    int timeout;
     int rc;
 
     self = (struct nn_worker*) arg;
@@ -156,176 +160,118 @@ static void nn_worker_routine (void *arg)
     while (1) {
 
         /*  Process all expired timers. */
-        while (1) {
-            rc = nn_timerset_event (&self->timerset, &thndl);
-            if (rc == -EAGAIN)
-                break;
-            errnum_assert (rc == 0, -rc);
-            timer = nn_cont (thndl, struct nn_worker_timer, hndl);
-            nn_ctx_enter (timer->owner->ctx);
-            nn_fsm_feed (timer->owner, -1, NN_WORKER_TIMER_TIMEOUT, timer);
-            nn_ctx_leave (timer->owner->ctx);
-        }
-
-        /*  Compute the time interval till next timer expiration. */
-        timeout = nn_timerset_timeout (&self->timerset);
-        timeout = timeout < 0 ? INFINITE : timeout;
+        timeout = nn_worker_timer_process (self);
 
         /*  Wait for new events and/or timeouts. */
         brc = GetQueuedCompletionStatusEx (self->cp, entries,
-            NN_WORKER_MAX_EVENTS, &count, timeout, FALSE);
-        if (!brc && GetLastError () == WAIT_TIMEOUT)
+            NN_WORKER_MAX_EVENTS, &numentries, timeout, FALSE);
+        
+        /*  A timer has expired; restart worker loop to process it. */
+        if (!brc && GetLastError () == WAIT_TIMEOUT) {
             continue;
+        }
+
+        /*  One or more events has occurred. */
         nn_assert_win (brc);
+        nn_assert_win (numentries > 0);
 
-        for (i = 0; i != count; ++i) {
+        for (i = 0; i != numentries; ++i) {
 
-            item = &entries [i];
+            entry = &entries [i];
 
-            /*  Process I/O completion events. */
-            if (item->lpOverlapped != NULL) {
-                op = nn_cont (item->lpOverlapped, struct nn_worker_op, olpd);
+            /*  Is this an I/O operation that has completed? */
+            if (entry->lpOverlapped) {
+                op = nn_cont (entry->lpOverlapped, struct nn_task_io, olpd);
+                nn_assert (op->base.internaltype == NN_WORKER_TASK_IO);
                 /*  The 'Internal' field is actually an NTSTATUS. Report
                     success and error. Ignore warnings and informational
                     messages. */
-                rc = item->Internal & 0xc0000000;
-                switch (rc) {
+                switch (entry->Internal & 0xc0000000) {
                 case 0x00000000:
-                    rc = NN_WORKER_OP_DONE;
+                    op->result = 1;
                     break;
                 case 0xc0000000:
-                    rc = NN_WORKER_OP_ERROR;
+                    op->result = 0;
                     break;
                 default:
+                    nn_assert_unreachable ("JRD - when?");
                     continue;
                 }
-                bytes = item->dwNumberOfBytesTransferred;
+                op->bytes = entry->dwNumberOfBytesTransferred;
 
                 /*  Raise the completion event. */
-                nn_ctx_enter (op->owner->ctx);
-                switch (op->state) {
-
-                case NN_WORKER_OP_STATE_IDLE:
-                    nn_assert_unreachable ("Impossible code path.");
-                    break;
-
-                case NN_WORKER_OP_STATE_ACCEPTING:
-                case NN_WORKER_OP_STATE_CONNECTING:
-                    nn_assert (op->pending_sz == NULL);
-                    nn_assert (op->pending_count == NULL);
-                    break;
-
-                case NN_WORKER_OP_STATE_SENDING:
-                case NN_WORKER_OP_STATE_RECEIVING:
-                    if (bytes == 0) {
-                        rc = NN_WORKER_OP_ERROR;
-                        break;
-                    }
-                    nn_assert (bytes > 0);
-                    if (op->pending_sz) {
-                        nn_assert (*op->pending_sz >= bytes);
-                        *op->pending_sz -= bytes;
-                    }
-                    if (op->pending_count) {
-                        nn_assert (*op->pending_count > 0);
-                        --*op->pending_count;
-                    }
-                    break;
-
-                default:
-                    nn_assert_unreachable ("Unknown state.");
-                    break;
-                }
-                op->state = NN_WORKER_OP_STATE_IDLE;
-                nn_fsm_feed (op->owner, op->src, rc, op);
-                nn_ctx_leave (op->owner->ctx);
+                nn_ctx_enter (op->complete->dest->ctx);
+                nn_assert (op->base.state == NN_STATE_TASK_ACTIVE);
+                op->base.state = NN_STATE_TASK_DONE;
+                nn_fsm_feed (op->complete->dest, op->complete->type, &op->base);
+                nn_ctx_leave (op->complete->dest->ctx);
 
                 continue;
             }
 
-            /*  Worker thread shutdown is requested. */
-            if (item->lpCompletionKey == (ULONG_PTR) &nn_worker_stop)
+            task = (struct nn_taskbase *) entry->lpCompletionKey;
+            switch (task->internaltype) {
+
+            case NN_WORKER_TASK_STOP:
+                /*  Worker thread shutdown is requested. */
                 return;
 
-            /*  Process tasks. */
-            task = (struct nn_worker_task*) item->lpCompletionKey;
-            nn_ctx_enter (task->owner->ctx);
-            nn_fsm_feed (task->owner, task->src, NN_WORKER_TASK_EXECUTE, task);
-            nn_ctx_leave (task->owner->ctx);
+            case NN_WORKER_TASK_IO:
+
+            case NN_WORKER_TASK_ADDTIMER:
+                /*  Timer added. */
+                timer = nn_cont (task, struct nn_timer, base);
+                nn_worker_timer_add (self, timer);
+                continue;
+
+            default:
+                nn_assert_unreachable ("Unexpected [task->internaltype].");
+                return;
+            }
+
+            nn_assert_unreachable ("Next iteration should have begun.");
         }
     }
 }
 #else
 
-#include "../utils/attr.h"
-#include "../utils/queue.h"
-
-/*  Private functions. */
-static void nn_worker_routine (void *arg);
-
-void nn_worker_fd_init (struct nn_worker_fd *self, int src,
-    struct nn_fsm *owner)
+void nn_worker_fd_register (struct nn_worker *worker, nn_fd fd,
+    struct nn_task_io *operation)
 {
-    self->src = src;
-    self->owner = owner;
+    nn_poller_add (&worker->poller, fd, &operation->hndl);
 }
 
-void nn_worker_fd_term (NN_UNUSED struct nn_worker_fd *self)
-{
-}
-
-void nn_worker_add_fd (struct nn_worker *self, int s, struct nn_worker_fd *fd)
-{
-    nn_poller_add (&self->poller, s, &fd->hndl);
-}
-
-void nn_worker_rm_fd (struct nn_worker *self, struct nn_worker_fd *fd)
+void nn_worker_rm_fd (struct nn_worker *self, struct nn_task_io *fd)
 {
     nn_poller_rm (&self->poller, &fd->hndl);
 }
 
-void nn_worker_set_in (struct nn_worker *self, struct nn_worker_fd *fd)
+void nn_worker_set_in (struct nn_worker *self, struct nn_task_io *fd)
 {
     nn_poller_set_in (&self->poller, &fd->hndl);
 }
 
-void nn_worker_reset_in (struct nn_worker *self, struct nn_worker_fd *fd)
+void nn_worker_reset_in (struct nn_worker *self, struct nn_task_io *fd)
 {
     nn_poller_reset_in (&self->poller, &fd->hndl);
 }
 
-void nn_worker_set_out (struct nn_worker *self, struct nn_worker_fd *fd)
+void nn_worker_set_out (struct nn_worker *self, struct nn_task_io *fd)
 {
     nn_poller_set_out (&self->poller, &fd->hndl);
 }
 
-void nn_worker_reset_out (struct nn_worker *self, struct nn_worker_fd *fd)
+void nn_worker_reset_out (struct nn_worker *self, struct nn_task_io *fd)
 {
     nn_poller_reset_out (&self->poller, &fd->hndl);
 }
 
-void nn_worker_add_timer (struct nn_worker *self, int timeout,
-    struct nn_worker_timer *timer)
+void nn_worker_task_feed (struct nn_worker *self, const int *which)
 {
-    nn_timerset_add (&self->timerset, timeout, &timer->hndl);
-}
-
-void nn_worker_rm_timer (struct nn_worker *self, struct nn_worker_timer *timer)
-{
-    nn_timerset_rm (&self->timerset, &timer->hndl);
-}
-
-void nn_worker_task_init (struct nn_worker_task *self, int src,
-    struct nn_fsm *owner)
-{
-    self->src = src;
-    self->owner = owner;
-    nn_queue_item_init (&self->item);
-}
-
-void nn_worker_task_term (struct nn_worker_task *self)
-{
-    nn_queue_item_term (&self->item);
+    nn_mutex_lock (&self->sync);
+    nn_queue_push (&self->tasks, &task->item);
+    nn_efd_signal (&self->efd);
+    nn_mutex_unlock (&self->sync);
 }
 
 int nn_worker_init (struct nn_worker *self)
@@ -342,7 +288,7 @@ int nn_worker_init (struct nn_worker *self)
     nn_poller_init (&self->poller);
     nn_poller_add (&self->poller, nn_efd_getfd (&self->efd), &self->efd_hndl);
     nn_poller_set_in (&self->poller, &self->efd_hndl);
-    nn_timerset_init (&self->timerset);
+    nn_list_init (&self->timeouts);
     nn_thread_init (&self->thread, nn_worker_routine, self);
 
     return 0;
@@ -360,27 +306,12 @@ void nn_worker_term (struct nn_worker *self)
     nn_thread_term (&self->thread);
 
     /*  Clean up. */
-    nn_timerset_term (&self->timerset);
+    nn_list_term (&self->timeouts);
     nn_poller_term (&self->poller);
     nn_efd_term (&self->efd);
     nn_queue_item_term (&self->stop);
     nn_queue_term (&self->tasks);
     nn_mutex_term (&self->sync);
-}
-
-void nn_worker_execute (struct nn_worker *self, struct nn_worker_task *task)
-{
-    nn_mutex_lock (&self->sync);
-    nn_queue_push (&self->tasks, &task->item);
-    nn_efd_signal (&self->efd);
-    nn_mutex_unlock (&self->sync);
-}
-
-void nn_worker_cancel (struct nn_worker *self, struct nn_worker_task *task)
-{
-    nn_mutex_lock (&self->sync);
-    nn_queue_remove (&self->tasks, &task->item);
-    nn_mutex_unlock (&self->sync);
 }
 
 static void nn_worker_routine (void *arg)
@@ -389,12 +320,12 @@ static void nn_worker_routine (void *arg)
     struct nn_worker *self;
     int pevent;
     struct nn_poller_hndl *phndl;
-    struct nn_timerset_hndl *thndl;
     struct nn_queue tasks;
     struct nn_queue_item *item;
     struct nn_worker_task *task;
-    struct nn_worker_fd *fd;
-    struct nn_worker_timer *timer;
+    struct nn_task_io *io;
+    struct nn_timer *timer;
+    int timeout;
 
     self = (struct nn_worker*) arg;
 
@@ -402,22 +333,12 @@ static void nn_worker_routine (void *arg)
         shut down. */
     while (1) {
 
-        /*  Wait for new events and/or timeouts. */
-        rc = nn_poller_wait (&self->poller,
-            nn_timerset_timeout (&self->timerset));
-        errnum_assert (rc == 0, -rc);
-
         /*  Process all expired timers. */
-        while (1) {
-            rc = nn_timerset_event (&self->timerset, &thndl);
-            if (rc == -EAGAIN)
-                break;
-            errnum_assert (rc == 0, -rc);
-            timer = nn_cont (thndl, struct nn_worker_timer, hndl);
-            nn_ctx_enter (timer->owner->ctx);
-            nn_fsm_feed (timer->owner, -1, NN_WORKER_TIMER_TIMEOUT, timer);
-            nn_ctx_leave (timer->owner->ctx);
-        }
+        timeout = nn_worker_timer_process (self);
+
+        /*  Wait for new events and/or timeouts. */
+        rc = nn_poller_wait (&self->poller, timeout);
+        errnum_assert (rc == 0, -rc);
 
         /*  Process all events from the poller. */
         while (1) {
@@ -450,9 +371,7 @@ static void nn_worker_routine (void *arg)
 
                     /*  If the worker thread is asked to stop, do so. */
                     if (item == &self->stop) {
-                        /*  Make sure we remove all the other workers from
-                            the queue, because we're not doing anything with
-                            them. */
+                        /*  Remove and ignore all remaining tasks. */
                         while (nn_queue_pop (&tasks) != NULL) {
                             continue;
                         }
@@ -473,27 +392,116 @@ static void nn_worker_routine (void *arg)
             }
 
             /*  It's a true I/O event. Invoke the handler. */
-            fd = nn_cont (phndl, struct nn_worker_fd, hndl);
-            nn_ctx_enter (fd->owner->ctx);
-            nn_fsm_feed (fd->owner, fd->src, pevent, fd);
-            nn_ctx_leave (fd->owner->ctx);
+            io = nn_cont (phndl, struct nn_task_io, hndl);
+            nn_ctx_enter (io->owner->ctx);
+            nn_fsm_feed (io->owner, io->src, pevent, io);
+            nn_ctx_leave (io->owner->ctx);
         }
     }
 }
 #endif
 
-void nn_worker_timer_init (struct nn_worker_timer *self, struct nn_fsm *owner)
+struct nn_worker *nn_worker_choose (struct nn_fsm *fsm)
 {
-    self->owner = owner;
-    nn_timerset_hndl_init (&self->hndl);
+    return nn_pool_choose_worker (fsm->ctx->pool);
 }
 
-void nn_worker_timer_term (struct nn_worker_timer *self)
+void nn_task_io_init (struct nn_task_io *io, struct nn_worker *worker, struct nn_fsm_event *complete)
 {
-    nn_timerset_hndl_term (&self->hndl);
+    io->base.state = NN_STATE_TASK_IDLE;
+    io->base.internaltype = NN_WORKER_TASK_IO;
+    io->base.worker = worker;
+    nn_queue_item_init (&io->base.item);
+    io->complete = complete;
 }
 
-int nn_worker_timer_isactive (struct nn_worker_timer *self)
+void nn_task_io_term (struct nn_task_io *io)
 {
-    return nn_timerset_hndl_isactive (&self->hndl);
+    nn_assert_state (&io->base, NN_STATE_TASK_IDLE);
+    nn_queue_item_term (&io->base.item);
+}
+
+void nn_task_io_start (struct nn_task_io *io, nn_fd fd, int type)
+{
+    nn_assert_state (&io->base, NN_STATE_TASK_IDLE);
+    io->base.state = NN_STATE_TASK_ACTIVE;
+    io->complete->type = type;
+    memset (&io->olpd, 0, sizeof (io->olpd));
+
+    nn_worker_task_feed (io->base.worker, &io->base);
+}
+
+void nn_task_io_finish (struct nn_task_io *io, void *src)
+{
+    /*  Sanity check that the operation from the worker is the same that was
+        initiated. */
+    nn_assert (&io->base == src);
+    nn_assert_state (&io->base, NN_STATE_TASK_DONE);
+    io->base.state = NN_STATE_TASK_IDLE;
+    io->result = 0;
+    io->complete->type = 0;
+    io->bytes = -1;
+}
+
+void nn_task_io_cancel (struct nn_task_io *io)
+{
+    nn_mutex_lock (&self->sync);
+    nn_queue_remove (&self->tasks, &task->item);
+    nn_mutex_unlock (&self->sync);
+}
+
+void nn_task_io_cancel (struct nn_task_io *io)
+{
+    BOOL brc;
+    io->
+    brc = CancelIoEx ((HANDLE) s->fd, &s->incoming.olpd);
+//JRD - experimental
+nn_assert (brc);
+//if (!brc) {
+//    err = GetLastError ();
+//    nn_assert_win (err == ERROR_NOT_FOUND);
+//}
+}
+
+void nn_timer_init (struct nn_timer *timer, struct nn_worker *worker, struct nn_fsm *owner)
+{
+    timer->base.state = NN_STATE_TASK_IDLE;
+    timer->base.internaltype = NN_WORKER_TASK_ADDTIMER;
+    timer->base.worker = worker;
+    nn_queue_item_init (&timer->base.item);
+
+    timer->complete.dest = owner;
+    nn_list_item_init (&timer->item);
+    timer->timeout = -1;
+}
+
+void nn_timer_term (struct nn_timer *timer)
+{
+    nn_assert_state (&timer->base, NN_STATE_TASK_IDLE);
+    nn_queue_item_term (&timer->base.item);
+    nn_list_item_term (&timer->item);
+}
+
+void nn_timer_start (struct nn_timer *timer, int type, int timeout)
+{
+    nn_assert_state (&timer->base, NN_STATE_TASK_IDLE);
+    timer->base.state = NN_STATE_TASK_ACTIVE;
+
+    /*  Negative timeout makes no sense. */
+    nn_assert (timeout >= 0);
+
+    timer->timeout = timeout;
+    timer->complete.type = type;
+
+    nn_worker_task_feed (timer->base.worker, &timer->base);
+}
+
+void nn_timer_cancel (struct nn_timer *timer)
+{
+    nn_list_erase (&self->timeouts, &timer->item);
+}
+
+int nn_timer_isidle (struct nn_timer *timer)
+{
+    return timer->base.state == NN_STATE_TASK_IDLE ? 1 : 0;
 }

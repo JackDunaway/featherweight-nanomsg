@@ -51,13 +51,12 @@ set (NN_SOURCES
     aio/ctx.c
     aio/fsm.h
     aio/fsm.c
+    aio/poller.h
+    aio/poller.c
     aio/pool.h
     aio/pool.c
     aio/stream.h
-    aio/timer.h
-    aio/timer.c
-    aio/timerset.h
-    aio/timerset.c
+    aio/stream.c
     aio/worker.h
     aio/worker.c
 
@@ -239,11 +238,6 @@ set (NN_SOURCES
 if (WIN32)
     list (APPEND NN_SOURCES
         utils/win.h
-    )
-else ()
-    list (APPEND NN_SOURCES
-        aio/poller.h
-        aio/poller.c
     )
 endif ()
 

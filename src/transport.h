@@ -151,8 +151,7 @@ struct nn_pipebase_vfptr {
 };
 
 /*  Endpoint specific options. Same restrictions as for nn_pipebase apply  */
-struct nn_ep_options
-{
+struct nn_ep_options {
     int sndprio;
     int rcvprio;
     int ipv4only;

@@ -22,12 +22,12 @@
     IN THE SOFTWARE.
 */
 
+#include "err.h"
 #include "efd.h"
 #include "clock.h"
 
 #if defined NN_USE_EVENTFD
 
-#include "err.h"
 #include "closefd.h"
 
 #include <sys/eventfd.h>
@@ -100,7 +100,6 @@ void nn_efd_unsignal (struct nn_efd *self)
 
 #elif defined NN_USE_PIPE
 
-#include "err.h"
 #include "closefd.h"
 
 #include <sys/types.h>
@@ -201,7 +200,6 @@ void nn_efd_unsignal (struct nn_efd *self)
 
 #elif defined NN_USE_SOCKETPAIR
 
-#include "err.h"
 #include "closefd.h"
 
 #include <sys/types.h>
@@ -304,8 +302,6 @@ void nn_efd_unsignal (struct nn_efd *self)
 
 #define NN_EFD_PORT 5907
 #define NN_EFD_RETRIES 1000
-
-#include "err.h"
 
 #include <string.h>
 #include <stdint.h>

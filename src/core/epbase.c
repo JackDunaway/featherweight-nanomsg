@@ -24,7 +24,8 @@
 
 #include "ep.h"
 #include "sock.h"
-#include "../utils/attr.h"
+
+#include "../utils/err.h"
 
 void nn_epbase_init (struct nn_epbase *self,
     const struct nn_epbase_vfptr *vfptr, void *hint)
@@ -33,8 +34,9 @@ void nn_epbase_init (struct nn_epbase *self,
     self->ep = (struct nn_ep*) hint;
 }
 
-void nn_epbase_term (NN_UNUSED struct nn_epbase *self)
+void nn_epbase_term (struct nn_epbase *self)
 {
+    nn_assert (self);
 }
 
 void nn_epbase_stopped (struct nn_epbase *self)
@@ -73,6 +75,7 @@ void nn_epbase_clear_error (struct nn_epbase *self)
     nn_ep_clear_error (self->ep);
 }
 
-void nn_epbase_stat_increment(struct nn_epbase *self, int name, int increment) {
-    nn_ep_stat_increment(self->ep, name, increment);
+void nn_epbase_stat_increment (struct nn_epbase *self, int name, int increment)
+{
+    nn_ep_stat_increment (self->ep, name, increment);
 }

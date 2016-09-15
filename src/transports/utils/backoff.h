@@ -23,13 +23,10 @@
 #ifndef NN_BACKOFF_INCLUDED
 #define NN_BACKOFF_INCLUDED
 
-#include "../../aio/timer.h"
+#include "../../aio/worker.h"
 
 /*  Timer with exponential backoff. Actual wating time is (2^n-1)*minivl,
     meaning that first wait is 0 ms long, second one is minivl ms long etc. */
-
-#define NN_BACKOFF_TIMEOUT NN_TIMER_TIMEOUT
-#define NN_BACKOFF_STOPPED NN_TIMER_STOPPED
 
 struct nn_backoff {
     struct nn_timer timer;
@@ -38,13 +35,13 @@ struct nn_backoff {
     int n;
 };
 
-void nn_backoff_init (struct nn_backoff *self, int src, int minivl, int maxivl,
-    struct nn_fsm *owner);
+void nn_backoff_init (struct nn_backoff *self, struct nn_worker *worker,
+    int minivl, int maxivl, struct nn_fsm *owner);
 void nn_backoff_term (struct nn_backoff *self);
 
+void nn_backoff_start (struct nn_backoff *self, int type);
+void nn_backoff_cancel (struct nn_backoff *self);
 int nn_backoff_isidle (struct nn_backoff *self);
-void nn_backoff_start (struct nn_backoff *self);
-void nn_backoff_stop (struct nn_backoff *self);
 
 void nn_backoff_reset (struct nn_backoff *self);
 

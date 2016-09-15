@@ -31,6 +31,8 @@
 
 #if defined NN_USE_EVENTFD
 
+    #define NN_INVALID_FD -1
+
     typedef int nn_fd;
 
     struct nn_efd {
@@ -38,6 +40,8 @@
     };
 
 #elif defined NN_USE_PIPE
+
+    #define NN_INVALID_FD -1
 
     typedef int nn_fd;
 
@@ -47,6 +51,8 @@
     };
 
 #elif defined NN_USE_SOCKETPAIR
+
+    #define NN_INVALID_FD -1
 
     typedef int nn_fd;
 
@@ -58,6 +64,8 @@
 #elif defined NN_USE_WINSOCK
 
     #include "win.h"
+
+    #define NN_INVALID_FD INVALID_SOCKET
 
     typedef SOCKET nn_fd;
 

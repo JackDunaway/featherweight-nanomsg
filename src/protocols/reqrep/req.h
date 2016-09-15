@@ -24,7 +24,8 @@
 #define NN_REQ_INCLUDED
 
 #include "xreq.h"
-#include "task.h"
+
+#include "../../aio/worker.h"
 
 #include "../../protocol.h"
 #include "../../aio/fsm.h"
@@ -38,14 +39,23 @@ struct nn_req {
     struct nn_fsm fsm;
     int state;
 
-    /*  Last request ID assigned. */
-    uint32_t lastid;
+    /*  Stored request, so that it can be re-sent if needed. */
+    struct nn_msg request;
+    uint32_t currentid;
+
+    /*  Timer active while waiting for reply. On timeout, the request is
+        re-sent. */
+    struct nn_timer timer;
+
+    /*  Stored reply, so that user can retrieve it later on. */
+    struct nn_msg reply;
 
     /*  Protocol-specific socket options. */
     int resend_ivl;
 
-    /*  The request being processed. */
-    struct nn_task task;
+    /*  Pipe via which the current request has been sent. This is an optimisation so
+        that request can be re-sent immediately if the pipe disappears.  */
+    struct nn_pipe *via;
 };
 
 extern struct nn_socktype *nn_req_socktype;
@@ -56,11 +66,8 @@ void nn_req_init (struct nn_req *self,
     const struct nn_sockbase_vfptr *vfptr, void *hint);
 void nn_req_term (struct nn_req *self);
 int nn_req_inprogress (struct nn_req *self);
-void nn_req_handler (struct nn_fsm *self, int src, int type,
-    void *srcptr);
-void nn_req_shutdown (struct nn_fsm *self, int src, int type,
-    void *srcptr);
-void nn_req_action_send (struct nn_req *self, int allow_delay);
+void nn_req_handler (struct nn_fsm *myfsm, int type, void *srcptr);
+void nn_req_action_send (struct nn_req *self);
 
 /*  Implementation of nn_sockbase's virtual functions. */
 void nn_req_stop (struct nn_sockbase *self);

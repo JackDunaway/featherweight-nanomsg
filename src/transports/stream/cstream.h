@@ -1,6 +1,5 @@
 /*
-    Copyright (c) 2014 Martin Sustrik  All rights reserved.
-    Copyright 2016 Garrett D'Amore <garrett@damore.org>
+    Copyright (c) 2013 Martin Sustrik  All rights reserved.
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"),
@@ -21,38 +20,47 @@
     IN THE SOFTWARE.
 */
 
-#ifndef NN_TASK_INCLUDED
-#define NN_TASK_INCLUDED
+#ifndef NN_CSTREAM_INCLUDED
+#define NN_CSTREAM_INCLUDED
 
-#include "../../reqrep.h"
+#include "sstream.h"
+#include "ustream.h"
 
-#include "../../aio/fsm.h"
-#include "../../aio/timer.h"
-#include "../../utils/msg.h"
+#include "../../transport.h"
 
-struct nn_task {
+#include "../utils/backoff.h"
 
-    /*  ID of the request being currently processed. Replies for different
-        requests are considered stale and simply dropped. */
-    uint32_t id;
+/*  State machine managing connected stream endpoint. */
 
-    /*  Stored request, so that it can be re-sent if needed. */
-    struct nn_msg request;
+struct nn_cstream {
 
-    /*  Stored reply, so that user can retrieve it later on. */
-    struct nn_msg reply;
+    /*  The state machine. */
+    struct nn_fsm fsm;
+    int state;
 
-    /*  Timer used to wait while request should be re-sent. */
-    struct nn_timer timer;
+    /*  This object is a specific type of endpoint.
+        Thus it is derived from epbase. */
+    struct nn_epbase epbase;
 
-    /*  Pipe the current request has been sent to. This is an optimisation so
-        that request can be re-sent immediately if the pipe disappears.  */
-    struct nn_pipe *sent_to;
+    /*  The underlying stream. */
+    struct nn_stream usock;
+
+    /*  Used to wait before retrying to connect. */
+    struct nn_backoff retry;
+
+    /*  State machine that handles the active part of the connection
+        lifetime. */
+    struct nn_sstream sstream;
+
+    /*  Flag that determines whether the endpoint persistently retries to
+        connect. */
+    int persistent;
+
+    /*  Virtual function table for stream subclass overrides. */
+    struct nn_stream_vfptr *vft;
 };
 
-void nn_task_init (struct nn_task *self, uint32_t id, int src,
-    struct nn_fsm *owner);
-void nn_task_term (struct nn_task *self);
+int nn_cstream_create (struct nn_cstream *self, void *hint,
+    struct nn_epbase **epbase, struct nn_stream_vfptr *vft);
 
 #endif
-

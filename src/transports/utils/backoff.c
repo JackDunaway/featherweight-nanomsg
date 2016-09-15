@@ -22,10 +22,10 @@
 
 #include "backoff.h"
 
-void nn_backoff_init (struct nn_backoff *self, int src, int minivl, int maxivl,
+void nn_backoff_init (struct nn_backoff *self, struct nn_worker *worker, int minivl, int maxivl,
     struct nn_fsm *owner)
 {
-    nn_timer_init (&self->timer, src, owner);
+    nn_timer_init (&self->timer, worker, owner);
     self->minivl = minivl;
     self->maxivl = maxivl;
     self->n = 1;
@@ -41,23 +41,23 @@ int nn_backoff_isidle (struct nn_backoff *self)
     return nn_timer_isidle (&self->timer);
 }
 
-void nn_backoff_start (struct nn_backoff *self)
+void nn_backoff_start (struct nn_backoff *self, int type)
 {
      int timeout;
 
-     /*  Start the timer for the actual n value. If the interval haven't yet
+     /*  Start the timer for the actual n value. If the interval has not yet
          exceeded the maximum, double the next timeout value. */
      timeout = (self->n - 1) * self->minivl;
      if (timeout > self->maxivl)
          timeout = self->maxivl;
      else
          self->n *= 2;
-     nn_timer_start (&self->timer, timeout);
+     nn_timer_start (&self->timer, type, timeout);
 }
 
-void nn_backoff_stop (struct nn_backoff *self)
+void nn_backoff_cancel (struct nn_backoff *self)
 {
-    nn_timer_stop (&self->timer);
+    nn_timer_cancel (&self->timer);
 }
 
 void nn_backoff_reset (struct nn_backoff *self)

@@ -20,29 +20,29 @@
     IN THE SOFTWARE.
 */
 
-#ifndef NN_SIPC_INCLUDED
-#define NN_SIPC_INCLUDED
+#ifndef NN_SSTREAM_INCLUDED
+#define NN_SSTREAM_INCLUDED
 
-#include "uipc.h"
+#include "ustream.h"
 #include "../../transport.h"
 #include "../../aio/fsm.h"
-#include "../../aio/timer.h"
+#include "../../aio/worker.h"
 #include "../../utils/msg.h"
 
-/*  This state machine handles IPC connection from the point where it is
+/*  This state machine handles a stream session from the point where it is
     established to the point when it is broken. */
 
-#define NN_SIPC_ERROR 1
-#define NN_SIPC_STOPPED 2
+#define NN_SSTREAM_ERROR 1
+#define NN_SSTREAM_STOPPED 2
 
-struct nn_sipc {
+struct nn_sstream {
 
     /*  The state machine. */
     struct nn_fsm fsm;
     int state;
 
     /*  The underlying socket. */
-    struct nn_uipc *usock;
+    struct nn_stream *usock;
 
     /*  Used to timeout the protocol header exchange. */
     struct nn_timer timer;
@@ -51,9 +51,9 @@ struct nn_sipc {
     uint8_t protohdr [8];
 
     /*  The original owner of the underlying socket. */
-    struct nn_fsm_owner usock_owner;
+    struct nn_fsm *owner;
 
-    /*  Pipe connecting this IPC connection to the nanomsg core. */
+    /*  Pipe connecting this stream session to the nanomsg core. */
     struct nn_pipebase pipebase;
 
     /*  State of inbound state machine. */
@@ -78,12 +78,12 @@ struct nn_sipc {
     struct nn_fsm_event done;
 };
 
-void nn_sipc_init (struct nn_sipc *self, int src,
-    struct nn_epbase *epbase, struct nn_fsm *owner);
-void nn_sipc_term (struct nn_sipc *self);
+void nn_sstream_init (struct nn_sstream *self, struct nn_epbase *epbase,
+    struct nn_fsm *owner);
+void nn_sstream_term (struct nn_sstream *self);
 
-int nn_sipc_isidle (struct nn_sipc *self);
-void nn_sipc_start (struct nn_sipc *self, struct nn_uipc *usock);
-void nn_sipc_stop (struct nn_sipc *self);
+int nn_sstream_isidle (struct nn_sstream *self);
+void nn_sstream_start (struct nn_sstream *self, struct nn_stream *usock);
+void nn_sstream_stop (struct nn_sstream *self);
 
 #endif
