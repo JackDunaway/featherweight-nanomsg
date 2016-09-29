@@ -137,7 +137,7 @@ void nn_worker_fd_register (struct nn_worker *worker, nn_fd fd)
 {
     HANDLE cp;
 
-    cp = CreateIoCompletionPort (fd, worker->cp, (ULONG_PTR) NULL, 0);
+    cp = CreateIoCompletionPort ((HANDLE) fd, worker->cp, (ULONG_PTR) NULL, 0);
     nn_assert_win (cp == worker->cp);
 }
 
@@ -153,7 +153,6 @@ static void nn_worker_routine (void *arg)
     ULONG i;
     BOOL brc;
     int timeout;
-    int rc;
 
     self = (struct nn_worker*) arg;
 
@@ -421,7 +420,7 @@ void nn_task_io_term (struct nn_task_io *io)
     nn_queue_item_term (&io->base.item);
 }
 
-void nn_task_io_start (struct nn_task_io *io, nn_fd fd, int type)
+void nn_task_io_start (struct nn_task_io *io, int type)
 {
     nn_assert_state (&io->base, NN_STATE_TASK_IDLE);
     io->base.state = NN_STATE_TASK_ACTIVE;
@@ -446,15 +445,15 @@ void nn_task_io_finish (struct nn_task_io *io, void *src)
 void nn_task_io_cancel (struct nn_task_io *io)
 {
     nn_mutex_lock (&self->sync);
-    nn_queue_remove (&self->tasks, &task->item);
+    nn_queue_remove (&self->tasks, &io->base.item);
     nn_mutex_unlock (&self->sync);
 }
 
 void nn_task_io_cancel (struct nn_task_io *io)
 {
     BOOL brc;
-    io->
-    brc = CancelIoEx ((HANDLE) s->fd, &s->incoming.olpd);
+
+    brc = CancelIoEx ((HANDLE) io->fd, &io->olpd);
 //JRD - experimental
 nn_assert (brc);
 //if (!brc) {
@@ -498,7 +497,7 @@ void nn_timer_start (struct nn_timer *timer, int type, int timeout)
 
 void nn_timer_cancel (struct nn_timer *timer)
 {
-    nn_list_erase (&self->timeouts, &timer->item);
+    nn_list_erase (&timer->base.worker->timeouts, &timer->item);
 }
 
 int nn_timer_isidle (struct nn_timer *timer)

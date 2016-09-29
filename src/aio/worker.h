@@ -150,7 +150,7 @@ void nn_worker_term (struct nn_worker *self);
 
 struct nn_worker *nn_worker_choose (struct nn_fsm *fsm);
 
-void nn_worker_fd_register (struct nn_worker *worker, nn_fd fd, struct nn_task_io *io);
+void nn_worker_fd_register (struct nn_worker *worker, nn_fd fd);
 void nn_worker_fd_unregister (struct nn_worker *worker, nn_fd fd);
 void nn_worker_rm_fd (struct nn_worker *worker, struct nn_task_io *io);
 void nn_worker_set_in (struct nn_worker *worker, struct nn_task_io *io);
@@ -158,17 +158,17 @@ void nn_worker_reset_in (struct nn_worker *worker, struct nn_task_io *io);
 void nn_worker_set_out (struct nn_worker *worker, struct nn_task_io *io);
 void nn_worker_reset_out (struct nn_worker *worker, struct nn_task_io *io);
 
+void nn_task_io_init (struct nn_task_io *io, struct nn_worker *worker, struct nn_fsm_event *complete);
+void nn_task_io_term (struct nn_task_io *io);
+void nn_task_io_start (struct nn_task_io *io, int task);
+void nn_task_io_cancel (struct nn_task_io *io);
+void nn_task_io_finish (struct nn_task_io *io, void *src);
+
 void nn_timer_init (struct nn_timer *timer, struct nn_worker *worker, struct nn_fsm *owner);
 void nn_timer_term (struct nn_timer *timer);
 void nn_timer_start (struct nn_timer *timer, int type, int timeout);
 void nn_timer_cancel (struct nn_timer *timer);
 int nn_timer_isidle (struct nn_timer *timer);
-
-void nn_task_io_init (struct nn_task_io *io, struct nn_worker *worker, struct nn_fsm *owner);
-void nn_task_io_term (struct nn_task_io *io);
-void nn_task_io_start (struct nn_task_io *io, int task);
-void nn_task_io_cancel (struct nn_task_io *io);
-void nn_task_io_finish (struct nn_task_io *io, void *src);
 
 
 #endif

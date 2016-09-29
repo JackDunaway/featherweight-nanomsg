@@ -85,7 +85,7 @@ struct nn_stream {
 
     /*  In ACCEPTING state points to the socket being accepted.
         In BEING_ACCEPTED state points to the listener socket. */
-    //struct nn_fsm *asock;
+    struct nn_fsm *asock;
 
     /*  Asynchronous directed operation currently in progress on this
         full-duplex stream. */
@@ -115,7 +115,9 @@ struct nn_stream_vfptr {
     /*  Notify the underlying transport that a message has been sent. */
     int (*sent) (struct nn_stream *s);
 
-    /*  Request the underlying transport to cancel an active I/O operation. */
+    /*  Request the underlying transport to cancel an active I/O operation.
+        Returns 1 if async cancellation has begun and 0 if there were no pending
+        operations to cancel. */
     int (*cancel_io) (struct nn_stream *s);
 
     /*  Begin name resolution for the endpoint address. */
@@ -151,39 +153,35 @@ void nn_stream_swap_owner (struct nn_stream *self,
 /*  Returns 1 if the stream has pending I/O operations and 0 otherwise. */
 int nn_stream_pending (struct nn_stream *self);
 
-/*  Returns 1 if async cancellation has begun and 0 if there were no pending
-    operations to cancel. */
-int nn_stream_cancel_io (struct nn_stream *self);
 
 
-
-int nn_stream_isidle (struct nn_stream *self);
-int nn_stream_start (struct nn_stream *self, int domain, int type, int protocol);
-void nn_stream_stop (struct nn_stream *self);
-
-int nn_stream_setsockopt (struct nn_stream *self, int level, int optname,
-    const void *optval, size_t optlen);
-
-int nn_stream_bind (struct nn_stream *self, const struct sockaddr *addr,
-    size_t addrlen);
-int nn_stream_listen (struct nn_stream *self, int backlog);
+//int nn_stream_isidle (struct nn_stream *self);
+//int nn_stream_start (struct nn_stream *self, int domain, int type, int protocol);
+//void nn_stream_stop (struct nn_stream *self);
+//
+//int nn_stream_setsockopt (struct nn_stream *self, int level, int optname,
+//    const void *optval, size_t optlen);
+//
+//int nn_stream_bind (struct nn_stream *self, const struct sockaddr *addr,
+//    size_t addrlen);
+//int nn_stream_listen (struct nn_stream *self, int backlog);
 
 /*  Accept a new connection from a listener. When done, NN_STREAM_ACCEPTED
     event will be delivered to the accepted socket. To cancel the operation,
     stop the socket being accepted. Listening socket should not be stopped
     while accepting a new socket is underway. */
-void nn_stream_accept (struct nn_stream *self, struct nn_stream *listener);
+//void nn_stream_accept (struct nn_stream *self, struct nn_stream *listener);
 
 /*  Start connecting. Prior to this call the socket has to be bound to a local
     address. When connecting is done, NN_STREAM_CONNECTED event will be raised.
     If connecting fails NN_STREAM_ERROR event will be raised. */
-void nn_stream_connect (struct nn_stream *self, const struct sockaddr *addr,
-    size_t addrlen);
+//void nn_stream_connect (struct nn_stream *self, const struct sockaddr *addr,
+//    size_t addrlen);
 
-void nn_stream_send (struct nn_stream *self, const struct nn_iovec *iov,
-    int iovcnt);
+//void nn_stream_send (struct nn_stream *self, const struct nn_iovec *iov,
+//    int iovcnt);
 
-void nn_stream_recv (struct nn_stream *self, void *buf, size_t len);
+//void nn_stream_recv (struct nn_stream *self, void *buf, size_t len);
 
 
 #endif

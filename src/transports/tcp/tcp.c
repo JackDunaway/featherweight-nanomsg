@@ -543,9 +543,9 @@ void nn_utcp_accept (struct nn_utcp *self, struct nn_utcp *listener)
     nn_fsm_do_now (&self->stream.fsm, NN_STREAM_START_BEING_ACCEPTED);
 
     /*  Wait for the incoming connection. */
-    nn_task_io_start (&listener->stream.incoming, NN_STREAM_ACCEPTED);
+    nn_task_io_start (&listener->stream.task_accept, NN_STREAM_ACCEPTED);
     brc = AcceptEx (listener->stream.fd, self->stream.fd, listener->ainfo, 0,
-        256, 256, &nbytes, &listener->stream.incoming.olpd);
+        256, 256, &nbytes, &listener->stream.task_accept.olpd);
     err = brc ? ERROR_SUCCESS : WSAGetLastError();
 
     /*  Pair the two sockets. */
@@ -576,6 +576,11 @@ void nn_utcp_accept (struct nn_utcp *self, struct nn_utcp *listener)
     nn_assert_unreachable ("TODO: determine cases when this can fail.");
 }
 
+static int nn_utcp_activate (struct nn_astream *as)
+{
+    return 0;
+}
+
 void nn_utcp_connect (struct nn_utcp *self, const struct sockaddr *addr,
     size_t addrlen)
 {
@@ -602,9 +607,9 @@ void nn_utcp_connect (struct nn_utcp *self, const struct sockaddr *addr,
     nn_assert (addrlen < INT_MAX);
 
     /*  Begin connecting. */
-    nn_task_io_start (&self->stream.outgoing, NN_STREAM_CONNECTED);
+    nn_task_io_start (&self->stream.task_connecting, NN_STREAM_CONNECTED);
     brc = pconnectex (self->stream.fd, addr, (int) addrlen, NULL, 0, NULL,
-        &self->stream.outgoing.olpd);
+        &self->stream.task_connecting.olpd);
     err = brc ? ERROR_SUCCESS : WSAGetLastError ();
 
     /*  Most likely return path is asynchronous connect. */
@@ -648,9 +653,9 @@ void nn_utcp_send (struct nn_utcp *self, const struct nn_iovec *iov,
     }
 
     /*  Start the send operation. */
-    nn_task_io_start (&self->stream.outgoing, NN_STREAM_SENT);
+    nn_task_io_start (&self->stream.task_send, NN_STREAM_SENT);
     rc = WSASend (self->stream.fd, wbuf, iovcnt, NULL, 0,
-        &self->stream.outgoing.olpd, NULL);
+        &self->stream.task_send.olpd, NULL);
     err = (rc == 0) ? ERROR_SUCCESS : WSAGetLastError ();
 
     /*  Async send. */
@@ -687,9 +692,9 @@ void nn_utcp_recv (struct nn_utcp *self, void *buf, size_t len)
     wbuf.len = (ULONG) len;
     wbuf.buf = (char FAR*) buf;
     wflags = MSG_WAITALL;
-    nn_task_io_start (&self->stream.incoming, NN_STREAM_RECEIVED);
+    nn_task_io_start (&self->stream.task_recv, NN_STREAM_RECEIVED);
     rc = WSARecv (self->stream.fd, &wbuf, 1, NULL, &wflags,
-        &self->stream.incoming.olpd, NULL);
+        &self->stream.task_recv.olpd, NULL);
     err = (rc == 0) ? ERROR_SUCCESS : WSAGetLastError ();
 
     /*  Async receive. */
@@ -722,17 +727,6 @@ int nn_utcp_cancel_io (struct nn_stream *s)
     nn_task_io_cancel (&s->outgoing);
 
     return 1;
-}
-
-static int nn_utcp_close (struct nn_stream *s)
-{
-    int rc;
-
-    rc = closesocket (s->fd);
-    nn_assert_win (rc == 0);
-    s->fd = NN_INVALID_FD;
-
-    return 0;
 }
 
 static void nn_tcp_start_resolve (struct nn_cstream *cs)
@@ -862,6 +856,17 @@ int nn_tcp_tune (struct nn_stream *s, struct nn_epbase *e)
     nn_epbase_getopt (e, NN_SOL_SOCKET, NN_RCVBUF, &opt, &optsz);
     nn_assert (optsz == sizeof (opt));
     nn_stream_setsockopt (s, SOL_SOCKET, SO_RCVBUF, &opt, optsz);
+
+    return 0;
+}
+
+static int nn_utcp_close (struct nn_stream *s)
+{
+    int rc;
+
+    rc = closesocket (s->fd);
+    nn_assert_win (rc == 0);
+    s->fd = NN_INVALID_FD;
 
     return 0;
 }

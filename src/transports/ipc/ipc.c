@@ -456,8 +456,8 @@ void nn_uipc_accept (struct nn_uipc *self, struct nn_uipc *listener, struct nn_e
     nn_worker_fd_register (self->stream.worker, &self->stream, fd);
 
     /*  Initiate the incoming connection. */
-    nn_task_io_start (&listener->stream.incoming, NN_STREAM_ACCEPTED);
-    brc = ConnectNamedPipe (p, (LPOVERLAPPED) &listener->stream.incoming.olpd);
+    nn_task_io_start (&listener->stream.task_accept, NN_STREAM_ACCEPTED);
+    brc = ConnectNamedPipe (p, (LPOVERLAPPED) &listener->stream.task_accept.olpd);
     err = brc ? ERROR_SUCCESS : GetLastError();
 
     /*  Pair the two sockets. */
@@ -484,6 +484,11 @@ void nn_uipc_accept (struct nn_uipc *self, struct nn_uipc *listener, struct nn_e
     }
 
     nn_assert_unreachable ("TODO: determine cases when this can fail.");
+}
+
+static int nn_uipc_activate (struct nn_astream *as)
+{
+    return 0;
 }
 
 void nn_uipc_connect (struct nn_uipc *self, const struct sockaddr *addr,
@@ -550,7 +555,7 @@ void nn_uipc_send (struct nn_uipc *self, const struct nn_iovec *iov,
     int i;
 
     /*  Make sure that the socket is actually alive. */
-    nn_assert (self->stream.state == NN_USOCK_STATE_ACTIVE);
+    nn_assert_state (&self->stream, NN_USOCK_STATE_ACTIVE);
 
     /*  Create a WinAPI-style iovec. */
     len = 0;
@@ -575,9 +580,9 @@ void nn_uipc_send (struct nn_uipc *self, const struct nn_iovec *iov,
     }
 
     /*  Start the send operation. */
-    nn_task_io_start (&self->stream.outgoing, NN_STREAM_SENT);
+    nn_task_io_start (&self->stream.task_send, NN_STREAM_SENT);
     brc = WriteFile ((HANDLE) self->stream.fd, self->pipesendbuf, (DWORD) len, NULL,
-        &self->stream.outgoing.olpd);
+        &self->stream.task_send.olpd);
     err = brc ? ERROR_SUCCESS : GetLastError ();
 
     /*  This is the most likely return path with overlapped I/O. */
@@ -640,11 +645,6 @@ int nn_uipc_sent (struct nn_stream *s)
         self->pipesendbuf = NULL;
     }
 
-    return 0;
-}
-
-static int nn_uipc_activate (struct nn_astream *as)
-{
     return 0;
 }
 
@@ -715,6 +715,17 @@ int nn_ipc_tune (struct nn_stream *s, struct nn_epbase *e)
     nn_epbase_getopt (e, NN_SOL_SOCKET, NN_RCVBUF, &opt, &optsz);
     nn_assert (optsz == sizeof (opt));
     nn_stream_setsockopt (s, SOL_SOCKET, SO_RCVBUF, &opt, optsz);
+
+    return 0;
+}
+
+static int nn_uipc_close (struct nn_stream *s)
+{
+    int rc;
+
+    rc = closesocket (s->fd);
+    nn_assert_win (rc == 0);
+    s->fd = NN_INVALID_FD;
 
     return 0;
 }
